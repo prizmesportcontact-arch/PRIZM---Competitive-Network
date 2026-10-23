@@ -17,6 +17,12 @@
     else { a.setAttribute("aria-disabled", "true"); a.title = "Lien disponible bientôt"; }
   });
 
+  // ---------- Accueil : aperçu Cup / League ----------
+  document.querySelectorAll("[data-prev]").forEach(b => b.addEventListener("click", () => {
+    document.querySelectorAll("[data-prev]").forEach(x => { const on = x === b; x.classList.toggle("on", on); x.setAttribute("aria-selected", String(on)); });
+    document.querySelectorAll("[data-pane]").forEach(p => { p.hidden = p.dataset.pane !== b.dataset.prev; });
+  }));
+
   // ---------- Copier le modèle de scrim ----------
   const copyBtn = $("#copy-tpl");
   if (copyBtn) copyBtn.addEventListener("click", () => copyText($("#tpl").textContent, $("#copied"), $("#tpl")));
@@ -496,7 +502,7 @@
   async function viewTeams(app) {
     if (!sb) { app.innerHTML = panel("Équipes", `<p class="lead">Bientôt disponible.</p>`); return; }
     const teams = await rpc("list_teams");
-    const ok = teams.filter(t => t.status === "validee");
+    const ok = teams.filter(t => t.status === "validee" && !t.is_test);
     const pending = teams.filter(t => t.status === "en_attente").length;
     app.innerHTML = panel("Équipes du réseau", `
       <p class="lead">${ok.length} équipe${ok.length > 1 ? "s" : ""} validée${ok.length > 1 ? "s" : ""}${pending ? ` · ${pending} en attente de validation` : ""}. Clique sur une équipe pour voir ses joueurs.</p>
@@ -549,6 +555,11 @@
     } catch (e) { toast("Annonce Discord impossible.", "err"); }
   }
 
+  // Mode test : compétitions invisibles pour les joueurs, remplies d'équipes fictives
+  const testBox = id => `<label class="check-line" for="${id}"><input type="checkbox" id="${id}" ${location.hash.includes("?test") ? "checked" : ""}> <span><b>Compétition de test</b> : visible seulement par le staff, pas d'annonce Discord, remplie en un clic avec des équipes fictives. Tout s'efface depuis Admin.</span></label>`;
+  const testCallout = `<div class="callout test-callout"><b>Compétition de test.</b> Les joueurs ne la voient pas. Tu peux tout essayer : équipes fictives, scores, bracket, HUD de cast.</div>`;
+  const testBadge = `<span class="type-badge test">Test</span>`;
+
   async function viewTournamentForm(app, t) {
     if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
     const v = t || { name: "", division: 2, starts_at: null, max_teams: 8, best_of: 1, final_best_of: 3, description: "" };
@@ -567,6 +578,7 @@
         <label for="t-fbo">Format de la finale</label><select id="t-fbo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.final_best_of, x => "BO" + x)}</select>
         <label for="t-desc">Description (optionnelle)</label><textarea id="t-desc" rows="4" maxlength="1000" placeholder="Récompenses, règles particulières, horaires…">${esc(v.description || "")}</textarea>
         ${locked ? `<p class="small-note">Le bracket est lancé : seules la date et la description sont modifiables.</p>` : ""}
+        ${t ? "" : testBox("t-test")}
         <div class="ctas"><button class="btn solid" type="submit">${t ? "Enregistrer" : "Créer le tournoi"}</button><a class="btn" href="${t ? "#/tournoi/" + t.id : "#/tournois"}">Annuler</a></div>
         <p class="form-err" id="t-err" role="alert"></p>
       </form>`, "Staff");
@@ -579,10 +591,10 @@
       const n = existing.reduce((mx, nm) => { const m = nm.match(re); return m ? Math.max(mx, +m[1]) : mx; }, 0) + 1;
       return `${type} #${n} · D${div}`;
     };
-    const refreshName = () => { if (t) return; $("#t-name-preview").textContent = autoName(); const ty = T_TYPES.find(x => x.name === $("#t-type").value); $("#t-type-hint").textContent = ty.hint; };
+    const refreshName = () => { if (t) return; $("#t-name-preview").textContent = ($("#t-test").checked ? "Test · " : "") + autoName(); const ty = T_TYPES.find(x => x.name === $("#t-type").value); $("#t-type-hint").textContent = ty.hint; };
     if (!t) {
       $("#t-type").onchange = () => { const ty = T_TYPES.find(x => x.name === $("#t-type").value); $("#t-max").value = ty.max; $("#t-bo").value = ty.bo; $("#t-fbo").value = ty.fbo; refreshName(); };
-      $("#t-div").onchange = refreshName;
+      $("#t-div").onchange = refreshName; $("#t-test").onchange = refreshName;
       $("#t-type").onchange();
     }
     $("#t-form").onsubmit = async e => {
@@ -591,7 +603,8 @@
       const date = $("#t-date").value;
       try {
         const id = await rpc("admin_save_tournament", { p_id: t ? t.id : null, p_name: name, p_division: +$("#t-div").value, p_starts_at: date ? new Date(date).toISOString() : null,
-          p_max_teams: +$("#t-max").value, p_best_of: +$("#t-bo").value, p_final_best_of: +$("#t-fbo").value, p_description: $("#t-desc").value });
+          p_max_teams: +$("#t-max").value, p_best_of: +$("#t-bo").value, p_final_best_of: +$("#t-fbo").value, p_description: $("#t-desc").value,
+          p_is_test: !t && $("#t-test").checked });
         toast(t ? "Tournoi enregistré." : "Tournoi créé en brouillon."); location.hash = "#/tournoi/" + id;
       } catch (x) { err.textContent = errMsg(x); }
     };
@@ -670,7 +683,8 @@
       if (t.status === "inscriptions") b.push(`<button class="btn sm solid" data-st="checkin" type="button">Ouvrir le check-in</button>`, `<button class="btn sm" data-gen type="button">Générer le bracket sans check-in</button>`, `<button class="link-btn" data-st="brouillon" type="button">Repasser en brouillon</button>`);
       if (t.status === "checkin") b.push(`<button class="btn sm solid" data-gen type="button">Générer le bracket</button>`, `<button class="link-btn" data-st="inscriptions" type="button">Rouvrir les inscriptions</button>`);
       if (["en_cours", "termine"].includes(t.status)) b.push(`<button class="link-btn danger-t" id="t-reset" type="button">Réinitialiser le bracket</button>`);
-      const ev = { inscriptions: "inscriptions", checkin: "checkin", en_cours: "bracket", termine: "vainqueur" }[t.status];
+      if (t.is_test && ["brouillon", "inscriptions", "checkin"].includes(t.status) && d.teams.length < t.max_teams) b.unshift(`<button class="btn sm" id="t-fill" type="button">Ajouter des équipes de test</button>`);
+      const ev = t.is_test ? null : { inscriptions: "inscriptions", checkin: "checkin", en_cours: "bracket", termine: "vainqueur" }[t.status];
       staff = `<div class="card staff-card">
         <h3>Staff</h3>
         <div class="staff-row">${b.join("")}</div>
@@ -684,6 +698,7 @@
     app.innerHTML = panel(esc(t.name), `
       <div class="t-meta">${divChip(t.division)}${tPill(t.status)}<span>${esc(fmtDate(t.starts_at))}</span><span>BO${t.best_of} · finale BO${t.final_best_of}</span><span>${d.teams.length} / ${t.max_teams} équipes</span></div>
       ${t.description ? `<p class="lead t-desc">${esc(t.description)}</p>` : ""}
+      ${t.is_test ? testCallout : ""}
       ${action ? `<div class="card t-action">${action}<p class="form-err" id="t-err" role="alert"></p></div>` : ""}
       ${staff}
       ${d.matches.length ? `<h3 class="t-h">Bracket</h3>${bracketHtml(d, isAdmin)}` : ""}
@@ -711,6 +726,7 @@
       let order = [1]; while (order.length < size) { const n = order.length * 2; order = order.flatMap(s => [s, n + 1 - s]); }
       await rpc("admin_create_bracket", { p_id: t.id, p_order: order.map(s => eligible[s - 1] ? eligible[s - 1].id : null) });
     }, "Bracket généré ! Pense à l'annoncer sur Discord.")));
+    if ($("#t-fill")) $("#t-fill").onclick = () => act(async () => { const n = await rpc("admin_fill_test_teams", { p_kind: "cup", p_id: t.id }); toast(n + " équipes de test ajoutées (check-in fait)."); });
     if ($("#t-reset")) confirmable($("#t-reset"), "Confirmer : tous les scores seront effacés", () => act(() => rpc("admin_reset_bracket", { p_id: t.id }), "Bracket réinitialisé."));
     if ($("#t-del")) confirmable($("#t-del"), "Confirmer la suppression définitive", async () => { try { await rpc("admin_delete_tournament", { p_id: t.id }); toast("Tournoi supprimé."); location.hash = "#/tournois"; } catch (x) { toast(errMsg(x), "err"); } });
     if ($("#t-ann")) $("#t-ann").onclick = async () => { const b = $("#t-ann"); b.disabled = true; await announce(t.id, { inscriptions: "inscriptions", checkin: "checkin", en_cours: "bracket", termine: "vainqueur" }[t.status]); b.disabled = false; };
@@ -771,12 +787,12 @@
     const items = [
       ...cups.map(t => ({ kind: "cup", id: t.id, name: t.name, division: t.division, date: t.starts_at, status: t.status,
         live: t.status === "en_cours", open: ["inscriptions", "checkin"].includes(t.status), done: t.status === "termine",
-        type: t.name.startsWith("PRIZM League · Playoffs") ? "Playoffs" : "Cup", places: `${t.teams} / ${t.max_teams} équipes`,
+        type: /PRIZM League · Playoffs/.test(t.name) ? "Playoffs" : "Cup", test: t.is_test, places: `${t.teams} / ${t.max_teams} équipes`,
         format: `BO${t.best_of} · finale BO${t.final_best_of}`, pill: tPill(t.status), href: "#/tournoi/" + t.id,
         result: t.winner_name ? { label: "Vainqueur", name: t.winner_name, tag: t.winner_tag, logo: t.winner_logo } : null })),
       ...leagues.map(l => ({ kind: "league", id: l.id, name: l.name, division: l.division, date: l.starts_at, status: l.status,
         live: l.status === "en_cours", open: l.status === "inscriptions", done: l.status === "termine",
-        type: "League", places: `${l.teams} / ${l.max_teams} équipes`, format: `Saison régulière · BO${l.best_of}`, pill: lPill(l.status), href: "#/league/" + l.id,
+        type: "League", test: l.is_test, places: `${l.teams} / ${l.max_teams} équipes`, format: `Saison régulière · BO${l.best_of}`, pill: lPill(l.status), href: "#/league/" + l.id,
         result: l.leader_name ? { label: l.status === "termine" ? "1er" : "En tête", name: l.leader_name, tag: l.leader_tag, logo: l.leader_logo } : null })),
     ];
     const shown = items.filter(x => (!compFilter.div || x.division === compFilter.div) &&
@@ -786,7 +802,7 @@
     const next = shown.filter(x => !x.live && !x.done).sort((a, b) => (b.open - a.open) || byDate(a, b));
     const done = shown.filter(x => x.done).sort((a, b) => -byDate(a, b));
 
-    const typeBadge = x => `<span class="type-badge ${x.kind}">${x.type}</span>`;
+    const typeBadge = x => `<span class="type-badge ${x.kind}">${x.type}</span>${x.test ? testBadge : ""}`;
     const resultHtml = x => x.result ? `<span class="row-result">${teamLogo({ logo_url: x.result.logo, tag: x.result.tag }, 26)}<span><small>${x.result.label}</small>${esc(x.result.name)}</span></span>` : "";
     const row = x => `<a class="comp-row${x.open ? " open" : ""}" href="${x.href}">
         ${dateTile(x.date)}
@@ -835,16 +851,19 @@
         <span class="hint">Chaque équipe joue une fois contre toutes les autres : 8 équipes = 7 journées.</span>
         <label for="l-bo">Format des matchs</label><select id="l-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
         <label for="l-desc">Description (optionnelle)</label><textarea id="l-desc" rows="4" maxlength="1000" placeholder="Jour des matchs, récompenses…">${esc(v.description || "")}</textarea>
+        ${l ? "" : testBox("l-test")}
         <div class="ctas"><button class="btn solid" type="submit">${l ? "Enregistrer" : "Créer la saison"}</button><a class="btn" href="${l ? "#/league/" + l.id : "#/tournois"}">Annuler</a></div>
         <p class="form-err" id="l-err" role="alert"></p>
       </form>`, "Staff");
-    const preview = () => { if (l) return; const d = +$("#l-div").value; const n = seasons.filter(s => s.division === d).reduce((m, s) => Math.max(m, s.season), 0) + 1; $("#l-name-preview").textContent = `PRIZM League · Saison ${n} · D${d}`; };
-    if (!l) { $("#l-div").onchange = preview; preview(); }
+    const preview = () => { if (l) return; const d = +$("#l-div").value;
+      if ($("#l-test").checked) { $("#l-name-preview").textContent = `Test · PRIZM League · D${d}`; return; }
+      const n = seasons.filter(s => s.division === d && !s.is_test).reduce((m, s) => Math.max(m, s.season), 0) + 1; $("#l-name-preview").textContent = `PRIZM League · Saison ${n} · D${d}`; };
+    if (!l) { $("#l-div").onchange = preview; $("#l-test").onchange = preview; preview(); }
     $("#l-form").onsubmit = async e => {
       e.preventDefault(); const err = $("#l-err"); err.textContent = ""; const date = $("#l-date").value;
       try {
         const id = await rpc("admin_save_league", { p_id: l ? l.id : null, p_division: +$("#l-div").value, p_starts_at: date ? new Date(date).toISOString() : null,
-          p_max_teams: +$("#l-max").value, p_best_of: +$("#l-bo").value, p_description: $("#l-desc").value });
+          p_max_teams: +$("#l-max").value, p_best_of: +$("#l-bo").value, p_description: $("#l-desc").value, p_is_test: !l && $("#l-test").checked });
         toast(l ? "Saison enregistrée." : "Saison créée en brouillon."); location.hash = "#/league/" + id;
       } catch (x) { err.textContent = errMsg(x); }
     };
@@ -907,10 +926,11 @@
       if (l.status === "inscriptions") b.push(`<button class="btn sm solid" id="l-gen" type="button">Générer le calendrier et lancer la saison</button>`, `<button class="link-btn" data-lst="brouillon" type="button">Repasser en brouillon</button>`);
       if (l.status === "en_cours") b.push(`<button class="btn sm solid" id="l-po" type="button">Créer les playoffs (top 4) et terminer</button>`, `<button class="btn sm" data-lst="termine" type="button">Terminer sans playoffs</button>`, `<button class="link-btn danger-t" id="l-reset" type="button">Réinitialiser le calendrier</button>`);
       if (l.status === "termine" && !l.playoffs_tournament_id) b.push(`<button class="btn sm" data-lst="en_cours" type="button">Rouvrir la saison</button>`);
-      const ann = { inscriptions: ["inscriptions", "Annoncer les inscriptions"], en_cours: ["classement", "Publier le classement"], termine: ["classement", "Publier le classement final"] }[l.status];
+      if (l.is_test && ["brouillon", "inscriptions"].includes(l.status) && st.length < l.max_teams) b.unshift(`<button class="btn sm" id="l-fill" type="button">Ajouter des équipes de test</button>`);
+      const ann = l.is_test ? null : { inscriptions: ["inscriptions", "Annoncer les inscriptions"], en_cours: ["classement", "Publier le classement"], termine: ["classement", "Publier le classement final"] }[l.status];
       staffHtml = `<div class="card staff-card"><h3>Staff</h3>
         <div class="staff-row">${b.join("")}</div>
-        <div class="staff-row">${ann ? `<button class="btn sm" data-ann="${ann[0]}" type="button">${ann[1]} sur Discord</button>` : ""}${l.status === "en_cours" ? `<button class="btn sm" data-ann="calendrier" type="button">Annoncer le début de saison</button>` : ""}
+        <div class="staff-row">${ann ? `<button class="btn sm" data-ann="${ann[0]}" type="button">${ann[1]} sur Discord</button>` : ""}${l.status === "en_cours" && !l.is_test ? `<button class="btn sm" data-ann="calendrier" type="button">Annoncer le début de saison</button>` : ""}
           <a class="link-btn" href="#/league/${l.id}/modifier">Modifier</a><button class="link-btn danger-t" id="l-del" type="button">Supprimer la saison</button></div>
         ${l.status === "en_cours" ? `<p class="small-note">Clique sur un match du calendrier pour saisir ou corriger son score.</p>` : ""}
         ${l.status === "inscriptions" ? `<p class="small-note">Il faut au moins 3 équipes. L'ordre des matchs est tiré au sort.</p>` : ""}
@@ -920,6 +940,7 @@
     app.innerHTML = panel(esc(l.name), `
       <div class="t-meta">${divChip(l.division)}<span class="type-badge league">League</span>${lPill(l.status)}<span>Début : ${esc(fmtDate(l.starts_at))}</span><span>BO${l.best_of}</span><span>${st.length} / ${l.max_teams} équipes</span></div>
       ${l.description ? `<p class="lead t-desc">${esc(l.description)}</p>` : ""}
+      ${l.is_test ? testCallout : ""}
       ${l.playoffs_tournament_id ? `<a class="card po-link" href="#/tournoi/${l.playoffs_tournament_id}"><b>🏆 Playoffs de la saison</b><span>Voir le bracket →</span></a>` : ""}
       ${action ? `<div class="card t-action">${action}<p class="form-err" id="l-err" role="alert"></p></div>` : ""}
       ${staffHtml}
@@ -938,6 +959,7 @@
     app.querySelectorAll("[data-lst]").forEach(b => b.onclick = () => act(() => rpc("admin_set_league_status", { p_id: l.id, p_status: b.dataset.lst }), "Statut mis à jour."));
     app.querySelectorAll("[data-rm]").forEach(b => confirmable(b, "Confirmer ?", () => act(() => rpc("admin_remove_league_team", { p_league: l.id, p_team: b.dataset.rm }), "Équipe retirée.")));
     app.querySelectorAll("[data-ann]").forEach(b => b.onclick = async () => { b.disabled = true; await announceLeague(l.id, b.dataset.ann); b.disabled = false; });
+    if ($("#l-fill")) $("#l-fill").onclick = () => act(async () => { const n = await rpc("admin_fill_test_teams", { p_kind: "league", p_id: l.id }); toast(n + " équipes de test ajoutées."); });
     if ($("#l-gen")) confirmable($("#l-gen"), "Confirmer : la saison démarre", () => act(() => rpc("admin_generate_schedule", { p_league: l.id }), "Calendrier généré ! Pense à l'annoncer sur Discord."));
     if ($("#l-reset")) confirmable($("#l-reset"), "Confirmer : tous les scores seront effacés", () => act(() => rpc("admin_reset_schedule", { p_league: l.id }), "Calendrier réinitialisé."));
     if ($("#l-po")) confirmable($("#l-po"), "Confirmer : la saison sera terminée", async () => {
@@ -1001,7 +1023,7 @@
             : `<option value="">Aucun match en attente : lance un bracket ou un calendrier de League</option>`}</select>
           <button class="btn sm solid" id="rg-load" type="button" ${matches.length ? "" : "disabled"}>Mettre ce match à l'antenne</button>
         </div>
-        <p class="small-note">Mettre un match à l'antenne remet le score à 0-0.</p>
+        <p class="small-note">Mettre un match à l'antenne remet le score à 0-0. Pour essayer le HUD sans vrai match : <button class="link-btn" id="rg-demo" type="button">lancer un match de démo</button>.</p>
       </div>
       <div id="rg-board"></div>
       ${S.team1 ? `<div class="rg-preview"><span class="eyebrow">Aperçu du HUD (en direct)</span><div class="rg-frame"><iframe src="${esc(hudUrl("score"))}" title="Aperçu du HUD" loading="lazy"></iframe></div></div>` : ""}`, "Cast");
@@ -1058,6 +1080,7 @@
           ${fs ? `<p>Résultat envoyé au ${S.match_kind === "cup" ? "bracket" : "classement"} : <b>${esc(S.team1.name)} ${fs.a} – ${fs.b} ${esc(S.team2.name)}</b>${bo > 1 ? " (maps)" : " (rounds)"}.</p>
             <button type="button" class="btn solid" id="rg-final" ${fs.a === fs.b || (bo > 1 && !over) ? "disabled" : ""}>Enregistrer le résultat sur le site</button>
             <p class="small-note">${bo > 1 ? (over ? "Série terminée : tu peux enregistrer." : `Disponible quand une équipe a ${need()} maps.`) : fs.a === fs.b ? "Il faut un vainqueur pour enregistrer." : "Vérifie le score des rounds avant d'enregistrer."}</p>`
+            : !S.match_id ? `<p class="small-note">Match de démo : rien n'est enregistré sur le site.</p>`
             : `<p class="small-note">Ce match est déjà enregistré sur le site, ou n'est plus en cours.</p>`}
           <p class="form-err" id="rg-err" role="alert"></p>
         </div>`;
@@ -1085,6 +1108,10 @@
 
     app.querySelectorAll("[data-rg]").forEach(b => b.onclick = () => { regieId = b.dataset.rg; viewRegie(app); });
     app.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => copyText(b.dataset.copy, $("#rg-copied"), null));
+    $("#rg-demo").onclick = async () => {
+      try { await rpc("admin_cast_demo", { p_cast: R }); toast("Match de démo à l'antenne : compte des rounds pour voir le HUD bouger."); viewRegie(app); }
+      catch (x) { toast(errMsg(x), "err"); }
+    };
     $("#rg-load").onclick = async () => {
       const m = matches.find(x => x.id === $("#rg-match").value);
       if (!m) return toast("Choisis un match dans la liste.", "err");
@@ -1154,11 +1181,20 @@
   async function viewAdmin(app) {
     if (!state.session) return needLogin(app, "Espace réservé au staff.");
     if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé au staff du réseau.</p>`); return; }
-    const teams = await rpc("list_teams");
+    const [all, test] = await Promise.all([rpc("list_teams"), rpc("admin_test_summary").catch(() => null)]);
+    const teams = all.filter(t => !t.is_test);
     const order = { en_attente: 0, validee: 1, refusee: 2 };
     teams.sort((a, b) => order[a.status] - order[b.status]);
+    const nTest = test ? test.equipes + test.tournois + test.saisons : 0;
     app.innerHTML = panel("Validation des équipes", `
       ${adminTabs("teams")}
+      <div class="card test-card">
+        <div><h3>Mode test</h3>
+          <p class="small-note">Pour tout essayer sans vraies équipes : crée une Cup ou une saison de League en cochant « Compétition de test », puis clique sur « Ajouter des équipes de test ». Pour le HUD : Régie de cast puis « lancer un match de démo ». Les joueurs ne voient rien de tout ça.</p>
+          <p class="small-note">${nTest ? `Actuellement : ${test.equipes} équipe(s), ${test.tournois} tournoi(s) et ${test.saisons} saison(s) de test.` : "Aucune donnée de test pour l'instant."}</p></div>
+        <div class="staff-row"><a class="btn sm" href="#/tournoi/nouveau?test">Créer une Cup de test</a><a class="btn sm" href="#/league/nouveau?test">Créer une League de test</a>
+          ${nTest ? `<button class="btn sm danger" id="del-test" type="button">Supprimer les données de test</button>` : ""}</div>
+      </div>
       <p class="lead">${teams.filter(t => t.status === "en_attente").length} équipe(s) en attente. La division estimée est calculée sur la moyenne des titulaires.</p>
       <div class="admin-list">${teams.map(t => `
         <div class="admin-row" data-id="${t.id}">
@@ -1174,6 +1210,10 @@
           </div>
           <details class="team-row" data-id="${t.id}"><summary>Voir le roster</summary><div class="roster-slot"></div></details>
         </div>`).join("") || `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`}</div>`, "Staff");
+    if ($("#del-test")) confirmable($("#del-test"), "Confirmer : tout le test sera effacé", async () => {
+      try { const r = await rpc("admin_delete_test_data"); toast(`Supprimé : ${r.equipes} équipe(s), ${r.tournois} tournoi(s), ${r.saisons} saison(s) de test.`); viewAdmin(app); }
+      catch (x) { toast(errMsg(x), "err"); }
+    });
     app.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
       const row = b.closest(".admin-row"), id = row.dataset.id;
       try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$("select", row).value });

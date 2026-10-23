@@ -499,3 +499,17 @@ kbd{font:600 .8rem/1 var(--mono);border:1px solid var(--line);border-bottom-widt
   .rg-board{grid-template-columns:1fr}
   .rg-swap{flex-direction:row;justify-content:center}
 }
+
+/* Aperçu des formats sur l'accueil (Cup / League) */
+.preview-tabs{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:18px}
+.preview-tabs .small-note{margin-left:auto}
+.bracket-box .league-grid{margin-top:0}
+.bracket-box .lm,.bracket-box .standings{background:transparent}
+
+/* Mode test */
+.type-badge.test{border-color:#c98a00;color:#c98a00}
+.test-callout{border-left-color:#c98a00}
+.check-line{display:flex;gap:10px;align-items:flex-start;margin:18px 0 4px;font-weight:400;cursor:pointer;max-width:62ch}
+.check-line input{margin-top:5px;width:18px;height:18px;flex:none}
+.test-card{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center;margin:20px 0 28px;border-style:dashed}
+.test-card>div:first-child{flex:1 1 380px;display:flex;flex-direction:column;gap:6px}
