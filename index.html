@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>PRIZM Competitive Network</title>
+<meta name="description" content="Scrims et tournois Valorant par division de rang.">
+<link rel="icon" href="logo.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <a href="#top" aria-label="Accueil"><img src="logo.png" alt="PRIZM Competitive Network"></a>
+    <nav aria-label="Sections">
+      <a href="#/equipes">Équipes</a><a href="#divisions">Divisions</a><a href="#tournois">Tournois</a><a href="#scrims">Scrims</a><a href="#reglement">Règlement</a><a href="#casts">Casts</a>
+    </nav>
+    <div id="auth-slot"></div>
+  </div>
+</header>
+
+<div id="setup-banner" class="setup-banner" hidden>Le site est en cours de configuration : les comptes et les équipes seront bientôt disponibles.</div>
+<main id="top">
+<div id="view-home">
+  <div class="hero">
+    <div class="wrap">
+      <span class="eyebrow">Valorant · Scrims &amp; tournois · Saison 0</span>
+      <img class="mark" src="logo.png" alt="PRIZM Competitive Network" width="1100" height="315">
+      <p class="tag">Des scrims et des tournois contre des équipes <em>de ton niveau</em>, rang par rang.</p>
+      <div class="ctas">
+        <a class="btn solid" data-link="discord" href="#rejoindre">Rejoindre le Discord</a>
+        <a class="btn" href="#/mon-equipe">Inscrire mon équipe</a>
+      </div>
+      <div class="stats">
+        <div><b>4</b><span>divisions par rang</span></div>
+        <div><b>5v5</b><span>équipes uniquement</span></div>
+        <div><b>0 €</b><span>d'inscription</span></div>
+      </div>
+    </div>
+  </div>
+
+  <section id="divisions">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Divisions</span>
+        <h2>Quatre divisions, zéro match à sens unique</h2>
+        <p class="lead">Chaque équipe est placée dans une division selon le rang de ses joueurs. Tu scrimes et tu joues les tournois dans ta division, contre des équipes qui ont le même niveau que toi.</p>
+      </div>
+      <div class="divs">
+        <article class="div top">
+          <div class="code">D1<small>Élite</small></div>
+          <div class="meter" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i class="on"></i></div>
+          <div class="ranks">Immortel → Radiant</div>
+          <p>Le haut du réseau. Les matchs les plus suivis.</p>
+        </article>
+        <article class="div">
+          <div class="code">D2<small>Haute</small></div>
+          <div class="meter" aria-hidden="true"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+          <div class="ranks">Diamant → Ascendant</div>
+          <p>Équipes structurées qui visent la D1.</p>
+        </article>
+        <article class="div">
+          <div class="code">D3<small>Inter</small></div>
+          <div class="meter" aria-hidden="true"><i class="on"></i><i class="on"></i><i></i><i></i></div>
+          <div class="ranks">Or → Platine</div>
+          <p>Pour progresser en jeu d'équipe et en comms.</p>
+        </article>
+        <article class="div">
+          <div class="code">D4<small>Open</small></div>
+          <div class="meter" aria-hidden="true"><i class="on"></i><i></i><i></i><i></i></div>
+          <div class="ranks">Fer → Argent</div>
+          <p>Ta première compétition en équipe.</p>
+        </article>
+      </div>
+      <p class="note"><b>Comment on te place :</b> on prend le rang actuel des 5 titulaires, la division est celle de la moyenne. Si un joueur est deux divisions au-dessus du reste de l'équipe, l'équipe monte d'une division. Le placement est vérifié par le staff au moment de l'inscription.</p>
+    </div>
+  </section>
+
+  <section id="tournois">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Tournois</span>
+        <h2>Deux façons de compétitionner</h2>
+        <p class="lead">La Cup, c'est un tournoi d'une soirée. La League, c'est un championnat sur plusieurs semaines, avec un classement et des playoffs à la fin.</p>
+      </div>
+      <div class="formats">
+        <article class="fmt">
+          <h3>PRIZM Cup</h3>
+          <p>Un tournoi éclair. Tu t'inscris, tu joues, le vainqueur est connu le soir même. Une défaite et tu es éliminé.</p>
+          <dl><dt>Durée</dt><dd>Une soirée</dd><dt>Format</dt><dd>Élimination directe, BO1, finale BO3</dd><dt>Équipes</dt><dd>8 à 16 par division</dd></dl>
+        </article>
+        <article class="fmt main league">
+          <h3>PRIZM League</h3>
+          <p>Le championnat de chaque division. Toutes les équipes se rencontrent une fois, un match par semaine. Chaque victoire rapporte des points au classement, et les 4 premières équipes jouent les playoffs pour le titre de la saison.</p>
+          <div class="season" aria-label="Déroulé d'une saison de League">
+            <div class="ph"><span class="eyebrow">Semaines 1 → 7</span><b>Saison régulière</b><p>8 équipes, 7 matchs BO1. Classement aux victoires, puis à la différence de rounds.</p></div>
+            <div class="ph"><span class="eyebrow">Semaine 8</span><b>Playoffs</b><p>Top 4. Demi-finales BO3, grande finale BO5, castées sur Twitch.</p></div>
+          </div>
+        </article>
+      </div>
+
+      <div class="bracket-box">
+        <div class="eyebrow"><span>Aperçu du format · PRIZM Cup à 8 équipes</span><span>Équipes et scores fictifs</span></div>
+        <div class="bracket-scroll"><svg class="bracket-svg" viewBox="-2 0 904 448" role="img" aria-label="Bracket d'une PRIZM Cup à 8 équipes : Équipe A bat Équipe C 2-1 en finale"><defs><marker id="arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" class="arrh"/></marker></defs><text x="0" y="16" class="rl">QUARTS · BO1</text><text x="250" y="16" class="rl">DEMIES · BO1</text><text x="500" y="16" class="rl">FINALE · BO3</text><text x="750" y="16" class="rl">VAINQUEUR</text><path d="M176 94 H213 V144 H244" class="cn win-path" marker-end="url(#arr)"/><path d="M176 194 H213 V144 H244" class="cn win-path" marker-end="url(#arr)"/><path d="M176 294 H213 V344 H244" class="cn win-path" marker-end="url(#arr)"/><path d="M176 394 H213 V344 H244" class="cn win-path" marker-end="url(#arr)"/><path d="M426 144 H463 V244 H494" class="cn win-path" marker-end="url(#arr)"/><path d="M426 344 H463 V244 H494" class="cn win-path" marker-end="url(#arr)"/><path d="M676 244 H744" class="cn win-path" marker-end="url(#arr)"/><g class="m"><rect x="0" y="66.0" width="176" height="56" class="mb"/><line x1="0" y1="94.0" x2="176" y2="94.0" class="ml"/><rect x="0" y="66.0" width="4" height="28" class="wbar"/><text x="14" y="85.0" class="tn win">Équipe A</text><text x="164" y="85.0" text-anchor="end" class="ts win">13</text><text x="14" y="113.0" class="tn lose">Équipe H</text><text x="164" y="113.0" text-anchor="end" class="ts lose">7</text></g><g class="m"><rect x="0" y="166.0" width="176" height="56" class="mb"/><line x1="0" y1="194.0" x2="176" y2="194.0" class="ml"/><text x="14" y="185.0" class="tn lose">Équipe D</text><text x="164" y="185.0" text-anchor="end" class="ts lose">11</text><rect x="0" y="194.0" width="4" height="28" class="wbar"/><text x="14" y="213.0" class="tn win">Équipe E</text><text x="164" y="213.0" text-anchor="end" class="ts win">13</text></g><g class="m"><rect x="0" y="266.0" width="176" height="56" class="mb"/><line x1="0" y1="294.0" x2="176" y2="294.0" class="ml"/><rect x="0" y="266.0" width="4" height="28" class="wbar"/><text x="14" y="285.0" class="tn win">Équipe B</text><text x="164" y="285.0" text-anchor="end" class="ts win">13</text><text x="14" y="313.0" class="tn lose">Équipe G</text><text x="164" y="313.0" text-anchor="end" class="ts lose">10</text></g><g class="m"><rect x="0" y="366.0" width="176" height="56" class="mb"/><line x1="0" y1="394.0" x2="176" y2="394.0" class="ml"/><rect x="0" y="366.0" width="4" height="28" class="wbar"/><text x="14" y="385.0" class="tn win">Équipe C</text><text x="164" y="385.0" text-anchor="end" class="ts win">14</text><text x="14" y="413.0" class="tn lose">Équipe F</text><text x="164" y="413.0" text-anchor="end" class="ts lose">12</text></g><g class="m"><rect x="250" y="116.0" width="176" height="56" class="mb"/><line x1="250" y1="144.0" x2="426" y2="144.0" class="ml"/><rect x="250" y="116.0" width="4" height="28" class="wbar"/><text x="264" y="135.0" class="tn win">Équipe A</text><text x="414" y="135.0" text-anchor="end" class="ts win">13</text><text x="264" y="163.0" class="tn lose">Équipe E</text><text x="414" y="163.0" text-anchor="end" class="ts lose">9</text></g><g class="m"><rect x="250" y="316.0" width="176" height="56" class="mb"/><line x1="250" y1="344.0" x2="426" y2="344.0" class="ml"/><text x="264" y="335.0" class="tn lose">Équipe B</text><text x="414" y="335.0" text-anchor="end" class="ts lose">8</text><rect x="250" y="344.0" width="4" height="28" class="wbar"/><text x="264" y="363.0" class="tn win">Équipe C</text><text x="414" y="363.0" text-anchor="end" class="ts win">13</text></g><g class="m"><rect x="500" y="216.0" width="176" height="56" class="mb"/><line x1="500" y1="244.0" x2="676" y2="244.0" class="ml"/><rect x="500" y="216.0" width="4" height="28" class="wbar"/><text x="514" y="235.0" class="tn win">Équipe A</text><text x="664" y="235.0" text-anchor="end" class="ts win">2</text><text x="514" y="263.0" class="tn lose">Équipe C</text><text x="664" y="263.0" text-anchor="end" class="ts lose">1</text></g><g><rect x="750" y="204" width="150" height="80" class="champ-b"/><text x="825" y="234" text-anchor="middle" class="rl">CUP · D2</text><text x="825" y="264" text-anchor="middle" class="champ-t">ÉQUIPE A</text></g></svg></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="scrims">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Scrims</span>
+        <h2>Trouve un scrim en quelques minutes</h2>
+        <p class="lead">Les scrims se passent sur le Discord, dans un salon par division. Tu postes ta demande, une équipe de ton niveau répond.</p>
+      </div>
+      <div class="scrim-grid">
+        <ol class="steps">
+          <li><div><b>Inscris ton équipe</b><p>Le capitaine se connecte avec Discord sur ce site, crée l'équipe et invite ses joueurs. Le staff valide la division.</p></div></li>
+          <li><div><b>Poste ta demande</b><p>Dans <code>#scrim-d1</code> à <code>#scrim-d4</code>, avec le modèle ci-contre.</p></div></li>
+          <li><div><b>Une équipe accepte</b><p>Elle répond à ton message. Vous ouvrez un fil pour échanger les codes de partie et les maps.</p></div></li>
+          <li><div><b>Joue et poste le score</b><p>Le résultat va dans <code>#résultats-scrims</code>. Une équipe qui annule sans prévenir reçoit un avertissement.</p></div></li>
+        </ol>
+        <div class="post">
+          <div class="post-head"><span class="eyebrow">Modèle de demande</span><button class="btn sm" id="copy-tpl" type="button">Copier</button></div>
+<pre id="tpl">🔎 RECHERCHE SCRIM — D2
+Équipe : [nom de l'équipe]
+Date : [jour] · [heure]
+Format : 2 maps / 24 rounds
+Maps : [maps souhaitées ou "au choix"]
+Contact : @[capitaine]</pre>
+          <p class="copied" id="copied" aria-live="polite"></p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="reglement">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Règlement · résumé</span>
+        <h2>Les règles qui comptent</h2>
+        <p class="lead">Le règlement complet est épinglé sur le Discord. Voici l'essentiel à connaître avant ton premier match.</p>
+      </div>
+      <div class="rules">
+        <div class="rule"><span class="ref">§1</span><div><b>Roster</b><p>5 titulaires et jusqu'à 2 remplaçants. Un joueur ne joue que pour une équipe par saison.</p></div></div>
+        <div class="rule"><span class="ref">§2</span><div><b>Comptes</b><p>Chaque joueur déclare son Riot ID. Le smurf et le partage de compte entraînent l'exclusion.</p></div></div>
+        <div class="rule"><span class="ref">§3</span><div><b>Ponctualité</b><p>10 minutes de retard après l'heure prévue : la map est perdue par forfait.</p></div></div>
+        <div class="rule"><span class="ref">§4</span><div><b>Maps</b><p>Pool compétitif officiel en vigueur. Veto alterné entre capitaines avant chaque match.</p></div></div>
+        <div class="rule"><span class="ref">§5</span><div><b>Pauses techniques</b><p>2 pauses tactiques et 10 minutes de pause technique par équipe et par map.</p></div></div>
+        <div class="rule"><span class="ref">§6</span><div><b>Résultats</b><p>Le capitaine gagnant poste une capture du tableau de fin de partie dans les 30 minutes.</p></div></div>
+        <div class="rule"><span class="ref">§7</span><div><b>Comportement</b><p>Toxicité, insultes ou triche : avertissement, puis exclusion du réseau.</p></div></div>
+        <div class="rule"><span class="ref">§8</span><div><b>Litiges</b><p>Un ticket dans <code>#support</code>. La décision des arbitres est définitive.</p></div></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="casts">
+    <div class="wrap cast">
+      <div class="sec-head" style="margin:0">
+        <span class="eyebrow">Casts Twitch</span>
+        <h2>Les meilleurs matchs, commentés en direct</h2>
+        <p class="lead">Les matchs castés sont choisis selon l'enjeu et les dispos des casters. Il n'y a pas de jour fixe : chaque cast est annoncé à l'avance sur le Discord.</p>
+        <div class="ctas" style="margin-top:12px"><a class="btn" data-link="twitch" href="#casts">Suivre sur Twitch</a><a class="btn" data-link="youtube" href="#casts">Replays sur YouTube</a></div>
+      </div>
+      <div>
+        <p class="live" style="margin-bottom:14px">Comment ça marche</p>
+        <div class="sched">
+          <div><span class="d">En direct</span><span><b>Twitch</b><br><span style="color:var(--mute);font-size:.92rem">Les playoffs de League en priorité, puis les plus gros matchs de Cup quand des casters sont dispos.</span></span></div>
+          <div><span class="d">Annonce</span><span><b>Discord</b><br><span style="color:var(--mute);font-size:.92rem">Date, heure et affiche postées dans #annonces-casts dès que le cast est calé.</span></span></div>
+          <div><span class="d">Après</span><span><b>YouTube</b><br><span style="color:var(--mute);font-size:.92rem">Replays des matchs castés et récaps des meilleures actions.</span></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="staff">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Recrutement staff</span>
+        <h2>Le réseau se construit avec vous</h2>
+        <p class="lead">On cherche des bénévoles motivés. Postule dans <code>#candidatures</code> sur le Discord.</p>
+      </div>
+      <div class="roles">
+        <div><b>Casters</b><p>Commenter les matchs en direct, seul ou en duo.</p></div>
+        <div><b>Observers</b><p>Gérer la caméra en jeu pendant les diffusions.</p></div>
+        <div><b>Arbitres</b><p>Lancer les parties, vérifier les rosters, trancher les litiges.</p></div>
+        <div><b>Modérateurs</b><p>Faire vivre le Discord et garder une bonne ambiance.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="faq">
+    <div class="wrap">
+      <div class="sec-head"><span class="eyebrow">FAQ</span><h2>Questions fréquentes</h2></div>
+      <details><summary>C'est payant ?</summary><p>Non. Les scrims et les tournois sont gratuits.</p></details>
+      <details><summary>Je n'ai pas d'équipe, je peux participer ?</summary><p>Oui. Le salon <code>#recherche-équipe</code> sert à trouver des coéquipiers de ton rang. Une fois à 5, inscris l'équipe.</p></details>
+      <details><summary>Mon équipe change de rang en cours de saison ?</summary><p>La division est fixée pour toute la saison. Le placement est recalculé à chaque nouvelle saison.</p></details>
+      <details><summary>Comment mon match peut-il être casté ?</summary><p>Le staff choisit selon l'enjeu et les dispos des casters. Les playoffs de League passent en priorité. Les replays arrivent ensuite sur YouTube.</p></details>
+      <details><summary>Quel serveur de jeu ?</summary><p>Les parties se jouent en partie personnalisée sur les serveurs européens, avec Vanguard actif.</p></details>
+    </div>
+  </section>
+
+  <section class="join" id="rejoindre">
+    <div class="wrap">
+      <span class="eyebrow" style="color:inherit;opacity:.7">Saison 0 · Inscriptions bientôt</span>
+      <h2>Rejoins le réseau</h2>
+      <p class="lead">Connecte-toi avec Discord pour inscrire ton équipe, puis rejoins le serveur pour les scrims, les annonces et le support.</p>
+      <div class="ctas">
+        <a class="btn solid" data-link="discord" href="#rejoindre">Rejoindre le Discord</a>
+        <a class="btn" href="#/mon-equipe">Inscrire mon équipe</a>
+      </div>
+    </div>
+  </section>
+</div>
+<div id="view-app" hidden></div>
+</main>
+<div id="toasts" class="toasts" aria-live="polite"></div>
+
+<footer>
+  <div class="wrap">
+    <span>© 2026 PRIZM Competitive Network</span>
+    <span>Réseau communautaire non affilié à Riot Games.</span>
+  </div>
+</footer>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
