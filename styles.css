@@ -516,3 +516,33 @@ kbd{font:600 .8rem/1 var(--mono);border:1px solid var(--line);border-bottom-widt
 .prev-pane>.t-h{margin-top:36px}
 .table-scroll{position:relative}
 h2{overflow-wrap:break-word;hyphens:auto}.sec-head{min-width:0}.sec-head>*{min-width:0;max-width:100%}
+
+/* Mes matchs (capitaines) */
+.my-matches{margin:28px 0 8px}
+.mm-list{display:grid;border:1px solid var(--line)}
+.mm-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px 16px;align-items:center;padding:12px 14px;border-bottom:1px solid var(--line)}
+.mm-list>.mm-row:last-child{border-bottom:0}
+.mm-main{display:flex;align-items:center;gap:10px;min-width:0}
+.mm-main>div{display:flex;flex-direction:column;min-width:0}
+.mm-main b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mm-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:10px}
+.mm-state{font-size:.88rem;color:var(--mute)}
+.mm-state.hot{color:var(--ink)}
+.mm-state.warn{color:var(--warn)}
+.mm-form{grid-column:1/-1}
+.mm-decl{display:flex;flex-direction:column;gap:10px;padding:12px 0 4px;border-top:1px dashed var(--line)}
+.mm-file{display:flex;flex-direction:column;gap:6px;font-weight:600;font-size:.9rem}
+.mm-file input{font-weight:400}
+.mm-more{margin-top:8px}
+.mm-more summary{cursor:pointer;font-weight:600;padding:8px 0}
+.lock-line{margin:20px 0 4px;font-size:.92rem;color:var(--mute)}
+.ff-row{margin-top:10px}
+.reports{margin:8px 0 24px}
+.rep-list{display:grid;border:1px solid var(--line)}
+.rep-row{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px;padding:12px 14px;border-bottom:1px solid var(--line)}
+.rep-row:last-child{border-bottom:0}
+.rep-row>div:first-child{display:flex;flex-direction:column;min-width:0}
+.rep-row.hot{box-shadow:inset 3px 0 0 var(--warn)}
+.open-roster{margin-top:10px}
+@media (max-width:600px){.mm-row{grid-template-columns:1fr}.mm-act{justify-content:flex-start}}
+section.my-matches,section.reports{padding-block:0;border-top:0}

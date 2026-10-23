@@ -402,6 +402,7 @@
     const isCap = !!t.is_captain;
     const inviteLink = location.origin + location.pathname + "?join=" + code + "#/mon-equipe";
     const tit = roster.filter(r => r.role === "titulaire").length;
+    const locked = t.locked; // compétition en cours : arrivées et départs bloqués
 
     app.innerHTML = panel(`${teamLogo(t, 64)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
       <div class="team-status">
@@ -412,12 +413,14 @@
       </div>
       ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
       ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
-      ${rosterTable(roster, isCap, me)}
+      <div id="my-matches"></div>
+      ${locked ? `<p class="lock-line">🔒 Roster bloqué pendant <b>${esc(locked)}</b> : personne ne peut rejoindre ni quitter l'équipe. Besoin d'un changement ? Ouvre un ticket dans #support.</p>` : ""}
+      ${rosterTable(roster, isCap, me, false, !!locked)}
       <div class="roster-tools"><button class="link-btn" id="refresh-ranks" type="button">Actualiser les rangs de l'équipe</button><span class="small-note">✓ = rang vérifié · ? = rang non vérifié</span></div>
       <div class="cards3" style="margin-top:32px">
         <div class="card">
           <h3>Inviter des joueurs</h3>
-          <p class="small-note">7 joueurs max (5 titulaires + 2 remplaçants). Envoie le lien ou le code.</p>
+          <p class="small-note">${locked ? "Les invitations reprennent après la compétition." : "7 joueurs max (5 titulaires + 2 remplaçants). Envoie le lien ou le code."}</p>
           <div class="code-big" id="inv-code">${esc(code)}</div>
           <div class="copy-row"><input id="inv-link" readonly value="${esc(inviteLink)}" aria-label="Lien d'invitation"><button class="btn sm" id="copy-inv" type="button">Copier le lien</button></div>
           <p class="copied" id="inv-copied" aria-live="polite"></p>
@@ -437,8 +440,8 @@
         </div>
         <div class="card">
           <h3>Quitter l'équipe</h3>
-          <p class="small-note">${isCap ? (roster.length > 1 ? "Tu es capitaine : nomme un autre capitaine avant de partir." : "Tu es seul : quitter supprime l'équipe.") : "Tu pourras rejoindre une autre équipe ensuite."}</p>
-          <button class="btn danger" id="leave" type="button" ${isCap && roster.length > 1 ? "disabled" : ""}>${isCap && roster.length === 1 ? "Supprimer l'équipe" : "Quitter l'équipe"}</button>
+          <p class="small-note">${locked ? "Impossible pendant une compétition." : isCap ? (roster.length > 1 ? "Tu es capitaine : nomme un autre capitaine avant de partir." : "Tu es seul : quitter supprime l'équipe.") : "Tu pourras rejoindre une autre équipe ensuite."}</p>
+          <button class="btn danger" id="leave" type="button" ${locked || (isCap && roster.length > 1) ? "disabled" : ""}>${isCap && roster.length === 1 ? "Supprimer l'équipe" : "Quitter l'équipe"}</button>
         </div>
       </div>`, "Mon équipe");
 
@@ -463,6 +466,7 @@
     confirmable($("#leave"), "Clique encore pour confirmer", async () => {
       try { await rpc("leave_team"); discordSync({ user_ids: [me] }); toast("Tu as quitté l'équipe."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     bindRosterActions(app, () => viewMyTeam(app));
+    const mm = await loadMyMatches($("#my-matches"), isCap, () => viewMyTeam(app));
 
     // Arrivées, départs, rôles, validation, logo : la page se met à jour toute seule
     let pending = null;
@@ -473,7 +477,88 @@
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "team_members", filter: "team_id=eq." + teamId }, refresh)
       .on("postgres_changes", { event: "DELETE", schema: "public", table: "team_members" }, p => { if (p.old && p.old.team_id === teamId) refresh(); })
       .on("postgres_changes", { event: "UPDATE", schema: "public", table: "teams", filter: "id=eq." + teamId }, refresh)
+      // Déclarations de score de l'adversaire (ou validées par le staff)
+      .on("postgres_changes", { event: "*", schema: "public", table: "score_reports" }, p => {
+        const row = p.new && p.new.match_id ? p.new : p.old || {};
+        if (mm.matchIds.has(row.match_id) || mm.reportIds.has(row.id)) refresh(); })
       .subscribe();
+  }
+
+  // ---------- Mes matchs : le capitaine déclare le score, l'adversaire confirme ----------
+  async function loadMyMatches(box, isCap, reload) {
+    const out = { matchIds: new Set(), reportIds: new Set() };
+    let list = [];
+    try { list = await rpc("my_matches"); } catch (e) { return out; }
+    list.forEach(m => { out.matchIds.add(m.id); if (m.report) out.reportIds.add(m.report.id); });
+    if (!list.length || !box) return out;
+    const unit = bo => bo === 1 ? "rounds" : "maps";
+    const state_ = m => {
+      const r = m.report;
+      if (!r) return isCap ? `<button class="btn sm" data-decl="${m.id}" type="button">Déclarer le score</button>` : `<span class="small-note">À jouer</span>`;
+      const proof = r.proof_url ? `<a class="link-btn" href="${esc(r.proof_url)}" target="_blank" rel="noopener">Capture</a>` : "";
+      if (r.status === "conteste") return `<span class="mm-state warn">Contesté : le staff tranche</span>${proof}`;
+      const sc = (us, them) => `<b>${esc(state.team.tag)} ${us} – ${them} ${esc(m.opponent.tag)}</b>`;
+      if (r.mine) return `<span class="mm-state">Vous avez déclaré ${sc(r.score_for, r.score_against)}, en attente de l'adversaire</span>${proof}${isCap ? `<button class="link-btn" data-cancel="${r.id}" type="button">Annuler</button>` : ""}`;
+      return `<span class="mm-state hot">L'adversaire déclare ${sc(r.score_against, r.score_for)}</span>${proof}
+        ${isCap ? `<button class="btn sm solid" data-ok="${r.id}" type="button">Confirmer</button><button class="link-btn danger-t" data-no="${r.id}" type="button">Contester</button>` : ""}`;
+    };
+    const row = m => `<div class="mm-row" data-m="${m.id}">
+        <div class="mm-main">${teamLogo(m.opponent, 32)}<div><b>vs ${esc(m.opponent.name)}</b><span class="small-note">${esc(m.comp)} · ${esc(m.stage)} · BO${m.best_of}</span></div></div>
+        <div class="mm-act">${state_(m)}</div>
+        <div class="mm-form" hidden></div>
+      </div>`;
+    // Les matchs qui attendent une action passent devant ; au-delà de 3, le reste est replié
+    const urgent = m => m.report && !m.report.mine && m.report.status === "en_attente" ? 0 : m.report ? 1 : 2;
+    list.sort((a, b) => urgent(a) - urgent(b));
+    const first = list.slice(0, 3), rest = list.slice(3);
+    box.innerHTML = `<section class="my-matches"><h3 class="t-h">Mes matchs</h3>
+      <div class="mm-list">${first.map(row).join("")}</div>
+      ${rest.length ? `<details class="mm-more"><summary>${rest.length} autre${rest.length > 1 ? "s" : ""} match${rest.length > 1 ? "s" : ""} à venir</summary><div class="mm-list">${rest.map(row).join("")}</div></details>` : ""}
+      ${isCap ? `<p class="small-note">Après un match, le capitaine qui a gagné ou perdu déclare le score avec une capture d'écran. Le capitaine adverse confirme et le résultat est enregistré.</p>` : ""}
+    </section>`;
+    const find = id => list.find(m => m.id === id);
+    box.querySelectorAll("[data-decl]").forEach(b => b.onclick = () => {
+      const m = find(b.dataset.decl), f = $(`.mm-row[data-m="${m.id}"] .mm-form`, box);
+      if (!f.hidden) { f.hidden = true; return; }
+      f.hidden = false;
+      f.innerHTML = `<form class="mm-decl">
+        <div class="score-line"><label for="d1-${m.id}">${esc(state.team.tag)}</label><input id="d1-${m.id}" type="number" min="0" max="99" inputmode="numeric" required>
+          <span>–</span><input id="d2-${m.id}" type="number" min="0" max="99" inputmode="numeric" required><label for="d2-${m.id}">${esc(m.opponent.tag)}</label></div>
+        <span class="hint">Score en ${unit(m.best_of)}${m.best_of > 1 ? ` (ex : ${(m.best_of + 1) / 2}-${(m.best_of - 1) / 2})` : " (ex : 13-9)"}.</span>
+        <label class="mm-file">Capture du tableau des scores <input type="file" accept="image/png,image/jpeg,image/webp" required></label>
+        <div class="staff-row"><button class="btn sm solid" type="submit">Envoyer à l'adversaire</button></div>
+        <p class="form-err" role="alert"></p></form>`;
+      const form = $("form", f), err = $(".form-err", f);
+      form.onsubmit = async e => {
+        e.preventDefault(); err.textContent = "";
+        const a = $(`#d1-${m.id}`).value, c = $(`#d2-${m.id}`).value, file = $("input[type=file]", f).files[0];
+        if (a === "" || c === "") return err.textContent = "Entre les deux scores.";
+        if (!file) return err.textContent = "Ajoute la capture d'écran du tableau des scores.";
+        const btn = $("button[type=submit]", f); btn.disabled = true; btn.textContent = "Envoi…";
+        try { const url = await uploadProof(m.id, file); await rpc("report_score", { p_kind: m.kind, p_match: m.id, p_for: +a, p_against: +c, p_proof: url }); toast("Score envoyé : l'adversaire doit le confirmer."); reload(); }
+        catch (x) { err.textContent = errMsg(x); btn.disabled = false; btn.textContent = "Envoyer à l'adversaire"; }
+      };
+    });
+    box.querySelectorAll("[data-ok]").forEach(b => confirmable(b, "Sûr ? C'est définitif", async () => {
+      try { await rpc("answer_report", { p_report: b.dataset.ok, p_accept: true }); toast("Score confirmé et enregistré."); reload(); } catch (x) { toast(errMsg(x), "err"); } }));
+    box.querySelectorAll("[data-no]").forEach(b => b.onclick = async () => {
+      try { await rpc("answer_report", { p_report: b.dataset.no, p_accept: false, p_note: null }); toast("Score contesté : le staff va trancher. Explique le problème dans #support."); reload(); } catch (x) { toast(errMsg(x), "err"); } });
+    box.querySelectorAll("[data-cancel]").forEach(b => b.onclick = async () => {
+      try { await rpc("cancel_report", { p_report: b.dataset.cancel }); reload(); } catch (x) { toast(errMsg(x), "err"); } });
+    return out;
+  }
+  // Capture d'écran réduite (1600 px max, WEBP) pour rester sous 1 Mo
+  async function uploadProof(matchId, file) {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("Format accepté : PNG, JPG ou WEBP.");
+    const img = await createImageBitmap(file), k = Math.min(1, 1600 / img.width);
+    const c = document.createElement("canvas"); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+    c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+    let blob = await new Promise(r => c.toBlob(r, "image/webp", 0.82)), ext = "webp";
+    if (!blob || blob.type !== "image/webp") { blob = await new Promise(r => c.toBlob(r, "image/jpeg", 0.82)); ext = "jpg"; }
+    const path = `${state.session.user.id}/${matchId}-${Date.now()}.${ext}`;
+    const up = await sb.storage.from("score-proofs").upload(path, blob, { contentType: blob.type });
+    if (up.error) throw new Error("Envoi de la capture impossible : " + up.error.message);
+    return sb.storage.from("score-proofs").getPublicUrl(path).data.publicUrl;
   }
 
   function statusPill(t) {
@@ -490,7 +575,7 @@
     return label + mark;
   };
 
-  function rosterTable(roster, isCap, me, admin = false) {
+  function rosterTable(roster, isCap, me, admin = false, noKick = false) {
     return `<div class="table-scroll"><table class="roster">
       <thead><tr><th>Joueur</th><th>Riot ID</th><th>Rang</th><th>Rôle</th>${isCap ? "<th><span class='sr'>Actions</span></th>" : ""}</tr></thead>
       <tbody>${roster.map(r => `<tr>
@@ -501,7 +586,7 @@
         ${isCap ? `<td class="act">${r.user_id === me ? "" : `
           <button class="link-btn" data-act="role" data-u="${r.user_id}" data-r="${r.role === "titulaire" ? "remplacant" : "titulaire"}" type="button">${r.role === "titulaire" ? "Passer remplaçant" : "Passer titulaire"}</button>
           <button class="link-btn" data-act="cap" data-u="${r.user_id}" type="button">Nommer capitaine</button>
-          <button class="link-btn danger-t" data-act="kick" data-u="${r.user_id}" type="button">Retirer</button>`}</td>` : ""}
+          ${noKick ? "" : `<button class="link-btn danger-t" data-act="kick" data-u="${r.user_id}" type="button">Retirer</button>`}`}</td>` : ""}
       </tr>`).join("")}</tbody></table></div>`;
   }
 
@@ -535,7 +620,10 @@
     const load = async d => {
       try {
         const r = await rpc("team_roster", { p_team: d.dataset.id });
-        $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin);
+        $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin) + (admin ? `<p class="small-note open-roster">Roster bloqué pendant une compétition ? <button class="link-btn" data-open-roster type="button">Autoriser les changements pendant 24 h</button></p>` : "");
+        if (admin) { const ob = $("[data-open-roster]", d); ob.onclick = async () => {
+          try { const until = await rpc("admin_open_roster", { p_team: d.dataset.id }); toast("Changements autorisés jusqu'à " + new Date(until).toLocaleString("fr-FR", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + "."); }
+          catch (x) { toast(errMsg(x), "err"); } }; }
         if (admin) d.querySelectorAll("[data-rank-save]").forEach(b => b.onclick = async () => {
           const u = b.dataset.rankSave, v = d.querySelector(`[data-rank-for="${u}"]`).value;
           try { await rpc("admin_set_rank", { p_user: u, p_rank: v === "" ? null : +v }); toast("Rang fixé."); load(d); }
@@ -631,7 +719,8 @@
     if (!ms.length) return "";
     const team = id => d.teams.find(x => x.id === id) || d._gone?.[id];
     const row = (m, side) => {
-      const id = side === 1 ? m.team1_id : m.team2_id, sc = side === 1 ? m.score1 : m.score2, tm = id ? team(id) : null;
+      const id = side === 1 ? m.team1_id : m.team2_id, tm = id ? team(id) : null;
+      const sc = m.forfeit && m.winner_id && id && m.winner_id !== id ? "FF" : side === 1 ? m.score1 : m.score2;
       const win = m.winner_id && m.winner_id === id, lose = m.winner_id && id && m.winner_id !== id;
       const label = tm ? `${teamLogo(tm, 22)}<span class="bk-name">${esc(tm.name)}</span>` : `<span class="bk-name bk-tbd">${m.bye && m.round === 1 ? "Exempt" : "À déterminer"}</span>`;
       return `<div class="bk-row${win ? " win" : ""}${lose ? " lose" : ""}">${label}<span class="bk-sc">${sc ?? ""}</span></div>`;
@@ -652,6 +741,15 @@
     const champ = t.winner_team_id ? team(t.winner_team_id) : null;
     html += `<div class="bk-round bk-champ"><h4>Vainqueur</h4><div class="bk-col"><div class="bk-pair single"><div class="bk-slot"><div class="bk-win${champ ? "" : " empty"}">${champ ? `${teamLogo(champ, 44)}<b>${esc(champ.name)}</b>` : `<span class="small-note">À déterminer</span>`}</div></div></div></div></div>`;
     return `<div class="bk-scroll"><div class="bk" style="--cols:${total + 1}">${html}</div></div>`;
+  }
+
+  // Forfait : petite ligne discrète sous l'éditeur de score (staff)
+  const ffRow = (a, b) => `<p class="ff-row small-note">Équipe absente ? <button class="link-btn danger-t" type="button" data-ff="1">Forfait de ${esc(a ? a.name : "?")}</button> · <button class="link-btn danger-t" type="button" data-ff="2">Forfait de ${esc(b ? b.name : "?")}</button></p>`;
+  function bindFf(kind, m, done) {
+    document.querySelectorAll("#score-editor [data-ff]").forEach(b => confirmable(b, "Confirmer le forfait", async () => {
+      try { await rpc("admin_forfeit", { p_kind: kind, p_match: m.id, p_loser: b.dataset.ff === "1" ? m.team1_id : m.team2_id }); done(); }
+      catch (x) { $("#score-err").textContent = errMsg(x); }
+    }));
   }
 
   async function viewTournament(app, id) {
@@ -757,9 +855,11 @@
         <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
         <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
         <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button><button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
+        ${ffRow(a, b2)}
         <p class="form-err" id="score-err" role="alert"></p></form>`;
       $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" });
       $("#s1").focus();
+      bindFf("cup", m, () => { toast("Forfait enregistré."); reload(); });
       $("#score-cancel").onclick = () => { $("#score-editor").innerHTML = ""; el.classList.remove("sel"); };
       $("#score-form").onsubmit = async e => {
         e.preventDefault(); const s1 = $("#s1").value, s2 = $("#s2").value;
@@ -928,11 +1028,11 @@
 
     const weeks = [...new Set(d.matches.map(m => m.week))].sort((a, b) => a - b);
     const nextWeek = weeks.find(w => d.matches.some(m => m.week === w && !m.winner_id));
-    const side = (tid, sc, win) => { const t = team(tid); return `<span class="lm-team${win ? " win" : ""}">${t ? teamLogo(t, 24) : ""}<span>${t ? esc(t.name) : "Équipe supprimée"}</span></span><span class="lm-sc${win ? " win" : ""}">${sc ?? "–"}</span>`; };
+    const side = (tid, sc, win, ff) => { if (ff && !win) sc = "FF"; const t = team(tid); return `<span class="lm-team${win ? " win" : ""}">${t ? teamLogo(t, 24) : ""}<span>${t ? esc(t.name) : "Équipe supprimée"}</span></span><span class="lm-sc${win ? " win" : ""}">${sc ?? "–"}</span>`; };
     const schedule = weeks.length ? weeks.map(w => `<details class="week"${w === nextWeek || (!nextWeek && w === weeks[weeks.length - 1]) ? " open" : ""}>
         <summary>Journée ${w}<span class="small-note">${d.matches.filter(m => m.week === w && m.winner_id).length} / ${d.matches.filter(m => m.week === w).length} joués</span></summary>
         <div class="week-list">${d.matches.filter(m => m.week === w).map(m => `<${staff && l.status === "en_cours" ? `button type="button"` : "div"} class="lm${staff && l.status === "en_cours" ? " editable" : ""}" data-lm="${m.id}">
-          <span class="lm-side l">${side(m.team1_id, m.score1, m.winner_id && m.winner_id === m.team1_id)}</span><span class="lm-vs">vs</span><span class="lm-side r">${side(m.team2_id, m.score2, m.winner_id && m.winner_id === m.team2_id)}</span>
+          <span class="lm-side l">${side(m.team1_id, m.score1, m.winner_id && m.winner_id === m.team1_id, m.forfeit)}</span><span class="lm-vs">vs</span><span class="lm-side r">${side(m.team2_id, m.score2, m.winner_id && m.winner_id === m.team2_id, m.forfeit)}</span>
         </${staff && l.status === "en_cours" ? "button" : "div"}>`).join("")}</div></details>`).join("") : "";
 
     let staffHtml = "";
@@ -991,8 +1091,10 @@
         <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
         <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
         <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button>${m.winner_id ? `<button class="link-btn danger-t" type="button" id="score-clear">Effacer le score</button>` : ""}<button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
+        ${ffRow(a, b2)}
         <p class="form-err" id="score-err" role="alert"></p></form>`;
       $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" }); $("#s1").focus();
+      bindFf("league", m, () => { toast("Forfait enregistré, classement mis à jour."); reload(); });
       $("#score-cancel").onclick = () => { $("#score-editor").innerHTML = ""; el.classList.remove("sel"); };
       if ($("#score-clear")) $("#score-clear").onclick = async () => { try { await rpc("admin_report_league_score", { p_match: m.id, p_score1: null, p_score2: null }); toast("Score effacé."); reload(); } catch (x) { $("#score-err").textContent = errMsg(x); } };
       $("#score-form").onsubmit = async e => {
@@ -1197,13 +1299,20 @@
   async function viewAdmin(app) {
     if (!state.session) return needLogin(app, "Espace réservé au staff.");
     if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé au staff du réseau.</p>`); return; }
-    const [all, test] = await Promise.all([rpc("list_teams"), rpc("admin_test_summary").catch(() => null)]);
+    const [all, test, reports] = await Promise.all([rpc("list_teams"), rpc("admin_test_summary").catch(() => null), rpc("admin_list_reports").catch(() => [])]);
     const teams = all.filter(t => !t.is_test);
     const order = { en_attente: 0, validee: 1, refusee: 2 };
     teams.sort((a, b) => order[a.status] - order[b.status]);
     const nTest = test ? test.equipes + test.tournois + test.saisons : 0;
     app.innerHTML = panel("Validation des équipes", `
       ${adminTabs("teams")}
+      ${reports && reports.length ? `<section class="reports"><h3 class="t-h">Scores déclarés par les capitaines</h3>
+        <div class="rep-list">${reports.map(r => `<div class="rep-row${r.status === "conteste" ? " hot" : ""}">
+          <div><b>${esc(r.reporter)} ${r.score_for}-${r.score_against} ${esc(r.opponent || "?")}</b>
+            <span class="small-note">${esc(r.comp)} · ${r.status === "conteste" ? "Contesté par l'adversaire" + (r.note ? " : " + esc(r.note) : "") : "En attente de l'adversaire"}</span></div>
+          <div class="staff-row">${r.proof_url ? `<a class="link-btn" href="${esc(r.proof_url)}" target="_blank" rel="noopener">Capture</a>` : ""}<a class="btn sm${r.status === "conteste" ? " solid" : ""}" href="#/${r.kind === "cup" ? "tournoi" : "league"}/${r.comp_id}">Trancher</a></div>
+        </div>`).join("")}</div>
+        <p class="small-note">Pour trancher : ouvre la compétition, clique sur le match et entre le bon score. La déclaration disparaît toute seule.</p></section>` : ""}
       <div class="card test-card">
         <div><h3>Mode test</h3>
           <p class="small-note">Pour tout essayer sans vraies équipes : crée une Cup ou une saison de League en cochant « Compétition de test », puis clique sur « Ajouter des équipes de test ». Pour le HUD : Régie de cast puis « lancer un match de démo ». Les joueurs ne voient rien de tout ça.</p>
