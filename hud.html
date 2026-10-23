@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<title>PRIZM · HUD de cast</title>
+<meta name="robots" content="noindex">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;800;900&family=Instrument+Sans:wght@500;600&display=swap">
+<style>
+/* Source navigateur OBS : 1920 × 1080, fond transparent.
+   Paramètres : ?r=main|b  &scene=score|versus  &pos=top|bottom */
+:root{
+  --ink:#0e0f13; --ink2:#181a20; --paper:#f3f1ec; --mute:#a6a8b0;
+  --left:#2f5bff; --right:#d9577f;
+  --display:"Big Shoulders Display","Arial Narrow",Impact,sans-serif;
+  --body:"Instrument Sans",system-ui,sans-serif;
+}
+*{box-sizing:border-box;margin:0}
+html,body{width:1920px;height:1080px;overflow:hidden;background:transparent;color:var(--paper);font-family:var(--body)}
+img{display:block}
+
+/* ---------- Barre de score ---------- */
+.bar{position:absolute;left:50%;top:0;transform:translate(-50%,0);display:flex;flex-direction:column;align-items:center;
+  transition:transform .5s cubic-bezier(.2,.8,.2,1),opacity .4s}
+.pos-bottom .bar{top:auto;bottom:0;flex-direction:column-reverse}
+.hidden .bar{transform:translate(-50%,-120%);opacity:0}
+.pos-bottom.hidden .bar{transform:translate(-50%,120%)}
+.row{display:flex;align-items:stretch;height:72px}
+.side{display:flex;align-items:center;gap:16px;width:520px;background:var(--ink);padding:0 22px;position:relative}
+.side.l{clip-path:polygon(28px 0,100% 0,100% 100%,0 100%);justify-content:flex-end;padding-left:44px}
+.side.r{clip-path:polygon(0 0,100% 0,calc(100% - 28px) 100%,0 100%);flex-direction:row-reverse;justify-content:flex-end;padding-right:44px}
+.side::after{content:"";position:absolute;bottom:0;height:5px;width:100%;left:0}
+.side.l::after{background:var(--left)} .side.r::after{background:var(--right)}
+.logo{width:50px;height:50px;object-fit:contain;flex:none}
+.logo-empty{width:50px;height:50px;flex:none;display:grid;place-items:center;border:2px solid currentColor;font:800 17px/1 var(--display);opacity:.8}
+.names{display:flex;flex-direction:column;min-width:0;line-height:1}
+.l .names{align-items:flex-end;text-align:right}
+.name{font:900 34px/1 var(--display);text-transform:uppercase;letter-spacing:.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:330px}
+.name.s{font-size:28px}.name.xs{font-size:23px}
+.tag{font:600 14px/1 var(--body);color:var(--mute);margin-top:5px;letter-spacing:.06em}
+.pips{display:flex;gap:6px;flex:none}
+.pip{width:10px;height:24px;border:2px solid #4a4d57;transform:skewX(-14deg)}
+.l .pip.on{background:var(--left);border-color:var(--left)}
+.r .pip.on{background:var(--right);border-color:var(--right)}
+
+/* Le bloc central : une lame de papier coupée en biais, comme le logo */
+.score{position:relative;width:236px;background:var(--paper);color:var(--ink);display:flex;align-items:center;justify-content:center;gap:14px;
+  clip-path:polygon(0 0,100% 0,calc(100% - 22px) 100%,22px 100%);margin:0 -22px;z-index:1}
+.score b{font:900 60px/1 var(--display);min-width:62px;text-align:center;font-variant-numeric:tabular-nums}
+.score b.win{color:var(--ink)} .score b.lose{color:#8b8d95}
+.score i{width:3px;height:34px;background:linear-gradient(var(--left) 50%,var(--right) 50%);transform:skewX(-14deg)}
+.score b.bump{animation:bump .5s cubic-bezier(.2,.8,.2,1)}
+@keyframes bump{0%{transform:translateY(-14px);opacity:0}100%{transform:none;opacity:1}}
+
+.info{display:flex;gap:0;background:var(--ink2);font:600 15px/1 var(--body);letter-spacing:.03em;clip-path:polygon(14px 0,calc(100% - 14px) 0,100% 100%,0 100%)}
+.pos-bottom .info{clip-path:polygon(0 0,100% 0,calc(100% - 14px) 100%,14px 100%)}
+.info span{padding:9px 18px}
+.info span+span{border-left:1px solid #2c2f38}
+.info .map{color:var(--paper);font-weight:600}
+.info .muted{color:var(--mute)}
+
+/* ---------- Écran « versus » (entre les maps) ---------- */
+.vs{position:absolute;inset:0;background:var(--ink);display:grid;grid-template-rows:1fr auto;overflow:hidden;transition:opacity .5s}
+.hidden .vs{opacity:0}
+.vs::before,.vs::after{content:"";position:absolute;top:-10%;bottom:-10%;width:52%;transform:skewX(-12deg)}
+.vs::before{left:-8%;background:linear-gradient(90deg,rgba(47,91,255,.32),rgba(47,91,255,.05))}
+.vs::after{right:-8%;background:linear-gradient(270deg,rgba(217,87,127,.32),rgba(217,87,127,.05))}
+.vs-main{position:relative;z-index:1;display:grid;grid-template-columns:1fr 340px 1fr;align-items:center;padding:0 110px}
+.vs-team{display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center}
+.vs-team .logo,.vs-team .logo-empty{width:260px;height:260px}
+.vs-team .logo-empty{font-size:72px;border-width:4px}
+.vs-team .name{font-size:84px;max-width:620px}
+.vs-team .name.s{font-size:68px}.vs-team .name.xs{font-size:54px}
+.vs-team .name{white-space:normal;line-height:.95}
+.vs-team .tag{font-size:22px}
+.vs-mid{display:flex;flex-direction:column;align-items:center;gap:22px}
+.vs-score{display:flex;align-items:center;gap:26px;font:900 170px/1 var(--display)}
+.vs-score i{width:8px;height:120px;background:linear-gradient(var(--left) 50%,var(--right) 50%);transform:skewX(-14deg)}
+.vs-label{font:800 30px/1.1 var(--display);text-transform:uppercase;color:var(--mute);text-align:center;letter-spacing:.02em}
+.vs-foot{position:relative;z-index:1;display:flex;align-items:center;justify-content:space-between;padding:0 110px 56px}
+.vs-foot img{height:46px;width:auto}
+.vs-foot .title{font:800 34px/1 var(--display);text-transform:uppercase;letter-spacing:.02em}
+.vs-foot .map{font:600 22px/1 var(--body);color:var(--mute)}
+
+.waiting{position:absolute;left:24px;top:24px;font:600 18px/1.3 var(--body);background:rgba(14,15,19,.85);padding:12px 16px;max-width:560px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script src="config.js"></script>
+<script>
+(() => {
+  const q = new URLSearchParams(location.search);
+  const R = q.get("r") === "b" ? "b" : "main";
+  const SCENE = q.get("scene") === "versus" ? "versus" : "score";
+  document.body.classList.toggle("pos-bottom", q.get("pos") === "bottom");
+  const root = document.getElementById("root");
+  const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+  const CFG = window.PRIZM_CONFIG || {};
+  if (!window.supabase || !CFG.supabaseUrl) { root.innerHTML = `<p class="waiting">HUD PRIZM : config.js introuvable.</p>`; return; }
+  const sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: false, autoRefreshToken: false } });
+
+  let S = null, prev = null;
+  const logo = t => t && t.logo_url ? `<img class="logo" src="${esc(t.logo_url)}" alt="">` : `<span class="logo-empty">${esc((t && t.tag || "?").slice(0, 3))}</span>`;
+  const fit = n => (n || "").length > 16 ? " xs" : (n || "").length > 11 ? " s" : ""; // noms longs : police plus petite plutôt que coupée
+  const pips = (won, bo) => bo > 1 ? `<span class="pips">${Array.from({ length: Math.ceil(bo / 2) }, (_, i) => `<span class="pip${i < won ? " on" : ""}"></span>`).join("")}</span>` : "";
+
+  function render() {
+    if (!S || !S.team1 || !S.team2) { root.innerHTML = ""; return; }
+    document.body.classList.toggle("hidden", !S.visible);
+    const t1 = S.team1, t2 = S.team2, bo = S.best_of;
+    if (SCENE === "versus") {
+      root.innerHTML = `<div class="vs">
+        <div class="vs-main">
+          <div class="vs-team">${logo(t1)}<div class="names"><span class="name${fit(t1.name)}">${esc(t1.name)}</span><span class="tag">${esc(t1.tag)}</span></div></div>
+          <div class="vs-mid">
+            ${bo > 1 ? `<div class="vs-score"><b>${S.maps1}</b><i></i><b>${S.maps2}</b></div><p class="vs-label">${esc(S.stage || "")}<br>BO${bo}</p>`
+                     : `<div class="vs-score"><b>VS</b></div><p class="vs-label">${esc(S.stage || "")}</p>`}
+          </div>
+          <div class="vs-team">${logo(t2)}<div class="names"><span class="name${fit(t2.name)}">${esc(t2.name)}</span><span class="tag">${esc(t2.tag)}</span></div></div>
+        </div>
+        <div class="vs-foot"><img src="logo.png" alt="PRIZM Competitive Network"><span class="title">${esc(S.title || "")}</span><span class="map">${S.map_name ? "Prochaine map : " + esc(S.map_name) : ""}</span></div>
+      </div>`;
+      return;
+    }
+    const bump = k => prev && prev[k] !== S[k] ? " bump" : "";
+    const w1 = S.rounds1 > S.rounds2 ? "win" : S.rounds1 < S.rounds2 ? "lose" : "";
+    const w2 = S.rounds2 > S.rounds1 ? "win" : S.rounds2 < S.rounds1 ? "lose" : "";
+    const infos = [S.title, [S.stage, "BO" + bo].filter(Boolean).join(" / "), S.map_name ? `<b class="map">${esc(S.map_name)}</b>` : ""].filter(Boolean);
+    root.innerHTML = `<div class="bar">
+      <div class="row">
+        <div class="side l">${pips(S.maps1, bo)}<div class="names"><span class="name${fit(t1.name)}">${esc(t1.name)}</span><span class="tag">${esc(t1.tag)}</span></div>${logo(t1)}</div>
+        <div class="score"><b class="${w1}${bump("rounds1")}">${S.rounds1}</b><i></i><b class="${w2}${bump("rounds2")}">${S.rounds2}</b></div>
+        <div class="side r">${pips(S.maps2, bo)}<div class="names"><span class="name${fit(t2.name)}">${esc(t2.name)}</span><span class="tag">${esc(t2.tag)}</span></div>${logo(t2)}</div>
+      </div>
+      <div class="info">${infos.map((x, i) => `<span class="${i === 0 ? "" : "muted"}">${i === 2 ? x : esc(x)}</span>`).join("")}</div>
+    </div>`;
+  }
+
+  async function load() {
+    const { data, error } = await sb.rpc("cast_hud", { p_id: R });
+    if (error) { root.innerHTML = `<p class="waiting">HUD PRIZM : ${esc(error.message)}</p>`; return; }
+    prev = S; S = data; render();
+  }
+
+  // Temps réel : la régie modifie la ligne, le HUD la reçoit aussitôt
+  let poll = null;
+  sb.channel("cast-" + R)
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "cast_state", filter: "id=eq." + R }, p => {
+      const n = p.new;
+      if (!S || n.team1_id !== S.team1_id || n.team2_id !== S.team2_id) return load(); // nouvelles équipes : on recharge noms et logos
+      prev = S; S = { ...S, ...n }; render();
+    })
+    .subscribe(status => {
+      if (status === "SUBSCRIBED") { if (poll) { clearInterval(poll); poll = null; load(); } } // reconnexion : on resynchronise une fois
+      else if (!poll && (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED")) poll = setInterval(load, 15000); // secours si le temps réel coupe
+    });
+  load();
+})();
+</script>
+</body>
+</html>

@@ -107,6 +107,7 @@
           <a href="#/profil">Mon profil</a>
           <a href="#/mon-equipe">Mon équipe</a>
           ${state.isAdmin ? '<a href="#/admin">Admin</a>' : state.isStaff ? '<a href="#/tournois">Gérer les compétitions</a>' : ""}
+          ${state.isStaff ? '<a href="#/regie">Régie de cast</a>' : ""}
           <button type="button" id="logout-btn">Déconnexion</button>
         </div>
       </div>`;
@@ -125,7 +126,7 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/tournois": viewTournaments, "/staff": viewStaff };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/tournois": viewTournaments, "/staff": viewStaff, "/regie": viewRegie };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
@@ -965,6 +966,148 @@
     });
   }
 
+  // ---------- Régie de cast (pilote le HUD OBS) ----------
+  const VAL_MAPS = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset"];
+  let regieId = "main", regieKeys = null;
+  async function viewRegie(app) {
+    if (!state.session) return needLogin(app, "Espace réservé au staff.");
+    if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">La régie de cast est réservée au staff.</p>`); return; }
+    const R = regieId;
+    const [S0, matches] = await Promise.all([rpc("cast_hud", { p_id: R }), rpc("cast_matches")]);
+    let S = S0 || {};
+    const base = location.origin + location.pathname.replace(/[^/]*$/, "");
+    const hudUrl = scene => `${base}hud.html?r=${R}${scene === "versus" ? "&scene=versus" : ""}`;
+    const cur = matches.find(m => m.id === S.match_id);
+    const optLabel = m => `${m.team1} vs ${m.team2} · ${m.stage}`;
+    const groups = [...new Set(matches.map(m => m.title))];
+
+    app.innerHTML = panel("Régie de cast", `
+      ${state.isAdmin ? adminTabs("regie") : ""}
+      <p class="lead">Choisis le match, puis compte les rounds pendant le cast. Le HUD dans OBS se met à jour tout seul.</p>
+      <div class="rg-head">
+        <div class="f-group"><span class="eyebrow">Régie</span>
+          <button type="button" class="f-chip${R === "main" ? " on" : ""}" data-rg="main">Principale</button><button type="button" class="f-chip${R === "b" ? " on" : ""}" data-rg="b">Régie 2</button></div>
+        <div class="rg-links">
+          <span class="small-note">Sources navigateur OBS (1920 × 1080) :</span>
+          <button class="btn sm" type="button" data-copy="${esc(hudUrl("score"))}">Copier le lien du HUD</button>
+          <button class="btn sm" type="button" data-copy="${esc(hudUrl("versus"))}">Copier l'écran entre les maps</button>
+          <span class="copied" id="rg-copied" aria-live="polite"></span>
+        </div>
+      </div>
+      <div class="card rg-pick">
+        <label for="rg-match">Match à caster</label>
+        <div class="rg-pick-row">
+          <select id="rg-match">${matches.length ? `<option value="">Choisis un match…</option>` + groups.map(g => `<optgroup label="${esc(g)}">${matches.filter(m => m.title === g).map(m => `<option value="${m.id}" ${cur && cur.id === m.id ? "selected" : ""}>${esc(optLabel(m))}</option>`).join("")}</optgroup>`).join("")
+            : `<option value="">Aucun match en attente : lance un bracket ou un calendrier de League</option>`}</select>
+          <button class="btn sm solid" id="rg-load" type="button" ${matches.length ? "" : "disabled"}>Mettre ce match à l'antenne</button>
+        </div>
+        <p class="small-note">Mettre un match à l'antenne remet le score à 0-0.</p>
+      </div>
+      <div id="rg-board"></div>
+      ${S.team1 ? `<div class="rg-preview"><span class="eyebrow">Aperçu du HUD (en direct)</span><div class="rg-frame"><iframe src="${esc(hudUrl("score"))}" title="Aperçu du HUD" loading="lazy"></iframe></div></div>` : ""}`, "Cast");
+
+    const board = $("#rg-board");
+    const need = () => Math.ceil((S.best_of || 1) / 2);
+    let pending = {}, timer = null, saving = false;
+    const status = txt => { const el = $("#rg-status"); if (el) el.textContent = txt; };
+    async function flush() {
+      if (saving) { timer = setTimeout(flush, 150); return; }
+      const patch = pending; pending = {}; timer = null; if (!Object.keys(patch).length) return;
+      saving = true; status("Envoi…");
+      const { error } = await sb.from("cast_state").update(patch).eq("id", R);
+      saving = false; status(error ? "Erreur : " + errMsg(error) : "À jour sur le HUD");
+    }
+    // Les clics rapprochés sont regroupés en une seule écriture
+    const save = patch => {
+      const db = { ...patch }; delete db.team1; delete db.team2; // noms et logos : affichage seulement, pas des colonnes
+      Object.assign(S, patch); Object.assign(pending, db); drawBoard(); clearTimeout(timer); timer = setTimeout(flush, 250);
+    };
+    const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+
+    function finalScore() {
+      const m = matches.find(x => x.id === S.match_id); if (!m) return null;
+      const [a, b] = S.best_of > 1 ? [S.maps1, S.maps2] : [S.rounds1, S.rounds2];
+      return { m, s1: S.team1_id === m.team1_id ? a : b, s2: S.team1_id === m.team1_id ? b : a, a, b };
+    }
+
+    function drawBoard() {
+      if (!S.team1 || !S.team2) { board.innerHTML = `<p class="small-note">Aucun match à l'antenne pour l'instant.</p>`; return; }
+      const bo = S.best_of, over = bo > 1 && (S.maps1 >= need() || S.maps2 >= need());
+      const side = n => { const t = S["team" + n]; return `<div class="rg-side s${n}">
+          <div class="rg-team">${teamLogo(t, 44)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span></div>
+          <div class="rg-count"><span class="eyebrow">Rounds</span>
+            <div class="rg-step"><button type="button" class="rg-btn" data-d="rounds${n}" data-v="-1" aria-label="Retirer un round à ${esc(t.name)}">−</button><b>${S["rounds" + n]}</b><button type="button" class="rg-btn plus" data-d="rounds${n}" data-v="1" aria-label="Ajouter un round à ${esc(t.name)}">+</button></div></div>
+          ${bo > 1 ? `<div class="rg-count"><span class="eyebrow">Maps gagnées</span>
+            <div class="rg-step sm"><button type="button" class="rg-btn" data-d="maps${n}" data-v="-1" aria-label="Retirer une map à ${esc(t.name)}">−</button><b>${S["maps" + n]}</b><button type="button" class="rg-btn" data-d="maps${n}" data-v="1" aria-label="Ajouter une map à ${esc(t.name)}">+</button></div>
+            <button type="button" class="btn sm" data-mapwin="${n}" ${over ? "disabled" : ""}>Map gagnée par ${esc(t.tag)}</button></div>` : ""}
+        </div>`; };
+      const fs = finalScore();
+      board.innerHTML = `<div class="rg-live">
+          <div class="rg-meta">${divChip(S.division)}<b>${esc(S.title || "")}</b><span>${esc(S.stage || "")} · BO${bo}</span><span class="rg-status" id="rg-status" aria-live="polite"></span></div>
+          <div class="rg-board">${side(1)}<button type="button" class="rg-swap" id="rg-swap" title="Inverser les côtés (gauche / droite)">⇄<span>Inverser</span></button>${side(2)}</div>
+          <div class="rg-opts">
+            <label for="rg-map">Map en cours</label>
+            <select id="rg-map"><option value="">—</option>${VAL_MAPS.map(m => `<option ${S.map_name === m ? "selected" : ""}>${m}</option>`).join("")}</select>
+            <button type="button" class="btn sm" id="rg-vis">${S.visible ? "Masquer le HUD" : "Afficher le HUD"}</button>
+            <button type="button" class="link-btn" id="rg-zero">Rounds à 0-0</button>
+          </div>
+          <p class="small-note">Raccourcis clavier : <kbd>A</kbd> round pour la gauche, <kbd>L</kbd> round pour la droite, <kbd>Z</kbd> annule le dernier round.</p>
+        </div>
+        <div class="card rg-end">
+          <h3>Fin du match</h3>
+          ${fs ? `<p>Résultat envoyé au ${S.match_kind === "cup" ? "bracket" : "classement"} : <b>${esc(S.team1.name)} ${fs.a} – ${fs.b} ${esc(S.team2.name)}</b>${bo > 1 ? " (maps)" : " (rounds)"}.</p>
+            <button type="button" class="btn solid" id="rg-final" ${fs.a === fs.b || (bo > 1 && !over) ? "disabled" : ""}>Enregistrer le résultat sur le site</button>
+            <p class="small-note">${bo > 1 ? (over ? "Série terminée : tu peux enregistrer." : `Disponible quand une équipe a ${need()} maps.`) : fs.a === fs.b ? "Il faut un vainqueur pour enregistrer." : "Vérifie le score des rounds avant d'enregistrer."}</p>`
+            : `<p class="small-note">Ce match est déjà enregistré sur le site, ou n'est plus en cours.</p>`}
+          <p class="form-err" id="rg-err" role="alert"></p>
+        </div>`;
+
+      board.querySelectorAll("[data-d]").forEach(b => b.onclick = () => {
+        const k = b.dataset.d, max = k.startsWith("maps") ? need() : 99; save({ [k]: clamp(S[k] + +b.dataset.v, 0, max) }); });
+      board.querySelectorAll("[data-mapwin]").forEach(b => b.onclick = () => {
+        const n = b.dataset.mapwin; save({ ["maps" + n]: clamp(S["maps" + n] + 1, 0, need()), rounds1: 0, rounds2: 0, map_name: null }); });
+      $("#rg-swap").onclick = () => save({ team1_id: S.team2_id, team2_id: S.team1_id, team1: S.team2, team2: S.team1,
+        rounds1: S.rounds2, rounds2: S.rounds1, maps1: S.maps2, maps2: S.maps1 });
+      $("#rg-map").onchange = e => save({ map_name: e.target.value || null });
+      $("#rg-vis").onclick = () => save({ visible: !S.visible });
+      $("#rg-zero").onclick = () => save({ rounds1: 0, rounds2: 0 });
+      if ($("#rg-final")) confirmable($("#rg-final"), "Confirmer : le résultat sera enregistré", async () => {
+        const f = finalScore(); $("#rg-err").textContent = "";
+        try {
+          await rpc(f.m.kind === "cup" ? "admin_report_score" : "admin_report_league_score", { p_match: f.m.id, p_score1: f.s1, p_score2: f.s2 });
+          toast("Résultat enregistré sur le site."); viewRegie(app);
+        } catch (x) { $("#rg-err").textContent = errMsg(x); }
+      });
+    }
+    drawBoard();
+    const fr = $(".rg-frame", app);
+    if (fr) { const fit = () => fr.style.setProperty("--k", fr.clientWidth / 1920); fit(); new ResizeObserver(fit).observe(fr); }
+
+    app.querySelectorAll("[data-rg]").forEach(b => b.onclick = () => { regieId = b.dataset.rg; viewRegie(app); });
+    app.querySelectorAll("[data-copy]").forEach(b => b.onclick = () => copyText(b.dataset.copy, $("#rg-copied"), null));
+    $("#rg-load").onclick = async () => {
+      const m = matches.find(x => x.id === $("#rg-match").value);
+      if (!m) return toast("Choisis un match dans la liste.", "err");
+      const patch = { match_kind: m.kind, match_id: m.id, team1_id: m.team1_id, team2_id: m.team2_id, maps1: 0, maps2: 0, rounds1: 0, rounds2: 0,
+        best_of: m.best_of, map_name: null, title: m.title, stage: m.stage, division: m.division, visible: true };
+      const { error } = await sb.from("cast_state").update(patch).eq("id", R);
+      if (error) return toast(errMsg(error), "err");
+      toast("Match à l'antenne."); viewRegie(app);
+    };
+    // Raccourcis clavier (actifs seulement sur cette page)
+    let lastKey = null;
+    if (regieKeys) document.removeEventListener("keydown", regieKeys);
+    regieKeys = e => {
+      if (!location.hash.startsWith("#/regie")) { document.removeEventListener("keydown", regieKeys); regieKeys = null; return; }
+      if (/INPUT|SELECT|TEXTAREA/.test(document.activeElement.tagName) || e.ctrlKey || e.metaKey || e.altKey || !S.team1) return;
+      const k = e.key.toLowerCase();
+      if (k === "a") { lastKey = "rounds1"; save({ rounds1: clamp(S.rounds1 + 1, 0, 99) }); }
+      else if (k === "l") { lastKey = "rounds2"; save({ rounds2: clamp(S.rounds2 + 1, 0, 99) }); }
+      else if (k === "z" && lastKey) { save({ [lastKey]: clamp(S[lastKey] - 1, 0, 99) }); lastKey = null; }
+    };
+    document.addEventListener("keydown", regieKeys);
+  }
+
   // ---------- Staff ----------
   async function viewStaff(app) {
     if (!state.session) return needLogin(app, "Espace réservé aux admins.");
@@ -1005,7 +1148,7 @@
     };
   }
 
-  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/tournois">Compétitions</a></nav>`;
+  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/regie" class="${cur === "regie" ? "on" : ""}">Régie de cast</a><a href="#/tournois">Compétitions</a></nav>`;
 
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
