@@ -151,6 +151,19 @@
     return data;
   }
 
+  // Synchro des rôles Discord (D1 à D4, Capitaine) via la fonction discord-sync
+  async function discordSync(body, verbose = false) {
+    if (!sb) return;
+    try {
+      const { data, error } = await sb.functions.invoke("discord-sync", { body });
+      if (error) { if (verbose) toast("Synchro Discord impossible : " + (await error.context?.json?.().then(j => j.error).catch(() => null) || error.message), "err"); return; }
+      if (verbose && data && data.report) {
+        const lines = Object.entries(data.report).map(([k, v]) => k + " : " + v);
+        toast("Discord · " + (lines.join(" · ") || "rien à changer"));
+      }
+    } catch (e) { if (verbose) toast("Synchro Discord impossible.", "err"); }
+  }
+
   const rankOptions = sel => `<option value="">Choisis ton rang</option>` +
     ["Fer","Bronze","Argent","Or","Platine","Diamant","Ascendant","Immortel"].map((g, gi) =>
       `<optgroup label="${g}">${[0,1,2].map(k => { const i = gi*3+k; return `<option value="${i}" ${sel === i ? "selected" : ""}>${RANKS[i]}</option>`; }).join("")}</optgroup>`).join("") +
@@ -227,7 +240,7 @@
       };
       $("#join-form").onsubmit = async e => {
         e.preventDefault(); const err = $("#join-err"); err.textContent = "";
-        try { await rpc("join_team", { p_code: $("#j-code").value.trim() }); toast("Tu as rejoint l'équipe."); try { sessionStorage.removeItem("prizm_join"); } catch (e) {} viewMyTeam(app); }
+        try { const tid = await rpc("join_team", { p_code: $("#j-code").value.trim() }); discordSync({ team_id: tid }); toast("Tu as rejoint l'équipe."); try { sessionStorage.removeItem("prizm_join"); } catch (e) {} viewMyTeam(app); }
         catch (x) { err.textContent = errMsg(x); }
       };
       return;
@@ -247,7 +260,8 @@
           t.status === "refusee" ? "Contacte le staff dans #support sur le Discord." :
           `Division estimée : <b>${t.suggested ? DIV_NAMES[t.suggested] : "à calculer"}</b>. Le staff valide la division finale.`}</span>
       </div>
-      ${tit < 5 ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
+      ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
+      ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
       ${rosterTable(roster, isCap, me)}
       <div class="two" style="margin-top:32px">
         <div class="card">
@@ -265,11 +279,12 @@
         </div>
       </div>`, "Mon équipe");
 
+    if ($("#sync-me")) $("#sync-me").onclick = () => discordSync({ user_ids: [me] }, true);
     $("#copy-inv").onclick = () => copyText(inviteLink, $("#inv-copied"), null);
     if ($("#regen")) confirmable($("#regen"), "Confirmer : l'ancien code ne marchera plus", async () => {
       try { await rpc("regenerate_invite"); toast("Nouveau code généré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     confirmable($("#leave"), "Clique encore pour confirmer", async () => {
-      try { await rpc("leave_team"); toast("Tu as quitté l'équipe."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
+      try { await rpc("leave_team"); discordSync({ user_ids: [me] }); toast("Tu as quitté l'équipe."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     bindRosterActions(app, () => viewMyTeam(app));
   }
 
@@ -298,8 +313,8 @@
     root.querySelectorAll("[data-act]").forEach(b => {
       const u = b.dataset.u;
       if (b.dataset.act === "role") b.onclick = async () => { try { await rpc("set_member_role", { p_user: u, p_role: b.dataset.r }); refresh(); } catch (x) { toast(errMsg(x), "err"); } };
-      if (b.dataset.act === "cap") confirmable(b, "Confirmer ?", async () => { try { await rpc("transfer_captain", { p_user: u }); toast("Nouveau capitaine nommé."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
-      if (b.dataset.act === "kick") confirmable(b, "Confirmer ?", async () => { try { await rpc("kick_member", { p_user: u }); toast("Joueur retiré."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
+      if (b.dataset.act === "cap") confirmable(b, "Confirmer ?", async () => { try { await rpc("transfer_captain", { p_user: u }); discordSync({ user_ids: [u, state.session.user.id] }); toast("Nouveau capitaine nommé."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
+      if (b.dataset.act === "kick") confirmable(b, "Confirmer ?", async () => { try { await rpc("kick_member", { p_user: u }); discordSync({ user_ids: [u] }); toast("Joueur retiré."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
     });
   }
 
@@ -347,15 +362,18 @@
             <select id="div-${t.id}">${[1,2,3,4].map(d => `<option value="${d}" ${(t.division || t.suggested) === d ? "selected" : ""}>D${d}</option>`).join("")}</select>
             <button class="btn sm solid" data-review="validee" type="button">Valider</button>
             <button class="btn sm" data-review="refusee" type="button">Refuser</button>
+            <button class="link-btn" data-sync type="button" title="Remet les rôles Discord de cette équipe à jour">Synchro Discord</button>
           </div>
           <details class="team-row" data-id="${t.id}"><summary>Voir le roster</summary><div class="roster-slot"></div></details>
         </div>`).join("") || `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`}</div>`, "Staff");
     app.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
       const row = b.closest(".admin-row"), id = row.dataset.id;
       try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$("select", row).value });
-        toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); viewAdmin(app); }
+        toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); await discordSync({ team_id: id }, true); viewAdmin(app); }
       catch (x) { toast(errMsg(x), "err"); }
     });
+    app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => {
+      b.disabled = true; await discordSync({ team_id: b.closest(".admin-row").dataset.id }, true); b.disabled = false; });
     bindTeamRows(app, true);
   }
 
