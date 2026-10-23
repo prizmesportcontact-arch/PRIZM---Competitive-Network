@@ -44,14 +44,15 @@
   if (window.supabase && CFG.supabaseUrl && CFG.supabaseKey) {
     sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
   }
-  const state = { session: null, profile: null, isAdmin: false };
+  const state = { session: null, profile: null, isAdmin: false, isStaff: false };
 
   async function loadMe() {
-    state.profile = null; state.isAdmin = false;
+    state.profile = null; state.isAdmin = false; state.isStaff = false;
     if (!sb || !state.session) return;
-    const { data, error } = await sb.from("profiles").select("id,username,avatar_url,riot_id,rank,rank_source,rank_checked_at,is_admin").eq("id", state.session.user.id).maybeSingle();
+    const { data, error } = await sb.from("profiles").select("id,username,avatar_url,riot_id,rank,rank_source,rank_checked_at,is_admin,staff_role").eq("id", state.session.user.id).maybeSingle();
     if (error) { if (isSetupError(error)) showSetupBanner(); return; }
     state.profile = data; state.isAdmin = !!(data && data.is_admin);
+    state.isStaff = state.isAdmin || !!(data && ["admin", "arbitre"].includes(data.staff_role));
   }
 
   function isSetupError(e) {
@@ -93,7 +94,7 @@
         <div class="me-menu" id="me-menu" hidden>
           <a href="#/profil">Mon profil</a>
           <a href="#/mon-equipe">Mon équipe</a>
-          ${state.isAdmin ? '<a href="#/admin">Admin</a>' : ""}
+          ${state.isAdmin ? '<a href="#/admin">Admin</a>' : state.isStaff ? '<a href="#/tournois">Gérer les compétitions</a>' : ""}
           <button type="button" id="logout-btn">Déconnexion</button>
         </div>
       </div>`;
@@ -108,17 +109,17 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/tournois": viewTournaments };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/tournois": viewTournaments, "/staff": viewStaff };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
     const home = $("#view-home"), app = $("#view-app");
-    document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h || (h.startsWith("#/tournoi") && a.getAttribute("href") === "#/tournois")));
-    const tm = path && path.match(/^\/tournoi\/(.+)$/);
-    if (path && (views[path] || tm)) {
+    document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h || ((h.startsWith("#/tournoi") || h.startsWith("#/league")) && a.getAttribute("href") === "#/tournois")));
+    const tm = path && path.match(/^\/tournoi\/(.+)$/), lm = path && path.match(/^\/league\/(.+)$/);
+    if (path && (views[path] || tm || lm)) {
       home.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
-      (tm ? viewTournament(app, tm[1]) : views[path](app)).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
+      (tm ? viewTournament(app, tm[1]) : lm ? viewLeague(app, lm[1]) : views[path](app)).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
     } else {
       app.hidden = true; home.hidden = false;
       if (h && !h.startsWith("#/")) { const el = document.getElementById(h.slice(1)); if (el) el.scrollIntoView(); }
@@ -522,30 +523,9 @@
     } catch (e) { toast("Annonce Discord impossible.", "err"); }
   }
 
-  async function viewTournaments(app) {
-    if (!sb) { app.innerHTML = panel("Tournois", `<p class="lead">Bientôt disponible.</p>`); return; }
-    if (state.session && !state.profile) await loadMe();
-    const list = await rpc("list_tournaments");
-    const live = list.filter(t => t.status === "en_cours"), next = list.filter(t => ["brouillon", "inscriptions", "checkin"].includes(t.status)), done = list.filter(t => t.status === "termine");
-    const card = t => `<a class="t-card" href="#/tournoi/${t.id}">
-        <div class="t-card-top">${divChip(t.division)}${tPill(t.status)}</div>
-        <b class="t-card-name">${esc(t.name)}</b>
-        <span class="small-note">${esc(fmtDate(t.starts_at))}</span>
-        <span class="t-card-meta">${t.teams} / ${t.max_teams} équipes · BO${t.best_of}, finale BO${t.final_best_of}</span>
-        ${t.status === "termine" && t.winner_name ? `<span class="t-card-win">${teamLogo({ logo_url: t.winner_logo, tag: t.winner_tag }, 28)}<span>🥇 ${esc(t.winner_name)}</span></span>` : ""}
-      </a>`;
-    const block = (title, arr, empty) => `<section class="div-block"><h3>${title}</h3>${arr.length ? `<div class="t-grid">${arr.map(card).join("")}</div>` : `<p class="small-note">${empty}</p>`}</section>`;
-    app.innerHTML = panel("Tournois", `
-      <p class="lead">Les PRIZM Cup se jouent en élimination directe, par division. Le capitaine inscrit son équipe, fait le check-in le jour J, et le bracket se met à jour en direct.</p>
-      ${state.isAdmin ? `<div class="ctas" style="margin:16px 0 8px"><a class="btn solid" href="#/tournoi/nouveau">Créer un tournoi</a></div>` : ""}
-      ${block("En cours", live, "Aucun tournoi en cours.")}
-      ${block("À venir", next, "Aucun tournoi annoncé pour l'instant. Suis les annonces sur le Discord.")}
-      ${block("Terminés", done, "Pas encore de tournoi terminé.")}`, "Compétition");
-  }
-
   async function viewTournamentForm(app, t) {
     await loadMe();
-    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
+    if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
     const v = t || { name: "", division: 2, starts_at: null, max_teams: 8, best_of: 1, final_best_of: 3, description: "" };
     const locked = t && ["en_cours", "termine"].includes(t.status);
     const opt = (vals, cur, lab = x => x) => vals.map(x => `<option value="${x}" ${+cur === x ? "selected" : ""}>${lab(x)}</option>`).join("");
@@ -637,7 +617,7 @@
       }
     }
     const reg = my ? d.teams.find(x => x.id === my.id) : null;
-    const isAdmin = state.isAdmin;
+    const isAdmin = state.isStaff;
 
     // Bloc d'action du capitaine
     let action = "";
@@ -691,7 +671,7 @@
       ${staff}
       ${d.matches.length ? `<h3 class="t-h">Bracket</h3>${bracketHtml(d, isAdmin)}` : ""}
       <h3 class="t-h">Équipes inscrites</h3>${teamsHtml}
-      <div class="ctas" style="margin-top:32px"><a class="btn" href="#/tournois">Tous les tournois</a></div>`, `Tournoi · ${DIV_NAMES[t.division]}`);
+      <div class="ctas" style="margin-top:32px"><a class="btn" href="#/tournois">Toutes les compétitions</a></div>`, `Tournoi · ${DIV_NAMES[t.division]}`);
 
     const reload = () => viewTournament(app, id);
     const err = $("#t-err");
@@ -745,6 +725,274 @@
     });
   }
 
+  // ================= Compétitions (Cups + League) =================
+  const L_STATUS = { brouillon: "Brouillon", inscriptions: "Inscriptions ouvertes", en_cours: "En cours", termine: "Terminée" };
+  const L_PILL = { brouillon: "wait", inscriptions: "ok", en_cours: "live", termine: "done" };
+  const lPill = s => `<span class="pill t-${L_PILL[s]}">${L_STATUS[s]}</span>`;
+  const compFilter = { div: null, type: "all", init: false };
+  const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
+  const dateTile = iso => {
+    if (!iso) return `<div class="date-tile empty"><b>?</b><span>date à venir</span></div>`;
+    const d = new Date(iso);
+    return `<div class="date-tile"><b>${d.getDate()}</b><span>${MONTHS[d.getMonth()]}</span><small>${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</small></div>`;
+  };
+
+  async function viewTournaments(app) {
+    if (!sb) { app.innerHTML = panel("Compétitions", `<p class="lead">Bientôt disponible.</p>`); return; }
+    if (state.session && !state.profile) await loadMe();
+    const [cups, leagues] = await Promise.all([rpc("list_tournaments"), rpc("list_leagues").catch(() => [])]);
+    // Division par défaut : celle de mon équipe
+    if (!compFilter.init) {
+      compFilter.init = true;
+      if (state.session) { try { const tid = await rpc("my_team_id"); if (tid) { const t = (await rpc("list_teams")).find(x => x.id === tid); if (t && t.division) compFilter.div = t.division; } } catch (e) {} }
+    }
+    const items = [
+      ...cups.map(t => ({ kind: "cup", id: t.id, name: t.name, division: t.division, date: t.starts_at, status: t.status,
+        live: t.status === "en_cours", open: ["inscriptions", "checkin"].includes(t.status), done: t.status === "termine",
+        type: t.name.startsWith("PRIZM League · Playoffs") ? "Playoffs" : "Cup", places: `${t.teams} / ${t.max_teams} équipes`,
+        format: `BO${t.best_of} · finale BO${t.final_best_of}`, pill: tPill(t.status), href: "#/tournoi/" + t.id,
+        result: t.winner_name ? { label: "Vainqueur", name: t.winner_name, tag: t.winner_tag, logo: t.winner_logo } : null })),
+      ...leagues.map(l => ({ kind: "league", id: l.id, name: l.name, division: l.division, date: l.starts_at, status: l.status,
+        live: l.status === "en_cours", open: l.status === "inscriptions", done: l.status === "termine",
+        type: "League", places: `${l.teams} / ${l.max_teams} équipes`, format: `Saison régulière · BO${l.best_of}`, pill: lPill(l.status), href: "#/league/" + l.id,
+        result: l.leader_name ? { label: l.status === "termine" ? "1er" : "En tête", name: l.leader_name, tag: l.leader_tag, logo: l.leader_logo } : null })),
+    ];
+    const shown = items.filter(x => (!compFilter.div || x.division === compFilter.div) &&
+      (compFilter.type === "all" || (compFilter.type === "cup" ? x.kind === "cup" : x.kind === "league")));
+    const byDate = (a, b) => (a.date ? new Date(a.date) : Infinity) - (b.date ? new Date(b.date) : Infinity);
+    const live = shown.filter(x => x.live).sort(byDate);
+    const next = shown.filter(x => !x.live && !x.done).sort((a, b) => (b.open - a.open) || byDate(a, b));
+    const done = shown.filter(x => x.done).sort((a, b) => -byDate(a, b));
+
+    const typeBadge = x => `<span class="type-badge ${x.kind}">${x.type}</span>`;
+    const resultHtml = x => x.result ? `<span class="row-result">${teamLogo({ logo_url: x.result.logo, tag: x.result.tag }, 26)}<span><small>${x.result.label}</small>${esc(x.result.name)}</span></span>` : "";
+    const row = x => `<a class="comp-row${x.open ? " open" : ""}" href="${x.href}">
+        ${dateTile(x.date)}
+        <span class="comp-main"><span class="comp-tags">${divChip(x.division)}${typeBadge(x)}${x.pill}</span>
+          <b class="comp-name">${esc(x.name)}</b><span class="small-note">${x.format} · ${x.places}</span></span>
+        ${x.done ? resultHtml(x) : `<span class="comp-cta">${x.open ? "S'inscrire →" : x.live ? "Suivre →" : "Voir →"}</span>`}
+      </a>`;
+    const liveCard = x => `<a class="live-card" href="${x.href}">
+        <span class="comp-tags">${divChip(x.division)}${typeBadge(x)}${x.pill}</span>
+        <b class="comp-name">${esc(x.name)}</b>
+        <span class="small-note">${x.format} · ${x.places}</span>
+        ${x.result ? resultHtml(x) : ""}
+        <span class="comp-cta">${x.kind === "cup" ? "Voir le bracket en direct →" : "Voir le classement →"}</span></a>`;
+    const chip = (key, val, label) => `<button type="button" class="f-chip${compFilter[key] === val ? " on" : ""}" data-f="${key}" data-v="${val ?? ""}" aria-pressed="${compFilter[key] === val}">${label}</button>`;
+
+    app.innerHTML = panel("Compétitions", `
+      <p class="lead">Les PRIZM Cup se jouent en une soirée, en élimination directe. La PRIZM League est une saison où chaque équipe affronte toutes les autres, avant des playoffs pour le top 4.</p>
+      <div class="filters" role="group" aria-label="Filtres">
+        <div class="f-group"><span class="eyebrow">Division</span>${chip("div", null, "Toutes")}${[1, 2, 3, 4].map(d => chip("div", d, "D" + d)).join("")}</div>
+        <div class="f-group"><span class="eyebrow">Type</span>${chip("type", "all", "Tout")}${chip("type", "cup", "Cups")}${chip("type", "league", "League")}</div>
+      </div>
+      ${state.isStaff ? `<div class="staff-row" style="margin-top:8px"><a class="btn sm solid" href="#/tournoi/nouveau">Créer une Cup</a><a class="btn sm" href="#/league/nouveau">Créer une saison de League</a></div>` : ""}
+      ${live.length ? `<section class="comp-sec"><h3><span class="live-dot"></span>En direct</h3><div class="live-grid">${live.map(liveCard).join("")}</div></section>` : ""}
+      <section class="comp-sec"><h3>Prochainement</h3>${next.length ? `<div class="comp-list">${next.map(row).join("")}</div>` : `<p class="small-note">Rien de prévu${compFilter.div ? " en D" + compFilter.div : ""} pour l'instant. Les annonces arrivent sur le Discord.</p>`}</section>
+      <section class="comp-sec"><h3>Résultats</h3>${done.length ? `<div class="comp-list">${done.map(row).join("")}</div>` : `<p class="small-note">Pas encore de compétition terminée${compFilter.div ? " en D" + compFilter.div : ""}.</p>`}</section>`, "Compétition");
+    app.querySelectorAll(".f-chip").forEach(b => b.onclick = () => {
+      const k = b.dataset.f; compFilter[k] = k === "div" ? (b.dataset.v ? +b.dataset.v : null) : b.dataset.v; viewTournaments(app);
+    });
+  }
+
+  // ---------- League ----------
+  async function viewLeagueForm(app, l) {
+    await loadMe();
+    if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
+    const v = l || { division: 2, starts_at: null, max_teams: 8, best_of: 1, description: "" };
+    const locked = l && ["en_cours", "termine"].includes(l.status);
+    const opt = (vals, cur, lab = x => x) => vals.map(x => `<option value="${x}" ${+cur === x ? "selected" : ""}>${lab(x)}</option>`).join("");
+    let seasons = [];
+    if (!l) { try { seasons = await rpc("list_leagues"); } catch (e) {} }
+    app.innerHTML = panel(l ? "Modifier la saison" : "Nouvelle saison de League", `
+      <form class="form" id="l-form" novalidate>
+        ${l ? `<label>Nom</label><p class="t-name-fixed">${esc(l.name)}</p>` : ""}
+        <label for="l-div">Division</label><select id="l-div" ${l ? "disabled" : ""}>${opt([1, 2, 3, 4], v.division, d => DIV_NAMES[d])}</select>
+        ${l ? "" : `<p class="t-name-preview">Nom : <b id="l-name-preview"></b></p>`}
+        <label for="l-date">Date de début</label><input id="l-date" type="datetime-local" value="${toLocalInput(v.starts_at)}">
+        <label for="l-max">Nombre d'équipes maximum</label><select id="l-max" ${locked ? "disabled" : ""}>${opt([4, 5, 6, 7, 8, 9, 10, 11, 12], v.max_teams)}</select>
+        <span class="hint">Chaque équipe joue une fois contre toutes les autres : 8 équipes = 7 journées.</span>
+        <label for="l-bo">Format des matchs</label><select id="l-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
+        <label for="l-desc">Description (optionnelle)</label><textarea id="l-desc" rows="4" maxlength="1000" placeholder="Jour des matchs, récompenses…">${esc(v.description || "")}</textarea>
+        <div class="ctas"><button class="btn solid" type="submit">${l ? "Enregistrer" : "Créer la saison"}</button><a class="btn" href="${l ? "#/league/" + l.id : "#/tournois"}">Annuler</a></div>
+        <p class="form-err" id="l-err" role="alert"></p>
+      </form>`, "Staff");
+    const preview = () => { if (l) return; const d = +$("#l-div").value; const n = seasons.filter(s => s.division === d).reduce((m, s) => Math.max(m, s.season), 0) + 1; $("#l-name-preview").textContent = `PRIZM League · Saison ${n} · D${d}`; };
+    if (!l) { $("#l-div").onchange = preview; preview(); }
+    $("#l-form").onsubmit = async e => {
+      e.preventDefault(); const err = $("#l-err"); err.textContent = ""; const date = $("#l-date").value;
+      try {
+        const id = await rpc("admin_save_league", { p_id: l ? l.id : null, p_division: +$("#l-div").value, p_starts_at: date ? new Date(date).toISOString() : null,
+          p_max_teams: +$("#l-max").value, p_best_of: +$("#l-bo").value, p_description: $("#l-desc").value });
+        toast(l ? "Saison enregistrée." : "Saison créée en brouillon."); location.hash = "#/league/" + id;
+      } catch (x) { err.textContent = errMsg(x); }
+    };
+  }
+
+  async function announceLeague(lid, event) {
+    try {
+      const { error } = await sb.functions.invoke("tournament-announce", { body: { league_id: lid, event } });
+      if (error) { let m = null; try { m = (await error.context.json()).error; } catch (e) {} toast(m || "Annonce Discord impossible.", "err"); return; }
+      toast("Annonce publiée sur Discord.");
+    } catch (e) { toast("Annonce Discord impossible.", "err"); }
+  }
+
+  async function viewLeague(app, id) {
+    if (id === "nouveau") return viewLeagueForm(app, null);
+    if (id.endsWith("/modifier")) { const d = await rpc("league_detail", { p_id: id.slice(0, -9) }); return viewLeagueForm(app, d.league); }
+    if (state.session) await loadMe();
+    const d = await rpc("league_detail", { p_id: id });
+    const l = d.league;
+    if (!l) { app.innerHTML = panel("Saison introuvable", `<p class="lead">Cette saison n'existe pas ou n'est pas encore publiée.</p><div class="ctas"><a class="btn" href="#/tournois">Compétitions</a></div>`); return; }
+    const st = d.standings, staff = state.isStaff;
+    const team = tid => st.find(x => x.team_id === tid);
+    let my = null, isCap = false;
+    if (state.session) {
+      const tid = await rpc("my_team_id");
+      if (tid) { const [all, roster] = await Promise.all([rpc("list_teams"), rpc("team_roster", { p_team: tid })]); my = all.find(x => x.id === tid); isCap = roster.some(r => r.user_id === state.session.user.id && r.is_captain); }
+    }
+    const reg = my ? team(my.id) : null;
+
+    let action = "";
+    if (l.status === "inscriptions") {
+      if (!state.session) action = `<p>Connecte-toi avec Discord pour inscrire ton équipe.</p><button class="btn solid" id="l-login" type="button">${discordIcon()} Connexion</button>`;
+      else if (!my) action = `<p>Tu n'as pas encore d'équipe.</p><a class="btn" href="#/mon-equipe">Créer ou rejoindre une équipe</a>`;
+      else if (reg) action = `<p class="ok-line">✓ <b>${esc(my.name)}</b> est inscrite à la saison.</p>${isCap ? `<button class="link-btn danger-t" id="l-unreg" type="button">Désinscrire mon équipe</button>` : ""}`;
+      else if (!isCap) action = `<p>Seul le capitaine de <b>${esc(my.name)}</b> peut inscrire l'équipe.</p>`;
+      else if (my.status !== "validee") action = `<p>Ton équipe doit d'abord être validée par le staff.</p>`;
+      else if (my.division !== l.division) action = `<p>Cette saison est réservée à la ${DIV_NAMES[l.division]}. Ton équipe est en ${DIV_NAMES[my.division]}.</p>`;
+      else if (st.length >= l.max_teams) action = `<p>La saison est complète.</p>`;
+      else action = `<p>Inscris <b>${esc(my.name)}</b> à cette saison.</p><button class="btn solid" id="l-reg" type="button">Inscrire mon équipe</button>`;
+    }
+
+    const started = ["en_cours", "termine"].includes(l.status);
+    const table = st.length ? `<div class="table-scroll"><table class="standings">
+      <thead><tr><th>#</th><th>Équipe</th><th title="Matchs joués">J</th><th title="Victoires">V</th><th title="Défaites">D</th><th title="Différence de ${l.best_of === 1 ? "rounds" : "maps"}">+/-</th><th>Pts</th></tr></thead>
+      <tbody>${st.map((r, i) => `<tr class="${started && i < 4 ? "po" : ""}${my && r.team_id === my.id ? " me" : ""}">
+        <td class="pos">${i + 1}</td><td><span class="pl">${teamLogo(r, 28)}<b>${esc(r.name)}</b><span class="tag-chip">${esc(r.tag)}</span></span></td>
+        <td>${r.played}</td><td>${r.wins}</td><td>${r.losses}</td><td>${r.diff > 0 ? "+" : ""}${r.diff}</td><td class="pts">${r.points}</td>
+        ${staff && !started ? `<td><button class="link-btn danger-t" data-rm="${r.team_id}" type="button">Retirer</button></td>` : ""}</tr>`).join("")}</tbody></table></div>
+      ${started ? `<p class="small-note legend"><span class="po-mark"></span>Top 4 : qualifiés pour les playoffs · 3 points par victoire, départage à la différence de ${l.best_of === 1 ? "rounds" : "maps"}.</p>` : ""}`
+      : `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`;
+
+    const weeks = [...new Set(d.matches.map(m => m.week))].sort((a, b) => a - b);
+    const nextWeek = weeks.find(w => d.matches.some(m => m.week === w && !m.winner_id));
+    const side = (tid, sc, win) => { const t = team(tid); return `<span class="lm-team${win ? " win" : ""}">${t ? teamLogo(t, 24) : ""}<span>${t ? esc(t.name) : "Équipe supprimée"}</span></span><span class="lm-sc${win ? " win" : ""}">${sc ?? "–"}</span>`; };
+    const schedule = weeks.length ? weeks.map(w => `<details class="week"${w === nextWeek || (!nextWeek && w === weeks[weeks.length - 1]) ? " open" : ""}>
+        <summary>Journée ${w}<span class="small-note">${d.matches.filter(m => m.week === w && m.winner_id).length} / ${d.matches.filter(m => m.week === w).length} joués</span></summary>
+        <div class="week-list">${d.matches.filter(m => m.week === w).map(m => `<${staff && l.status === "en_cours" ? `button type="button"` : "div"} class="lm${staff && l.status === "en_cours" ? " editable" : ""}" data-lm="${m.id}">
+          <span class="lm-side l">${side(m.team1_id, m.score1, m.winner_id && m.winner_id === m.team1_id)}</span><span class="lm-vs">vs</span><span class="lm-side r">${side(m.team2_id, m.score2, m.winner_id && m.winner_id === m.team2_id)}</span>
+        </${staff && l.status === "en_cours" ? "button" : "div"}>`).join("")}</div></details>`).join("") : "";
+
+    let staffHtml = "";
+    if (staff) {
+      const b = [];
+      if (l.status === "brouillon") b.push(`<button class="btn sm solid" data-lst="inscriptions" type="button">Ouvrir les inscriptions</button>`);
+      if (l.status === "inscriptions") b.push(`<button class="btn sm solid" id="l-gen" type="button">Générer le calendrier et lancer la saison</button>`, `<button class="link-btn" data-lst="brouillon" type="button">Repasser en brouillon</button>`);
+      if (l.status === "en_cours") b.push(`<button class="btn sm solid" id="l-po" type="button">Créer les playoffs (top 4) et terminer</button>`, `<button class="btn sm" data-lst="termine" type="button">Terminer sans playoffs</button>`, `<button class="link-btn danger-t" id="l-reset" type="button">Réinitialiser le calendrier</button>`);
+      if (l.status === "termine" && !l.playoffs_tournament_id) b.push(`<button class="btn sm" data-lst="en_cours" type="button">Rouvrir la saison</button>`);
+      const ann = { inscriptions: ["inscriptions", "Annoncer les inscriptions"], en_cours: ["classement", "Publier le classement"], termine: ["classement", "Publier le classement final"] }[l.status];
+      staffHtml = `<div class="card staff-card"><h3>Staff</h3>
+        <div class="staff-row">${b.join("")}</div>
+        <div class="staff-row">${ann ? `<button class="btn sm" data-ann="${ann[0]}" type="button">${ann[1]} sur Discord</button>` : ""}${l.status === "en_cours" ? `<button class="btn sm" data-ann="calendrier" type="button">Annoncer le début de saison</button>` : ""}
+          <a class="link-btn" href="#/league/${l.id}/modifier">Modifier</a><button class="link-btn danger-t" id="l-del" type="button">Supprimer la saison</button></div>
+        ${l.status === "en_cours" ? `<p class="small-note">Clique sur un match du calendrier pour saisir ou corriger son score.</p>` : ""}
+        ${l.status === "inscriptions" ? `<p class="small-note">Il faut au moins 3 équipes. L'ordre des matchs est tiré au sort.</p>` : ""}
+        <div id="score-editor"></div></div>`;
+    }
+
+    app.innerHTML = panel(esc(l.name), `
+      <div class="t-meta">${divChip(l.division)}<span class="type-badge league">League</span>${lPill(l.status)}<span>Début : ${esc(fmtDate(l.starts_at))}</span><span>BO${l.best_of}</span><span>${st.length} / ${l.max_teams} équipes</span></div>
+      ${l.description ? `<p class="lead t-desc">${esc(l.description)}</p>` : ""}
+      ${l.playoffs_tournament_id ? `<a class="card po-link" href="#/tournoi/${l.playoffs_tournament_id}"><b>🏆 Playoffs de la saison</b><span>Voir le bracket →</span></a>` : ""}
+      ${action ? `<div class="card t-action">${action}<p class="form-err" id="l-err" role="alert"></p></div>` : ""}
+      ${staffHtml}
+      <div class="league-grid">
+        <section><h3 class="t-h">Classement</h3>${table}</section>
+        ${weeks.length ? `<section><h3 class="t-h">Calendrier</h3>${schedule}</section>` : ""}
+      </div>
+      <div class="ctas" style="margin-top:32px"><a class="btn" href="#/tournois">Toutes les compétitions</a></div>`, `League · ${DIV_NAMES[l.division]}`);
+
+    const reload = () => viewLeague(app, id), err = $("#l-err");
+    const act = async (fn, okMsg) => { if (err) err.textContent = ""; try { await fn(); if (okMsg) toast(okMsg); reload(); } catch (x) { if (err) err.textContent = errMsg(x); else toast(errMsg(x), "err"); } };
+    if ($("#l-login")) $("#l-login").onclick = login;
+    if ($("#l-reg")) $("#l-reg").onclick = () => act(() => rpc("register_league", { p_league: l.id }), "Équipe inscrite !");
+    if ($("#l-unreg")) confirmable($("#l-unreg"), "Confirmer la désinscription", () => act(() => rpc("unregister_league", { p_league: l.id }), "Équipe désinscrite."));
+    if (!staff) return;
+    app.querySelectorAll("[data-lst]").forEach(b => b.onclick = () => act(() => rpc("admin_set_league_status", { p_id: l.id, p_status: b.dataset.lst }), "Statut mis à jour."));
+    app.querySelectorAll("[data-rm]").forEach(b => confirmable(b, "Confirmer ?", () => act(() => rpc("admin_remove_league_team", { p_league: l.id, p_team: b.dataset.rm }), "Équipe retirée.")));
+    app.querySelectorAll("[data-ann]").forEach(b => b.onclick = async () => { b.disabled = true; await announceLeague(l.id, b.dataset.ann); b.disabled = false; });
+    if ($("#l-gen")) confirmable($("#l-gen"), "Confirmer : la saison démarre", () => act(() => rpc("admin_generate_schedule", { p_league: l.id }), "Calendrier généré ! Pense à l'annoncer sur Discord."));
+    if ($("#l-reset")) confirmable($("#l-reset"), "Confirmer : tous les scores seront effacés", () => act(() => rpc("admin_reset_schedule", { p_league: l.id }), "Calendrier réinitialisé."));
+    if ($("#l-po")) confirmable($("#l-po"), "Confirmer : la saison sera terminée", async () => {
+      try { const tid = await rpc("admin_create_playoffs", { p_league: l.id }); toast("Playoffs créés ! Annonce-les depuis la page du tournoi."); location.hash = "#/tournoi/" + tid; }
+      catch (x) { if (err) err.textContent = errMsg(x); else toast(errMsg(x), "err"); }
+    });
+    if ($("#l-del")) confirmable($("#l-del"), "Confirmer la suppression définitive", async () => { try { await rpc("admin_delete_league", { p_id: l.id }); toast("Saison supprimée."); location.hash = "#/tournois"; } catch (x) { toast(errMsg(x), "err"); } });
+    app.querySelectorAll(".lm.editable").forEach(el => el.onclick = () => {
+      const m = d.matches.find(x => x.id === el.dataset.lm), a = team(m.team1_id), b2 = team(m.team2_id);
+      app.querySelectorAll(".lm.sel").forEach(x => x.classList.remove("sel")); el.classList.add("sel");
+      $("#score-editor").innerHTML = `<form class="score-form" id="score-form">
+        <span class="eyebrow">Journée ${m.week} · BO${l.best_of} · ${l.best_of === 1 ? "score en rounds" : "score en maps"}</span>
+        <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
+        <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
+        <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button>${m.winner_id ? `<button class="link-btn danger-t" type="button" id="score-clear">Effacer le score</button>` : ""}<button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
+        <p class="form-err" id="score-err" role="alert"></p></form>`;
+      $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" }); $("#s1").focus();
+      $("#score-cancel").onclick = () => { $("#score-editor").innerHTML = ""; el.classList.remove("sel"); };
+      if ($("#score-clear")) $("#score-clear").onclick = async () => { try { await rpc("admin_report_league_score", { p_match: m.id, p_score1: null, p_score2: null }); toast("Score effacé."); reload(); } catch (x) { $("#score-err").textContent = errMsg(x); } };
+      $("#score-form").onsubmit = async e => {
+        e.preventDefault(); const s1 = $("#s1").value, s2 = $("#s2").value;
+        if (s1 === "" || s2 === "") { $("#score-err").textContent = "Entre les deux scores."; return; }
+        try { await rpc("admin_report_league_score", { p_match: m.id, p_score1: +s1, p_score2: +s2 }); toast("Score enregistré, classement mis à jour."); reload(); }
+        catch (x) { $("#score-err").textContent = errMsg(x); }
+      };
+    });
+  }
+
+  // ---------- Staff ----------
+  async function viewStaff(app) {
+    if (!state.session) return needLogin(app, "Espace réservé aux admins.");
+    await loadMe();
+    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Seuls les admins peuvent gérer le staff.</p>`); return; }
+    const ROLE = { admin: "Admin", arbitre: "Arbitre", joueur: "Joueur" };
+    const rowHtml = p => `<div class="staff-person" data-u="${p.id}">
+        ${avatar(p.avatar_url, p.username, 36)}
+        <div class="sp-main"><b>${esc(p.username)}</b><span class="small-note">${esc(p.riot_id || "Pas de Riot ID")}${p.team_name ? " · " + esc(p.team_name) : ""}</span></div>
+        <label class="sr" for="role-${p.id}">Rôle de ${esc(p.username)}</label>
+        <select id="role-${p.id}">${["joueur", "arbitre", "admin"].map(r => `<option value="${r}" ${(p.staff_role || "joueur") === r ? "selected" : ""}>${ROLE[r]}</option>`).join("")}</select>
+        <button class="btn sm" data-save type="button">Enregistrer</button>
+      </div>`;
+    const staffList = await rpc("admin_list_players", { p_search: "" });
+    app.innerHTML = panel("Staff", `
+      ${adminTabs("staff")}
+      <div class="roles-explain">
+        <div><b>Arbitre</b><p class="small-note">Crée et gère les Cups et la League : inscriptions, check-in, brackets, calendriers, scores, annonces Discord.</p></div>
+        <div><b>Admin</b><p class="small-note">Tout ce que fait un arbitre, plus la validation des équipes, les rangs fixés à la main et la gestion du staff.</p></div>
+      </div>
+      <h3 class="t-h">Membres du staff</h3>
+      <div class="staff-list" id="staff-list">${staffList.map(rowHtml).join("")}</div>
+      <h3 class="t-h">Ajouter quelqu'un</h3>
+      <form class="search-row" id="staff-search" role="search"><label class="sr" for="staff-q">Pseudo Discord ou Riot ID</label>
+        <input id="staff-q" placeholder="Pseudo Discord ou Riot ID" autocomplete="off"><button class="btn sm solid" type="submit">Chercher</button></form>
+      <p class="small-note">Le joueur doit s'être connecté au moins une fois sur le site.</p>
+      <div class="staff-list" id="staff-results"></div>`, "Admin");
+    const bind = root => root.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
+      const row = b.closest(".staff-person");
+      try { await rpc("admin_set_staff", { p_user: row.dataset.u, p_role: $("select", row).value }); toast("Rôle mis à jour."); if (row.dataset.u === state.session.user.id) { await loadMe(); renderAuth(); } viewStaff(app); }
+      catch (x) { toast(errMsg(x), "err"); }
+    });
+    bind(app);
+    $("#staff-search").onsubmit = async e => {
+      e.preventDefault(); const q = $("#staff-q").value.trim(); if (q.length < 2) return;
+      const res = await rpc("admin_list_players", { p_search: q });
+      $("#staff-results").innerHTML = res.length ? res.map(rowHtml).join("") : `<p class="small-note">Aucun joueur trouvé.</p>`;
+      bind($("#staff-results"));
+    };
+  }
+
+  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/tournois">Compétitions</a></nav>`;
+
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
     if (!state.session) return needLogin(app, "Espace réservé au staff.");
@@ -754,6 +1002,7 @@
     const order = { en_attente: 0, validee: 1, refusee: 2 };
     teams.sort((a, b) => order[a.status] - order[b.status]);
     app.innerHTML = panel("Validation des équipes", `
+      ${adminTabs("teams")}
       <p class="lead">${teams.filter(t => t.status === "en_attente").length} équipe(s) en attente. La division estimée est calculée sur la moyenne des titulaires.</p>
       <div class="admin-list">${teams.map(t => `
         <div class="admin-row" data-id="${t.id}">
