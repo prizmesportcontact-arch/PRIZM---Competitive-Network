@@ -5,8 +5,8 @@ window.PRIZM_CONFIG = {
 
   // Liens à remplir quand ils existent (laisser "" sinon : le bouton reste grisé)
   links: {
-    discord: "",   // ex : https://discord.gg/xxxxxxx
-    twitch: "",    // ex : https://twitch.tv/prizmcn
-    youtube: ""    // ex : https://youtube.com/@prizmcn
+    discord: "https://discord.com/invite/azznMJBhvd",   // ex : https://discord.gg/xxxxxxx
+    twitch: "https://www.twitch.tv/prizm_val",    // ex : https://twitch.tv/prizmcn
+    youtube: "https://www.youtube.com/@PRIZM-Esport"    // ex : https://youtube.com/@prizmcn
   }
 };
