@@ -31,11 +31,11 @@
   }
 
   // ---------- Toasts ----------
-  function toast(msg, kind = "ok") {
+  function toast(msg, kind = "ok", ms = 4200) {
     const t = document.createElement("div");
     t.className = "toast " + kind; t.textContent = msg; t.setAttribute("role", "status");
     $("#toasts").appendChild(t);
-    setTimeout(() => t.remove(), 4200);
+    setTimeout(() => t.remove(), ms);
   }
   const errMsg = e => (e && (e.message || e.error_description)) || "Une erreur est survenue. Réessaie.";
 
@@ -1196,6 +1196,16 @@
   async function start() {
     // Lien d'invitation : ?join=CODE → mémorisé le temps de la connexion
     const q = new URLSearchParams(location.search);
+    // Connexion Discord refusée : Supabase revient avec ?error_description=…, on l'explique au lieu de ne rien afficher
+    const hq = new URLSearchParams(location.hash.startsWith("#") && location.hash.includes("error") ? location.hash.slice(1) : "");
+    const authErr = q.get("error_description") || hq.get("error_description");
+    if (authErr) {
+      history.replaceState(null, "", location.pathname + "#top");
+      const msg = /email/i.test(authErr)
+        ? "Connexion impossible : ton compte Discord n'a pas d'adresse e-mail vérifiée. Va dans Discord > Paramètres > Mon compte, ajoute ou vérifie ton e-mail, puis réessaie."
+        : "Connexion Discord impossible : " + authErr;
+      setTimeout(() => toast(msg, "err", 12000), 300);
+    }
     if (q.get("join")) {
       try { sessionStorage.setItem("prizm_join", q.get("join").toUpperCase()); } catch (e) {}
       history.replaceState(null, "", location.pathname + "#/mon-equipe");
