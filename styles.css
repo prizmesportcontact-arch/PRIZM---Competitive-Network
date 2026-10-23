@@ -513,3 +513,6 @@ kbd{font:600 .8rem/1 var(--mono);border:1px solid var(--line);border-bottom-widt
 .check-line input{margin-top:5px;width:18px;height:18px;flex:none}
 .test-card{display:flex;flex-wrap:wrap;gap:16px;justify-content:space-between;align-items:center;margin:20px 0 28px;border-style:dashed}
 .test-card>div:first-child{flex:1 1 380px;display:flex;flex-direction:column;gap:6px}
+.prev-pane>.t-h{margin-top:36px}
+.table-scroll{position:relative}
+h2{overflow-wrap:break-word;hyphens:auto}.sec-head{min-width:0}.sec-head>*{min-width:0;max-width:100%}

@@ -139,6 +139,7 @@
     const home = $("#view-home"), app = $("#view-app");
     document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h || ((h.startsWith("#/tournoi") || h.startsWith("#/league")) && a.getAttribute("href") === "#/tournois")));
     const tm = path && path.match(/^\/tournoi\/(.+)$/), lm = path && path.match(/^\/league\/(.+)$/);
+    stopLive();
     if (path && (views[path] || tm || lm)) {
       home.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
@@ -149,6 +150,10 @@
     }
   }
   window.addEventListener("hashchange", route);
+
+  // Temps réel : une seule connexion ouverte à la fois, fermée quand on change de page
+  let live = null;
+  function stopLive() { if (live && sb) { sb.removeChannel(live); } live = null; }
 
   const panel = (title, inner, eyebrow = "") =>
     `<div class="wrap app-wrap">${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ""}<h2 class="app-title">${title}</h2>${inner}</div>`;
@@ -458,6 +463,17 @@
     confirmable($("#leave"), "Clique encore pour confirmer", async () => {
       try { await rpc("leave_team"); discordSync({ user_ids: [me] }); toast("Tu as quitté l'équipe."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     bindRosterActions(app, () => viewMyTeam(app));
+
+    // Arrivées, départs, rôles, validation, logo : la page se met à jour toute seule
+    let pending = null;
+    const refresh = () => { clearTimeout(pending); pending = setTimeout(() => { if (location.hash.startsWith("#/mon-equipe")) viewMyTeam(app); }, 600); };
+    stopLive();
+    live = sb.channel("team-" + teamId)
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_members", filter: "team_id=eq." + teamId }, refresh)
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "team_members", filter: "team_id=eq." + teamId }, refresh)
+      .on("postgres_changes", { event: "DELETE", schema: "public", table: "team_members" }, p => { if (p.old && p.old.team_id === teamId) refresh(); })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "teams", filter: "id=eq." + teamId }, refresh)
+      .subscribe();
   }
 
   function statusPill(t) {
