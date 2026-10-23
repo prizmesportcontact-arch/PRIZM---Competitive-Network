@@ -181,7 +181,7 @@
     if (!blob || blob.type !== "image/webp") { blob = await new Promise(r => c.toBlob(r, "image/png")); ext = "png"; }
     const path = `${teamId}/logo-${Date.now()}.${ext}`;
     const up = await sb.storage.from("team-logos").upload(path, blob, { contentType: blob.type, upsert: false });
-    if (up.error) throw new Error(/row-level|policy|not found|Bucket/i.test(up.error.message) ? "Envoi refusé : le stockage des logos n'est pas encore activé (script SQL 002)." : up.error.message);
+    if (up.error) throw new Error(/Bucket not found/i.test(up.error.message) ? "Le stockage des logos n'est pas encore activé (script SQL 002)." : /row-level|policy/i.test(up.error.message) ? "Envoi refusé par le stockage : seul le capitaine peut changer le logo." : "Envoi impossible : " + up.error.message);
     const url = sb.storage.from("team-logos").getPublicUrl(path).data.publicUrl;
     await rpc("set_team_logo", { p_url: url });
   }
