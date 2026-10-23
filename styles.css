@@ -366,3 +366,6 @@ textarea{font:500 1rem var(--body);padding:12px 14px;border:1px solid var(--line
 .score-form{display:grid;gap:12px;border-top:1px solid var(--line);padding-top:14px;margin-top:6px}
 .score-line{display:flex;flex-wrap:wrap;align-items:center;gap:10px;font-weight:600}
 .score-line input{width:70px;font:600 1.2rem var(--mono);text-align:center;padding:8px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.t-name-preview{margin:4px 0 0;font-size:.95rem;color:var(--mute)}
+.t-name-preview b,.t-name-fixed{font-family:var(--display);font-size:1.3rem;text-transform:uppercase;color:var(--ink)}
+.t-name-fixed{margin:0}

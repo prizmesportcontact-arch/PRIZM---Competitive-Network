@@ -507,6 +507,11 @@
   const divChip = d => `<span class="div-chip d${d}">D${d}</span>`;
   const fmtDate = iso => iso ? new Date(iso).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Date à venir";
   const toLocalInput = iso => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  // Types de tournoi proposés (le nom est généré à partir du type, du numéro et de la division)
+  const T_TYPES = [
+    { name: "PRIZM Cup", max: 8, bo: 1, fbo: 3, hint: "Tournoi d'une soirée en élimination directe : BO1, finale en BO3." },
+    { name: "PRIZM League · Playoffs", max: 4, bo: 3, fbo: 5, hint: "Playoffs de fin de saison pour le top 4 : demi-finales en BO3, grande finale en BO5." },
+  ];
   const roundName = (r, total) => r === total ? "Finale" : r === total - 1 ? "Demi-finales" : r === total - 2 ? "Quarts de finale" : r === total - 3 ? "Huitièmes" : "Tour " + r;
 
   async function announce(tid, event) {
@@ -546,20 +551,38 @@
     const opt = (vals, cur, lab = x => x) => vals.map(x => `<option value="${x}" ${+cur === x ? "selected" : ""}>${lab(x)}</option>`).join("");
     app.innerHTML = panel(t ? "Modifier le tournoi" : "Nouveau tournoi", `
       <form class="form" id="t-form" novalidate>
-        <label for="t-name">Nom</label><input id="t-name" maxlength="60" value="${esc(v.name)}" placeholder="ex : PRIZM Cup #1 · D2" required>
+        ${t ? `<label>Nom</label><p class="t-name-fixed">${esc(v.name)}</p>`
+          : `<label for="t-type">Type de tournoi</label><select id="t-type">${T_TYPES.map(x => `<option value="${x.name}">${x.name}</option>`).join("")}</select>
+             <span class="hint" id="t-type-hint"></span>
+             <p class="t-name-preview">Nom : <b id="t-name-preview"></b></p>`}
         <label for="t-div">Division</label><select id="t-div" ${locked ? "disabled" : ""}>${opt([1, 2, 3, 4], v.division, d => DIV_NAMES[d])}</select>
         <label for="t-date">Date et heure de début</label><input id="t-date" type="datetime-local" value="${toLocalInput(v.starts_at)}">
         <label for="t-max">Nombre d'équipes maximum</label><select id="t-max" ${locked ? "disabled" : ""}>${opt([4, 8, 16, 32], v.max_teams)}</select>
         <label for="t-bo">Format des matchs</label><select id="t-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
         <label for="t-fbo">Format de la finale</label><select id="t-fbo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.final_best_of, x => "BO" + x)}</select>
         <label for="t-desc">Description (optionnelle)</label><textarea id="t-desc" rows="4" maxlength="1000" placeholder="Récompenses, règles particulières, horaires…">${esc(v.description || "")}</textarea>
-        ${locked ? `<p class="small-note">Le bracket est lancé : seuls le nom, la date et la description sont modifiables.</p>` : ""}
+        ${locked ? `<p class="small-note">Le bracket est lancé : seules la date et la description sont modifiables.</p>` : ""}
         <div class="ctas"><button class="btn solid" type="submit">${t ? "Enregistrer" : "Créer le tournoi"}</button><a class="btn" href="${t ? "#/tournoi/" + t.id : "#/tournois"}">Annuler</a></div>
         <p class="form-err" id="t-err" role="alert"></p>
       </form>`, "Staff");
+    // Nom généré automatiquement : « Type #N · Dx », N = prochain numéro libre dans la division
+    let existing = [];
+    if (!t) { try { existing = (await rpc("list_tournaments")).map(x => x.name); } catch (e) {} }
+    const autoName = () => {
+      const type = $("#t-type").value, div = +$("#t-div").value;
+      const re = new RegExp("^" + type.replace(/[.*+?^${}()|[\]\\]/g, "\\$&") + " #(\\d+) · D" + div + "$");
+      const n = existing.reduce((mx, nm) => { const m = nm.match(re); return m ? Math.max(mx, +m[1]) : mx; }, 0) + 1;
+      return `${type} #${n} · D${div}`;
+    };
+    const refreshName = () => { if (t) return; $("#t-name-preview").textContent = autoName(); const ty = T_TYPES.find(x => x.name === $("#t-type").value); $("#t-type-hint").textContent = ty.hint; };
+    if (!t) {
+      $("#t-type").onchange = () => { const ty = T_TYPES.find(x => x.name === $("#t-type").value); $("#t-max").value = ty.max; $("#t-bo").value = ty.bo; $("#t-fbo").value = ty.fbo; refreshName(); };
+      $("#t-div").onchange = refreshName;
+      $("#t-type").onchange();
+    }
     $("#t-form").onsubmit = async e => {
       e.preventDefault(); const err = $("#t-err"); err.textContent = "";
-      const name = $("#t-name").value.trim(); if (name.length < 3) { err.textContent = "Le nom doit faire au moins 3 caractères."; return; }
+      const name = t ? t.name : autoName();
       const date = $("#t-date").value;
       try {
         const id = await rpc("admin_save_tournament", { p_id: t ? t.id : null, p_name: name, p_division: +$("#t-div").value, p_starts_at: date ? new Date(date).toISOString() : null,
