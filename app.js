@@ -108,7 +108,7 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
@@ -164,10 +164,81 @@
     } catch (e) { if (verbose) toast("Synchro Discord impossible.", "err"); }
   }
 
+  // Logo d'équipe (ou initiales du tag si pas de logo)
+  const teamLogo = (t, size = 32) => t && t.logo_url
+    ? `<img class="team-logo" src="${esc(t.logo_url)}" alt="" width="${size}" height="${size}" loading="lazy">`
+    : `<span class="team-logo team-logo-empty" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.36)}px">${esc((t && t.tag || "?").slice(0, 3))}</span>`;
+
+  // Redimensionne l'image en 256×256 (contenue, fond transparent) puis l'envoie
+  async function uploadTeamLogo(teamId, file) {
+    if (!/^image\/(png|jpeg|webp)$/.test(file.type)) throw new Error("Format accepté : PNG, JPG ou WEBP.");
+    if (file.size > 8 * 1024 * 1024) throw new Error("Image trop lourde (8 Mo max avant redimensionnement).");
+    const img = await createImageBitmap(file);
+    const c = document.createElement("canvas"); c.width = c.height = 256;
+    const k = Math.min(256 / img.width, 256 / img.height), w = img.width * k, h = img.height * k;
+    c.getContext("2d").drawImage(img, (256 - w) / 2, (256 - h) / 2, w, h);
+    let blob = await new Promise(r => c.toBlob(r, "image/webp", 0.9)), ext = "webp";
+    if (!blob || blob.type !== "image/webp") { blob = await new Promise(r => c.toBlob(r, "image/png")); ext = "png"; }
+    const path = `${teamId}/logo-${Date.now()}.${ext}`;
+    const up = await sb.storage.from("team-logos").upload(path, blob, { contentType: blob.type, upsert: false });
+    if (up.error) throw new Error(/row-level|policy|not found|Bucket/i.test(up.error.message) ? "Envoi refusé : le stockage des logos n'est pas encore activé (script SQL 002)." : up.error.message);
+    const url = sb.storage.from("team-logos").getPublicUrl(path).data.publicUrl;
+    await rpc("set_team_logo", { p_url: url });
+  }
+
   const rankOptions = sel => `<option value="">Choisis ton rang</option>` +
     ["Fer","Bronze","Argent","Or","Platine","Diamant","Ascendant","Immortel"].map((g, gi) =>
       `<optgroup label="${g}">${[0,1,2].map(k => { const i = gi*3+k; return `<option value="${i}" ${sel === i ? "selected" : ""}>${RANKS[i]}</option>`; }).join("")}</optgroup>`).join("") +
     `<option value="24" ${sel === 24 ? "selected" : ""}>Radiant</option>`;
+
+  // ---------- Vue : confidentialité ----------
+  async function viewPrivacy(app) {
+    const support = (CFG.links || {}).discord
+      ? `ouvre un ticket dans <b>#support</b> sur <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">notre serveur Discord</a>`
+      : "ouvre un ticket dans <b>#support</b> sur notre serveur Discord";
+    app.innerHTML = panel("Confidentialité", `
+      <div class="legal">
+        <p class="lead">PRIZM Competitive Network est un réseau communautaire et bénévole de scrims et tournois Valorant. Cette page explique quelles données le site enregistre, pourquoi, et comment les faire supprimer.</p>
+        <p class="small-note">Dernière mise à jour : 23 octobre 2026.</p>
+
+        <h3>Qui s'occupe de tes données ?</h3>
+        <p>Le staff de PRIZM Competitive Network. Pour toute question ou demande, ${support}.</p>
+
+        <h3>Ce que nous enregistrons</h3>
+        <ul>
+          <li><b>Ton compte Discord</b>, quand tu te connectes : identifiant Discord, pseudo et avatar. Nous n'avons jamais accès à ton mot de passe ni à tes messages.</li>
+          <li><b>Ton profil joueur</b>, que tu renseignes toi-même : Riot ID et rang actuel.</li>
+          <li><b>Ton équipe</b> : nom, tag, logo, composition, rôle (titulaire, remplaçant, capitaine), statut et division.</li>
+        </ul>
+        <p>Pas de publicité, pas de revente, pas de traceur. Le site garde seulement ta session de connexion dans le stockage de ton navigateur, pour que tu restes connecté.</p>
+
+        <h3>Pourquoi</h3>
+        <ul>
+          <li>Te connecter et gérer ton profil et ton équipe.</li>
+          <li>Placer ton équipe dans la bonne division et organiser les scrims et tournois.</li>
+          <li>Te donner automatiquement ton rôle de division sur notre serveur Discord.</li>
+        </ul>
+
+        <h3>Qui peut les voir</h3>
+        <p>La liste des équipes validées (nom, tag, logo, pseudos, Riot ID et rangs des joueurs) est <b>publique</b> sur le site : c'est nécessaire pour la compétition. Le code d'invitation d'une équipe n'est visible que par ses membres. Le staff voit toutes les équipes pour les valider.</p>
+
+        <h3>Où elles sont stockées</h3>
+        <ul>
+          <li><b>Supabase</b> : base de données et logos, serveurs dans l'Union européenne (Irlande).</li>
+          <li><b>GitHub Pages</b> : héberge les pages du site.</li>
+          <li><b>Discord</b> : sert à la connexion et aux rôles du serveur.</li>
+        </ul>
+
+        <h3>Combien de temps</h3>
+        <p>Tant que ton compte existe. Tu peux le supprimer à tout moment depuis <a href="#/profil">Mon profil</a> : ton profil est effacé immédiatement et tu es retiré de ton équipe.</p>
+
+        <h3>Tes droits</h3>
+        <p>Tu peux consulter, corriger ou supprimer tes données, ou t'opposer à leur utilisation. Corrige ton profil toi-même sur le site, ou ${support} pour toute autre demande. Si tu estimes que tes droits ne sont pas respectés, tu peux saisir la CNIL (cnil.fr).</p>
+
+        <h3>Mineurs</h3>
+        <p>Si tu as moins de 15 ans, parle de ton inscription à un de tes parents avant de créer ton compte.</p>
+      </div>`, "Légal");
+  }
 
   // ---------- Vue : profil ----------
   async function viewProfile(app) {
@@ -186,7 +257,18 @@
         <p class="div-preview" id="div-preview">${div ? `Ce rang correspond à la <b>${DIV_NAMES[div]}</b>.` : "Choisis ton rang pour voir ta division."}</p>
         <div class="ctas"><button class="btn solid" type="submit">Enregistrer</button></div>
         <p class="form-err" id="profile-err" role="alert"></p>
-      </form>`, "Compte");
+      </form>
+      <div class="card danger-zone">
+        <h3>Supprimer mon compte</h3>
+        <p class="small-note">Efface ton profil (pseudo, avatar, Riot ID, rang) et te retire de ton équipe. C'est définitif. Plus d'infos dans la <a href="#/confidentialite">politique de confidentialité</a>.</p>
+        <button class="btn danger" id="delete-account" type="button">Supprimer mon compte</button>
+        <p class="form-err" id="delete-err" role="alert"></p>
+      </div>`, "Compte");
+    confirmable($("#delete-account"), "Clique encore : suppression définitive", async () => {
+      $("#delete-err").textContent = "";
+      try { await rpc("delete_my_account"); await sb.auth.signOut(); state.session = null; state.profile = null; renderAuth(); toast("Ton compte a été supprimé."); location.hash = "#top"; }
+      catch (x) { $("#delete-err").textContent = errMsg(x); }
+    });
     $("#rank").onchange = e => { const d = rankDiv(e.target.value === "" ? null : +e.target.value);
       $("#div-preview").innerHTML = d ? `Ce rang correspond à la <b>${DIV_NAMES[d]}</b>.` : "Choisis ton rang pour voir ta division."; };
     $("#profile-form").onsubmit = async e => {
@@ -253,7 +335,7 @@
     const inviteLink = location.origin + location.pathname + "?join=" + code + "#/mon-equipe";
     const tit = roster.filter(r => r.role === "titulaire").length;
 
-    app.innerHTML = panel(`${esc(t.name)} <span class="tag-chip">${esc(t.tag)}</span>`, `
+    app.innerHTML = panel(`${teamLogo(t, 64)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
       <div class="team-status">
         ${statusPill(t)}
         <span class="small-note">${t.status === "validee" ? "Ton équipe peut scrimer et s'inscrire aux tournois de sa division." :
@@ -263,7 +345,7 @@
       ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
       ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
       ${rosterTable(roster, isCap, me)}
-      <div class="two" style="margin-top:32px">
+      <div class="cards3" style="margin-top:32px">
         <div class="card">
           <h3>Inviter des joueurs</h3>
           <p class="small-note">7 joueurs max (5 titulaires + 2 remplaçants). Envoie le lien ou le code.</p>
@@ -273,6 +355,18 @@
           ${isCap ? `<button class="link-btn" id="regen" type="button">Générer un nouveau code</button>` : ""}
         </div>
         <div class="card">
+          <h3>Logo de l'équipe</h3>
+          <div class="logo-edit">${teamLogo(t, 96)}
+            ${isCap ? `<div class="logo-actions">
+              <label class="btn sm" for="logo-file">${t.logo_url ? "Changer le logo" : "Ajouter un logo"}</label>
+              <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" hidden>
+              ${t.logo_url ? `<button class="link-btn danger-t" id="logo-remove" type="button">Retirer le logo</button>` : ""}
+              <p class="small-note">PNG, JPG ou WEBP. Format carré conseillé, fond transparent idéal.</p>
+              <p class="form-err" id="logo-err" role="alert"></p>
+            </div>` : `<p class="small-note">Seul le capitaine peut changer le logo.</p>`}
+          </div>
+        </div>
+        <div class="card">
           <h3>Quitter l'équipe</h3>
           <p class="small-note">${isCap ? (roster.length > 1 ? "Tu es capitaine : nomme un autre capitaine avant de partir." : "Tu es seul : quitter supprime l'équipe.") : "Tu pourras rejoindre une autre équipe ensuite."}</p>
           <button class="btn danger" id="leave" type="button" ${isCap && roster.length > 1 ? "disabled" : ""}>${isCap && roster.length === 1 ? "Supprimer l'équipe" : "Quitter l'équipe"}</button>
@@ -280,6 +374,13 @@
       </div>`, "Mon équipe");
 
     if ($("#sync-me")) $("#sync-me").onclick = () => discordSync({ user_ids: [me] }, true);
+    if ($("#logo-file")) $("#logo-file").onchange = async e => {
+      const f = e.target.files[0]; if (!f) return; $("#logo-err").textContent = "Envoi en cours…";
+      try { await uploadTeamLogo(teamId, f); toast("Logo enregistré."); viewMyTeam(app); }
+      catch (x) { $("#logo-err").textContent = errMsg(x); }
+    };
+    if ($("#logo-remove")) confirmable($("#logo-remove"), "Confirmer ?", async () => {
+      try { await rpc("set_team_logo", { p_url: null }); toast("Logo retiré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     $("#copy-inv").onclick = () => copyText(inviteLink, $("#inv-copied"), null);
     if ($("#regen")) confirmable($("#regen"), "Confirmer : l'ancien code ne marchera plus", async () => {
       try { await rpc("regenerate_invite"); toast("Nouveau code généré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
@@ -334,7 +435,7 @@
       }).join("")}`, "Classement par division");
     bindTeamRows(app);
   }
-  const teamRow = t => `<details class="team-row" data-id="${t.id}"><summary><span class="tag-chip">${esc(t.tag)}</span><b>${esc(t.name)}</b><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
+  const teamRow = t => `<details class="team-row" data-id="${t.id}"><summary>${teamLogo(t, 36)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
   function bindTeamRows(root, admin = false) {
     root.querySelectorAll("details.team-row").forEach(d => d.addEventListener("toggle", async () => {
       if (!d.open || d.dataset.loaded) return; d.dataset.loaded = "1";
@@ -355,7 +456,7 @@
       <p class="lead">${teams.filter(t => t.status === "en_attente").length} équipe(s) en attente. La division estimée est calculée sur la moyenne des titulaires.</p>
       <div class="admin-list">${teams.map(t => `
         <div class="admin-row" data-id="${t.id}">
-          <div class="ar-main"><span class="tag-chip">${esc(t.tag)}</span><b>${esc(t.name)}</b>${statusPill(t)}
+          <div class="ar-main">${teamLogo(t, 40)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span>${statusPill(t)}
             <span class="small-note">Capitaine : ${esc(t.captain)} · ${t.members} joueur(s) · estimée : ${t.suggested ? "D" + t.suggested : "—"}</span></div>
           <div class="ar-actions">
             <label class="sr" for="div-${t.id}">Division</label>
