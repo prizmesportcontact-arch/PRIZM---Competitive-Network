@@ -108,16 +108,17 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/tournois": viewTournaments };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
     const home = $("#view-home"), app = $("#view-app");
-    document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h));
-    if (path && views[path]) {
+    document.querySelectorAll("nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h || (h.startsWith("#/tournoi") && a.getAttribute("href") === "#/tournois")));
+    const tm = path && path.match(/^\/tournoi\/(.+)$/);
+    if (path && (views[path] || tm)) {
       home.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
-      views[path](app).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
+      (tm ? viewTournament(app, tm[1]) : views[path](app)).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
     } else {
       app.hidden = true; home.hidden = false;
       if (h && !h.startsWith("#/")) { const el = document.getElementById(h.slice(1)); if (el) el.scrollIntoView(); }
@@ -498,6 +499,228 @@
     }));
   }
 
+
+  // ================= Tournois =================
+  const T_STATUS = { brouillon: "Brouillon", inscriptions: "Inscriptions ouvertes", checkin: "Check-in ouvert", en_cours: "En cours", termine: "Terminé" };
+  const T_PILL = { brouillon: "wait", inscriptions: "ok", checkin: "warn", en_cours: "live", termine: "done" };
+  const tPill = s => `<span class="pill t-${T_PILL[s]}">${T_STATUS[s]}</span>`;
+  const divChip = d => `<span class="div-chip d${d}">D${d}</span>`;
+  const fmtDate = iso => iso ? new Date(iso).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Date à venir";
+  const toLocalInput = iso => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
+  const roundName = (r, total) => r === total ? "Finale" : r === total - 1 ? "Demi-finales" : r === total - 2 ? "Quarts de finale" : r === total - 3 ? "Huitièmes" : "Tour " + r;
+
+  async function announce(tid, event) {
+    try {
+      const { error } = await sb.functions.invoke("tournament-announce", { body: { tournament_id: tid, event } });
+      if (error) { let m = null; try { m = (await error.context.json()).error; } catch (e) {} toast(m || "Annonce Discord impossible.", "err"); return; }
+      toast("Annonce publiée sur Discord.");
+    } catch (e) { toast("Annonce Discord impossible.", "err"); }
+  }
+
+  async function viewTournaments(app) {
+    if (!sb) { app.innerHTML = panel("Tournois", `<p class="lead">Bientôt disponible.</p>`); return; }
+    if (state.session && !state.profile) await loadMe();
+    const list = await rpc("list_tournaments");
+    const live = list.filter(t => t.status === "en_cours"), next = list.filter(t => ["brouillon", "inscriptions", "checkin"].includes(t.status)), done = list.filter(t => t.status === "termine");
+    const card = t => `<a class="t-card" href="#/tournoi/${t.id}">
+        <div class="t-card-top">${divChip(t.division)}${tPill(t.status)}</div>
+        <b class="t-card-name">${esc(t.name)}</b>
+        <span class="small-note">${esc(fmtDate(t.starts_at))}</span>
+        <span class="t-card-meta">${t.teams} / ${t.max_teams} équipes · BO${t.best_of}, finale BO${t.final_best_of}</span>
+        ${t.status === "termine" && t.winner_name ? `<span class="t-card-win">${teamLogo({ logo_url: t.winner_logo, tag: t.winner_tag }, 28)}<span>🥇 ${esc(t.winner_name)}</span></span>` : ""}
+      </a>`;
+    const block = (title, arr, empty) => `<section class="div-block"><h3>${title}</h3>${arr.length ? `<div class="t-grid">${arr.map(card).join("")}</div>` : `<p class="small-note">${empty}</p>`}</section>`;
+    app.innerHTML = panel("Tournois", `
+      <p class="lead">Les PRIZM Cup se jouent en élimination directe, par division. Le capitaine inscrit son équipe, fait le check-in le jour J, et le bracket se met à jour en direct.</p>
+      ${state.isAdmin ? `<div class="ctas" style="margin:16px 0 8px"><a class="btn solid" href="#/tournoi/nouveau">Créer un tournoi</a></div>` : ""}
+      ${block("En cours", live, "Aucun tournoi en cours.")}
+      ${block("À venir", next, "Aucun tournoi annoncé pour l'instant. Suis les annonces sur le Discord.")}
+      ${block("Terminés", done, "Pas encore de tournoi terminé.")}`, "Compétition");
+  }
+
+  async function viewTournamentForm(app, t) {
+    await loadMe();
+    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
+    const v = t || { name: "", division: 2, starts_at: null, max_teams: 8, best_of: 1, final_best_of: 3, description: "" };
+    const locked = t && ["en_cours", "termine"].includes(t.status);
+    const opt = (vals, cur, lab = x => x) => vals.map(x => `<option value="${x}" ${+cur === x ? "selected" : ""}>${lab(x)}</option>`).join("");
+    app.innerHTML = panel(t ? "Modifier le tournoi" : "Nouveau tournoi", `
+      <form class="form" id="t-form" novalidate>
+        <label for="t-name">Nom</label><input id="t-name" maxlength="60" value="${esc(v.name)}" placeholder="ex : PRIZM Cup #1 · D2" required>
+        <label for="t-div">Division</label><select id="t-div" ${locked ? "disabled" : ""}>${opt([1, 2, 3, 4], v.division, d => DIV_NAMES[d])}</select>
+        <label for="t-date">Date et heure de début</label><input id="t-date" type="datetime-local" value="${toLocalInput(v.starts_at)}">
+        <label for="t-max">Nombre d'équipes maximum</label><select id="t-max" ${locked ? "disabled" : ""}>${opt([4, 8, 16, 32], v.max_teams)}</select>
+        <label for="t-bo">Format des matchs</label><select id="t-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
+        <label for="t-fbo">Format de la finale</label><select id="t-fbo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.final_best_of, x => "BO" + x)}</select>
+        <label for="t-desc">Description (optionnelle)</label><textarea id="t-desc" rows="4" maxlength="1000" placeholder="Récompenses, règles particulières, horaires…">${esc(v.description || "")}</textarea>
+        ${locked ? `<p class="small-note">Le bracket est lancé : seuls le nom, la date et la description sont modifiables.</p>` : ""}
+        <div class="ctas"><button class="btn solid" type="submit">${t ? "Enregistrer" : "Créer le tournoi"}</button><a class="btn" href="${t ? "#/tournoi/" + t.id : "#/tournois"}">Annuler</a></div>
+        <p class="form-err" id="t-err" role="alert"></p>
+      </form>`, "Staff");
+    $("#t-form").onsubmit = async e => {
+      e.preventDefault(); const err = $("#t-err"); err.textContent = "";
+      const name = $("#t-name").value.trim(); if (name.length < 3) { err.textContent = "Le nom doit faire au moins 3 caractères."; return; }
+      const date = $("#t-date").value;
+      try {
+        const id = await rpc("admin_save_tournament", { p_id: t ? t.id : null, p_name: name, p_division: +$("#t-div").value, p_starts_at: date ? new Date(date).toISOString() : null,
+          p_max_teams: +$("#t-max").value, p_best_of: +$("#t-bo").value, p_final_best_of: +$("#t-fbo").value, p_description: $("#t-desc").value });
+        toast(t ? "Tournoi enregistré." : "Tournoi créé en brouillon."); location.hash = "#/tournoi/" + id;
+      } catch (x) { err.textContent = errMsg(x); }
+    };
+  }
+
+  function bracketHtml(d, admin) {
+    const t = d.tournament, total = t.rounds, ms = d.matches;
+    if (!ms.length) return "";
+    const team = id => d.teams.find(x => x.id === id) || d._gone?.[id];
+    const row = (m, side) => {
+      const id = side === 1 ? m.team1_id : m.team2_id, sc = side === 1 ? m.score1 : m.score2, tm = id ? team(id) : null;
+      const win = m.winner_id && m.winner_id === id, lose = m.winner_id && id && m.winner_id !== id;
+      const label = tm ? `${teamLogo(tm, 22)}<span class="bk-name">${esc(tm.name)}</span>` : `<span class="bk-name bk-tbd">${m.bye && m.round === 1 ? "Exempt" : "À déterminer"}</span>`;
+      return `<div class="bk-row${win ? " win" : ""}${lose ? " lose" : ""}">${label}<span class="bk-sc">${sc ?? ""}</span></div>`;
+    };
+    const box = m => {
+      const playable = admin && m.team1_id && m.team2_id && !m.bye;
+      return `<div class="bk-slot"><${playable ? "button type=\"button\"" : "div"} class="bk-m${m.winner_id ? " done" : ""}${playable ? " editable" : ""}" data-match="${m.id}" ${playable ? `aria-label="Saisir le score"` : ""}>${row(m, 1)}${row(m, 2)}</${playable ? "button" : "div"}></div>`;
+    };
+    let html = "";
+    for (let r = 1; r <= total; r++) {
+      const rm = ms.filter(m => m.round === r).sort((a, b) => a.slot - b.slot);
+      const bo = rm[0] ? rm[0].best_of : 1;
+      let col = "";
+      if (rm.length === 1) col = `<div class="bk-pair single">${box(rm[0])}</div>`;
+      else for (let i = 0; i < rm.length; i += 2) col += `<div class="bk-pair">${box(rm[i])}${box(rm[i + 1])}</div>`;
+      html += `<div class="bk-round"><h4>${roundName(r, total)} · BO${bo}</h4><div class="bk-col">${col}</div></div>`;
+    }
+    const champ = t.winner_team_id ? team(t.winner_team_id) : null;
+    html += `<div class="bk-round bk-champ"><h4>Vainqueur</h4><div class="bk-col"><div class="bk-pair single"><div class="bk-slot"><div class="bk-win${champ ? "" : " empty"}">${champ ? `${teamLogo(champ, 44)}<b>${esc(champ.name)}</b>` : `<span class="small-note">À déterminer</span>`}</div></div></div></div></div>`;
+    return `<div class="bk-scroll"><div class="bk" style="--cols:${total + 1}">${html}</div></div>`;
+  }
+
+  async function viewTournament(app, id) {
+    if (id === "nouveau") return viewTournamentForm(app, null);
+    if (id.endsWith("/modifier")) { const d = await rpc("tournament_detail", { p_id: id.slice(0, -9) }); return viewTournamentForm(app, d.tournament); }
+    if (state.session) await loadMe();
+    const d = await rpc("tournament_detail", { p_id: id });
+    const t = d.tournament;
+    if (!t) { app.innerHTML = panel("Tournoi introuvable", `<p class="lead">Ce tournoi n'existe pas ou n'est pas encore publié.</p><div class="ctas"><a class="btn" href="#/tournois">Voir les tournois</a></div>`); return; }
+    // Équipe du visiteur
+    let my = null, isCap = false;
+    if (state.session) {
+      const tid = await rpc("my_team_id");
+      if (tid) {
+        const [all, roster] = await Promise.all([rpc("list_teams"), rpc("team_roster", { p_team: tid })]);
+        my = all.find(x => x.id === tid); isCap = roster.some(r => r.user_id === state.session.user.id && r.is_captain);
+      }
+    }
+    const reg = my ? d.teams.find(x => x.id === my.id) : null;
+    const isAdmin = state.isAdmin;
+
+    // Bloc d'action du capitaine
+    let action = "";
+    if (["inscriptions", "checkin"].includes(t.status)) {
+      if (!state.session) action = `<p>Connecte-toi avec Discord pour inscrire ton équipe.</p><button class="btn solid" id="t-login" type="button">${discordIcon()} Connexion</button>`;
+      else if (!my) action = `<p>Tu n'as pas encore d'équipe.</p><a class="btn" href="#/mon-equipe">Créer ou rejoindre une équipe</a>`;
+      else if (reg) {
+        action = t.status === "checkin"
+          ? (reg.checked_in ? `<p class="ok-line">✓ Check-in fait pour <b>${esc(my.name)}</b>. Rendez-vous ${esc(fmtDate(t.starts_at))}.</p>`
+            : isCap ? `<p><b>${esc(my.name)}</b> est inscrite. Confirme votre présence :</p><button class="btn solid" id="t-checkin" type="button">Faire le check-in</button>`
+            : `<p><b>${esc(my.name)}</b> est inscrite. Ton capitaine doit faire le check-in.</p>`)
+          : `<p class="ok-line">✓ <b>${esc(my.name)}</b> est inscrite.${t.status === "inscriptions" ? " Le check-in ouvrira avant le début." : ""}</p>`;
+        if (isCap) action += `<button class="link-btn danger-t" id="t-unreg" type="button">Désinscrire mon équipe</button>`;
+      } else if (t.status === "checkin") action = `<p>Les inscriptions sont closes, le check-in est en cours.</p>`;
+      else if (!isCap) action = `<p>Seul le capitaine de <b>${esc(my.name)}</b> peut inscrire l'équipe.</p>`;
+      else if (my.status !== "validee") action = `<p>Ton équipe doit d'abord être validée par le staff.</p>`;
+      else if (my.division !== t.division) action = `<p>Ce tournoi est réservé à la ${DIV_NAMES[t.division]}. Ton équipe est en ${DIV_NAMES[my.division]}.</p>`;
+      else if (d.teams.length >= t.max_teams) action = `<p>Le tournoi est complet.</p>`;
+      else action = `<p>Inscris <b>${esc(my.name)}</b> à ce tournoi.</p><button class="btn solid" id="t-reg" type="button">Inscrire mon équipe</button>`;
+    }
+
+    const showCheck = t.status === "checkin";
+    const teamsHtml = d.teams.length ? `<div class="t-teams">${d.teams.map(x => `<div class="t-team">${teamLogo(x, 36)}<div><b>${esc(x.name)}</b><span class="small-note">${esc(x.tag)}${x.avg_rank != null ? " · moy. " + esc(RANKS[Math.round(x.avg_rank)]) : ""}</span></div>
+        ${showCheck ? (x.checked_in ? `<span class="pill ok">Check-in ✓</span>` : `<span class="pill wait">En attente</span>`) : ""}
+        ${isAdmin && ["brouillon", "inscriptions", "checkin"].includes(t.status) ? `<button class="link-btn danger-t" data-rm="${x.id}" type="button">Retirer</button>` : ""}</div>`).join("")}</div>`
+      : `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`;
+
+    // Panneau staff
+    let staff = "";
+    if (isAdmin) {
+      const b = [];
+      if (t.status === "brouillon") b.push(`<button class="btn sm solid" data-st="inscriptions" type="button">Ouvrir les inscriptions</button>`);
+      if (t.status === "inscriptions") b.push(`<button class="btn sm solid" data-st="checkin" type="button">Ouvrir le check-in</button>`, `<button class="btn sm" data-gen type="button">Générer le bracket sans check-in</button>`, `<button class="link-btn" data-st="brouillon" type="button">Repasser en brouillon</button>`);
+      if (t.status === "checkin") b.push(`<button class="btn sm solid" data-gen type="button">Générer le bracket</button>`, `<button class="link-btn" data-st="inscriptions" type="button">Rouvrir les inscriptions</button>`);
+      if (["en_cours", "termine"].includes(t.status)) b.push(`<button class="link-btn danger-t" id="t-reset" type="button">Réinitialiser le bracket</button>`);
+      const ev = { inscriptions: "inscriptions", checkin: "checkin", en_cours: "bracket", termine: "vainqueur" }[t.status];
+      staff = `<div class="card staff-card">
+        <h3>Staff</h3>
+        <div class="staff-row">${b.join("")}</div>
+        <div class="staff-row">${ev ? `<button class="btn sm" id="t-ann" type="button">Annoncer sur Discord</button>` : ""}<a class="link-btn" href="#/tournoi/${t.id}/modifier">Modifier</a><button class="link-btn danger-t" id="t-del" type="button">Supprimer le tournoi</button></div>
+        ${t.status === "en_cours" ? `<p class="small-note">Clique sur un match du bracket pour saisir son score. Le vainqueur avance automatiquement.</p>` : ""}
+        ${t.status === "checkin" ? `<p class="small-note">Les équipes sans check-in seront retirées à la génération. Têtes de série : rang moyen des titulaires.</p>` : ""}
+        <div id="score-editor"></div>
+      </div>`;
+    }
+
+    app.innerHTML = panel(esc(t.name), `
+      <div class="t-meta">${divChip(t.division)}${tPill(t.status)}<span>${esc(fmtDate(t.starts_at))}</span><span>BO${t.best_of} · finale BO${t.final_best_of}</span><span>${d.teams.length} / ${t.max_teams} équipes</span></div>
+      ${t.description ? `<p class="lead t-desc">${esc(t.description)}</p>` : ""}
+      ${action ? `<div class="card t-action">${action}<p class="form-err" id="t-err" role="alert"></p></div>` : ""}
+      ${staff}
+      ${d.matches.length ? `<h3 class="t-h">Bracket</h3>${bracketHtml(d, isAdmin)}` : ""}
+      <h3 class="t-h">Équipes inscrites</h3>${teamsHtml}
+      <div class="ctas" style="margin-top:32px"><a class="btn" href="#/tournois">Tous les tournois</a></div>`, `Tournoi · ${DIV_NAMES[t.division]}`);
+
+    const reload = () => viewTournament(app, id);
+    const err = $("#t-err");
+    const act = async (fn, okMsg) => { if (err) err.textContent = ""; try { await fn(); if (okMsg) toast(okMsg); reload(); } catch (x) { if (err) err.textContent = errMsg(x); else toast(errMsg(x), "err"); } };
+    if ($("#t-login")) $("#t-login").onclick = login;
+    if ($("#t-reg")) $("#t-reg").onclick = () => act(() => rpc("register_team", { p_tournament: t.id }), "Équipe inscrite !");
+    if ($("#t-checkin")) $("#t-checkin").onclick = () => act(() => rpc("checkin_team", { p_tournament: t.id }), "Check-in validé !");
+    if ($("#t-unreg")) confirmable($("#t-unreg"), "Confirmer la désinscription", () => act(() => rpc("unregister_team", { p_tournament: t.id }), "Équipe désinscrite."));
+    if (!isAdmin) return;
+
+    app.querySelectorAll("[data-st]").forEach(b => b.onclick = () => act(async () => {
+      await rpc("admin_set_tournament_status", { p_id: t.id, p_status: b.dataset.st });
+    }, "Statut mis à jour. Pense à l'annoncer sur Discord."));
+    app.querySelectorAll("[data-rm]").forEach(b => confirmable(b, "Confirmer ?", () => act(() => rpc("admin_remove_team", { p_tournament: t.id, p_team: b.dataset.rm }), "Équipe retirée.")));
+    app.querySelectorAll("[data-gen]").forEach(b => confirmable(b, "Confirmer la génération", () => act(async () => {
+      const eligible = d.teams.filter(x => t.status !== "checkin" || x.checked_in)
+        .map(x => ({ ...x, k: Math.random() })).sort((a, b) => (b.avg_rank ?? -1) - (a.avg_rank ?? -1) || a.k - b.k);
+      if (eligible.length < 2) throw new Error(t.status === "checkin" ? "Il faut au moins 2 équipes ayant fait leur check-in." : "Il faut au moins 2 équipes inscrites.");
+      const size = Math.max(2, 2 ** Math.ceil(Math.log2(eligible.length)));
+      let order = [1]; while (order.length < size) { const n = order.length * 2; order = order.flatMap(s => [s, n + 1 - s]); }
+      await rpc("admin_create_bracket", { p_id: t.id, p_order: order.map(s => eligible[s - 1] ? eligible[s - 1].id : null) });
+    }, "Bracket généré ! Pense à l'annoncer sur Discord.")));
+    if ($("#t-reset")) confirmable($("#t-reset"), "Confirmer : tous les scores seront effacés", () => act(() => rpc("admin_reset_bracket", { p_id: t.id }), "Bracket réinitialisé."));
+    if ($("#t-del")) confirmable($("#t-del"), "Confirmer la suppression définitive", async () => { try { await rpc("admin_delete_tournament", { p_id: t.id }); toast("Tournoi supprimé."); location.hash = "#/tournois"; } catch (x) { toast(errMsg(x), "err"); } });
+    if ($("#t-ann")) $("#t-ann").onclick = async () => { const b = $("#t-ann"); b.disabled = true; await announce(t.id, { inscriptions: "inscriptions", checkin: "checkin", en_cours: "bracket", termine: "vainqueur" }[t.status]); b.disabled = false; };
+
+    // Saisie des scores
+    app.querySelectorAll(".bk-m.editable").forEach(el => el.onclick = () => {
+      const m = d.matches.find(x => x.id === el.dataset.match), a = d.teams.find(x => x.id === m.team1_id), b2 = d.teams.find(x => x.id === m.team2_id);
+      app.querySelectorAll(".bk-m.sel").forEach(x => x.classList.remove("sel")); el.classList.add("sel");
+      const total = t.rounds;
+      $("#score-editor").innerHTML = `<form class="score-form" id="score-form">
+        <span class="eyebrow">${roundName(m.round, total)} · BO${m.best_of} · ${m.best_of === 1 ? "score en rounds" : "score en maps"}</span>
+        <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
+        <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
+        <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button><button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
+        <p class="form-err" id="score-err" role="alert"></p></form>`;
+      $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" });
+      $("#s1").focus();
+      $("#score-cancel").onclick = () => { $("#score-editor").innerHTML = ""; el.classList.remove("sel"); };
+      $("#score-form").onsubmit = async e => {
+        e.preventDefault(); const s1 = $("#s1").value, s2 = $("#s2").value;
+        if (s1 === "" || s2 === "") { $("#score-err").textContent = "Entre les deux scores."; return; }
+        try {
+          await rpc("admin_report_score", { p_match: m.id, p_score1: +s1, p_score2: +s2 });
+          const done = m.round === total;
+          toast(done ? "Finale enregistrée : le tournoi est terminé ! Annonce le vainqueur sur Discord." : "Score enregistré.");
+          reload();
+        } catch (x) { $("#score-err").textContent = errMsg(x); }
+      };
+    });
+  }
 
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
