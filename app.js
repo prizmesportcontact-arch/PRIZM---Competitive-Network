@@ -680,7 +680,7 @@
         <label for="t-max">Nombre d'équipes maximum</label><select id="t-max" ${locked ? "disabled" : ""}>${opt([4, 8, 16, 32], v.max_teams)}</select>
         <label for="t-bo">Format des matchs</label><select id="t-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
         <label for="t-fbo">Format de la finale</label><select id="t-fbo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.final_best_of, x => "BO" + x)}</select>
-        <label for="t-desc">Description (optionnelle)</label><textarea id="t-desc" rows="4" maxlength="1000" placeholder="Récompenses, règles particulières, horaires…">${esc(v.description || "")}</textarea>
+        <label for="t-desc">Description (optionnelle)</label><textarea id="t-desc" rows="4" maxlength="1000" placeholder="Règles particulières, horaires, matchs castés…">${esc(v.description || "")}</textarea>
         ${locked ? `<p class="small-note">Le bracket est lancé : seules la date et la description sont modifiables.</p>` : ""}
         ${t ? "" : testBox("t-test")}
         <div class="ctas"><button class="btn solid" type="submit">${t ? "Enregistrer" : "Créer le tournoi"}</button><a class="btn" href="${t ? "#/tournoi/" + t.id : "#/tournois"}">Annuler</a></div>
@@ -743,6 +743,9 @@
     return `<div class="bk-scroll"><div class="bk" style="--cols:${total + 1}">${html}</div></div>`;
   }
 
+  // Match de l'équipe du staff : rappel de neutralité (l'équipe PRIZM joue aussi)
+  const ownMatch = m => state.team && [m.team1_id, m.team2_id].includes(state.team.id)
+    ? `<p class="own-match">Tu joues ce match. Pour rester neutre, laisse le capitaine adverse confirmer le score, ou un arbitre qui n'est pas dans ton équipe.</p>` : "";
   // Forfait : petite ligne discrète sous l'éditeur de score (staff)
   const ffRow = (a, b) => `<p class="ff-row small-note">Équipe absente ? <button class="link-btn danger-t" type="button" data-ff="1">Forfait de ${esc(a ? a.name : "?")}</button> · <button class="link-btn danger-t" type="button" data-ff="2">Forfait de ${esc(b ? b.name : "?")}</button></p>`;
   function bindFf(kind, m, done) {
@@ -855,7 +858,7 @@
         <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
         <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
         <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button><button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
-        ${ffRow(a, b2)}
+        ${ownMatch(m)}${ffRow(a, b2)}
         <p class="form-err" id="score-err" role="alert"></p></form>`;
       $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" });
       $("#s1").focus();
@@ -966,7 +969,7 @@
         <label for="l-max">Nombre d'équipes maximum</label><select id="l-max" ${locked ? "disabled" : ""}>${opt([4, 5, 6, 7, 8, 9, 10, 11, 12], v.max_teams)}</select>
         <span class="hint">Chaque équipe joue une fois contre toutes les autres : 8 équipes = 7 journées.</span>
         <label for="l-bo">Format des matchs</label><select id="l-bo" ${locked ? "disabled" : ""}>${opt([1, 3, 5], v.best_of, x => "BO" + x)}</select>
-        <label for="l-desc">Description (optionnelle)</label><textarea id="l-desc" rows="4" maxlength="1000" placeholder="Jour des matchs, récompenses…">${esc(v.description || "")}</textarea>
+        <label for="l-desc">Description (optionnelle)</label><textarea id="l-desc" rows="4" maxlength="1000" placeholder="Jour et heure des matchs, matchs castés…">${esc(v.description || "")}</textarea>
         ${l ? "" : testBox("l-test")}
         <div class="ctas"><button class="btn solid" type="submit">${l ? "Enregistrer" : "Créer la saison"}</button><a class="btn" href="${l ? "#/league/" + l.id : "#/tournois"}">Annuler</a></div>
         <p class="form-err" id="l-err" role="alert"></p>
@@ -1091,7 +1094,7 @@
         <div class="score-line"><label for="s1">${esc(a ? a.name : "?")}</label><input id="s1" type="number" min="0" max="99" inputmode="numeric" value="${m.score1 ?? ""}">
         <span>–</span><input id="s2" type="number" min="0" max="99" inputmode="numeric" value="${m.score2 ?? ""}"><label for="s2">${esc(b2 ? b2.name : "?")}</label></div>
         <div class="staff-row"><button class="btn sm solid" type="submit">Enregistrer le score</button>${m.winner_id ? `<button class="link-btn danger-t" type="button" id="score-clear">Effacer le score</button>` : ""}<button class="link-btn" type="button" id="score-cancel">Annuler</button></div>
-        ${ffRow(a, b2)}
+        ${ownMatch(m)}${ffRow(a, b2)}
         <p class="form-err" id="score-err" role="alert"></p></form>`;
       $("#score-editor").scrollIntoView({ behavior: "smooth", block: "nearest" }); $("#s1").focus();
       bindFf("league", m, () => { toast("Forfait enregistré, classement mis à jour."); reload(); });

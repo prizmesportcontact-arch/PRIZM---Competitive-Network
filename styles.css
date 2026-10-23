@@ -582,3 +582,4 @@ h2{font-size:clamp(2.1rem,6vw,4.4rem)}
   .standings th,.standings td{padding-inline:4px}
 }
 .rg-pick>*{min-width:0;max-width:100%}.rg-pick select{width:100%;flex:1 1 260px}
+.own-match{margin-top:10px;font-size:.88rem;color:var(--warn)}
