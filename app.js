@@ -197,7 +197,7 @@
   // Logo d'équipe (ou initiales du tag si pas de logo)
   const teamLogo = (t, size = 32) => t && t.logo_url
     ? `<img class="team-logo" src="${esc(t.logo_url)}" alt="" width="${size}" height="${size}" loading="lazy">`
-    : `<span class="team-logo team-logo-empty" style="width:${size}px;height:${size}px;font-size:${Math.round(size * 0.36)}px">${esc((t && t.tag || "?").slice(0, 3))}</span>`;
+    : `<span class="team-logo team-logo-empty" style="width:${size}px;height:${size}px;font-size:${Math.max(10, Math.round(size * 0.36))}px">${esc((t && t.tag || "?").slice(0, 3))}</span>`;
 
   // Redimensionne l'image en 256×256 (contenue, fond transparent) puis l'envoie
   async function uploadTeamLogo(teamId, file) {
