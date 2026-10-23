@@ -44,15 +44,27 @@
   if (window.supabase && CFG.supabaseUrl && CFG.supabaseKey) {
     sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
   }
-  const state = { session: null, profile: null, isAdmin: false, isStaff: false };
+  const state = { session: null, profile: null, team: null, isAdmin: false, isStaff: false };
 
+  // Profil + équipe du joueur connecté, en une seule requête (gardés en mémoire entre les pages)
   async function loadMe() {
-    state.profile = null; state.isAdmin = false; state.isStaff = false;
-    if (!sb || !state.session) return;
-    const { data, error } = await sb.from("profiles").select("id,username,avatar_url,riot_id,rank,rank_source,rank_checked_at,is_admin,staff_role").eq("id", state.session.user.id).maybeSingle();
+    if (!sb || !state.session) { clearMe(); return; }
+    const { data, error } = await sb.rpc("my_context");
     if (error) { if (isSetupError(error)) showSetupBanner(); return; }
-    state.profile = data; state.isAdmin = !!(data && data.is_admin);
-    state.isStaff = state.isAdmin || !!(data && ["admin", "arbitre"].includes(data.staff_role));
+    const p = data && data.profile;
+    state.profile = p || null; state.team = (data && data.team) || null;
+    state.isAdmin = !!(p && p.is_admin);
+    state.isStaff = state.isAdmin || !!(p && ["admin", "arbitre"].includes(p.staff_role));
+    updateTeamCtas();
+  }
+  function clearMe() {
+    state.profile = null; state.team = null; state.isAdmin = false; state.isStaff = false;
+    updateTeamCtas();
+  }
+  // Boutons « Inscrire mon équipe » → « Mon équipe » quand le joueur a déjà une équipe
+  const teamCtaLabel = () => state.team ? "Mon équipe" : "Inscrire mon équipe";
+  function updateTeamCtas() {
+    document.querySelectorAll("[data-team-cta]").forEach(a => { a.textContent = teamCtaLabel(); });
   }
 
   function isSetupError(e) {
@@ -71,7 +83,7 @@
     if (error) toast(errMsg(error), "err");
   }
   async function logout() {
-    await sb.auth.signOut(); state.session = null; state.profile = null; state.isAdmin = false;
+    await sb.auth.signOut(); state.session = null; clearMe();
     renderAuth(); location.hash = "#top"; route();
   }
 
@@ -101,9 +113,13 @@
     const btn = $("#me-btn"), menu = $("#me-menu");
     btn.onclick = e => { e.stopPropagation(); menu.hidden = !menu.hidden; btn.setAttribute("aria-expanded", String(!menu.hidden)); };
     menu.onclick = () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); };
-    document.addEventListener("click", () => { menu.hidden = true; btn.setAttribute("aria-expanded", "false"); });
     $("#logout-btn").onclick = logout;
   }
+  // Ferme le menu du compte quand on clique ailleurs (un seul écouteur pour toute la page)
+  document.addEventListener("click", () => {
+    const menu = $("#me-menu"), btn = $("#me-btn");
+    if (menu && !menu.hidden) { menu.hidden = true; if (btn) btn.setAttribute("aria-expanded", "false"); }
+  });
   function discordIcon() {
     return `<svg width="18" height="14" viewBox="0 0 71 55" aria-hidden="true" fill="currentColor"><path d="M60.1 4.9A58.5 58.5 0 0 0 45.5.4a40 40 0 0 0-1.9 3.8 54 54 0 0 0-16.2 0A40 40 0 0 0 25.5.4 58.4 58.4 0 0 0 10.9 4.9C1.6 18.7-.9 32.2.3 45.5a58.8 58.8 0 0 0 17.9 9 43 43 0 0 0 3.8-6.2 38 38 0 0 1-6-2.9l1.5-1.1a42 42 0 0 0 36 0l1.5 1.1a38 38 0 0 1-6 2.9 43 43 0 0 0 3.8 6.2 58.6 58.6 0 0 0 17.9-9c1.5-15.4-2.5-28.8-10.6-40.6ZM23.7 37.3c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Zm23.6 0c-3.5 0-6.4-3.2-6.4-7.2s2.8-7.2 6.4-7.2 6.5 3.3 6.4 7.2c0 4-2.8 7.2-6.4 7.2Z"/></svg>`;
   }
@@ -186,6 +202,15 @@
     if (up.error) throw new Error(/Bucket not found/i.test(up.error.message) ? "Le stockage des logos n'est pas encore activé (script SQL 002)." : /row-level|policy/i.test(up.error.message) ? "Envoi refusé par le stockage : seul le capitaine peut changer le logo." : "Envoi impossible : " + up.error.message);
     const url = sb.storage.from("team-logos").getPublicUrl(path).data.publicUrl;
     await rpc("set_team_logo", { p_url: url });
+    await cleanLogos(teamId, path.split("/")[1]);
+  }
+  // Supprime les anciens logos de l'équipe pour ne pas remplir le stockage
+  async function cleanLogos(teamId, keep) {
+    try {
+      const { data } = await sb.storage.from("team-logos").list(teamId, { limit: 100 });
+      const old = (data || []).filter(f => f.name !== keep).map(f => `${teamId}/${f.name}`);
+      if (old.length) await sb.storage.from("team-logos").remove(old);
+    } catch (e) { /* pas grave : le nouveau logo est déjà en place */ }
   }
 
   const rankOptions = sel => `<option value="">Choisis ton rang</option>` +
@@ -265,7 +290,7 @@
       </div>`, "Compte");
     confirmable($("#delete-account"), "Clique encore : suppression définitive", async () => {
       $("#delete-err").textContent = "";
-      try { await rpc("delete_my_account"); await sb.auth.signOut(); state.session = null; state.profile = null; renderAuth(); toast("Ton compte a été supprimé."); location.hash = "#top"; }
+      try { await rpc("delete_my_account"); await sb.auth.signOut(); state.session = null; clearMe(); renderAuth(); toast("Ton compte a été supprimé."); location.hash = "#top"; }
       catch (x) { $("#delete-err").textContent = errMsg(x); }
     });
     $("#profile-form").onsubmit = async e => {
@@ -320,7 +345,7 @@
     await loadMe();
     const p = state.profile;
     const profileOk = p && p.riot_id && p.rank != null;
-    const teamId = await rpc("my_team_id");
+    const teamId = state.team ? state.team.id : null;
     let pendingCode = ""; try { pendingCode = sessionStorage.getItem("prizm_join") || ""; } catch (e) {}
 
     if (!teamId) {
@@ -359,10 +384,10 @@
       return;
     }
 
-    const [teams, roster, code] = await Promise.all([rpc("list_teams"), rpc("team_roster", { p_team: teamId }), rpc("my_invite_code")]);
-    const t = teams.find(x => x.id === teamId);
+    const t = state.team, code = t.invite_code;
+    const roster = await rpc("team_roster", { p_team: teamId });
     const me = state.session.user.id;
-    const isCap = roster.some(r => r.user_id === me && r.is_captain);
+    const isCap = !!t.is_captain;
     const inviteLink = location.origin + location.pathname + "?join=" + code + "#/mon-equipe";
     const tit = roster.filter(r => r.role === "titulaire").length;
 
@@ -419,7 +444,7 @@
       catch (x) { $("#logo-err").textContent = errMsg(x); }
     };
     if ($("#logo-remove")) confirmable($("#logo-remove"), "Confirmer ?", async () => {
-      try { await rpc("set_team_logo", { p_url: null }); toast("Logo retiré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
+      try { await rpc("set_team_logo", { p_url: null }); await cleanLogos(teamId, null); toast("Logo retiré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     $("#copy-inv").onclick = () => copyText(inviteLink, $("#inv-copied"), null);
     if ($("#regen")) confirmable($("#regen"), "Confirmer : l'ancien code ne marchera plus", async () => {
       try { await rpc("regenerate_invite"); toast("Nouveau code généré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
@@ -474,7 +499,7 @@
     const pending = teams.filter(t => t.status === "en_attente").length;
     app.innerHTML = panel("Équipes du réseau", `
       <p class="lead">${ok.length} équipe${ok.length > 1 ? "s" : ""} validée${ok.length > 1 ? "s" : ""}${pending ? ` · ${pending} en attente de validation` : ""}. Clique sur une équipe pour voir ses joueurs.</p>
-      <div class="ctas" style="margin:20px 0 40px"><a class="btn solid" href="#/mon-equipe">Inscrire mon équipe</a></div>
+      <div class="ctas" style="margin:20px 0 40px"><a class="btn solid" href="#/mon-equipe" data-team-cta>${teamCtaLabel()}</a></div>
       ${[1,2,3,4].map(d => {
         const list = ok.filter(t => t.division === d);
         return `<section class="div-block"><h3>${DIV_NAMES[d]}</h3>
@@ -524,7 +549,6 @@
   }
 
   async function viewTournamentForm(app, t) {
-    await loadMe();
     if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
     const v = t || { name: "", division: 2, starts_at: null, max_teams: 8, best_of: 1, final_best_of: 3, description: "" };
     const locked = t && ["en_cours", "termine"].includes(t.status);
@@ -603,19 +627,11 @@
   async function viewTournament(app, id) {
     if (id === "nouveau") return viewTournamentForm(app, null);
     if (id.endsWith("/modifier")) { const d = await rpc("tournament_detail", { p_id: id.slice(0, -9) }); return viewTournamentForm(app, d.tournament); }
-    if (state.session) await loadMe();
     const d = await rpc("tournament_detail", { p_id: id });
     const t = d.tournament;
     if (!t) { app.innerHTML = panel("Tournoi introuvable", `<p class="lead">Ce tournoi n'existe pas ou n'est pas encore publié.</p><div class="ctas"><a class="btn" href="#/tournois">Voir les tournois</a></div>`); return; }
-    // Équipe du visiteur
-    let my = null, isCap = false;
-    if (state.session) {
-      const tid = await rpc("my_team_id");
-      if (tid) {
-        const [all, roster] = await Promise.all([rpc("list_teams"), rpc("team_roster", { p_team: tid })]);
-        my = all.find(x => x.id === tid); isCap = roster.some(r => r.user_id === state.session.user.id && r.is_captain);
-      }
-    }
+    // Équipe du visiteur (déjà en mémoire)
+    const my = state.team, isCap = !!(my && my.is_captain);
     const reg = my ? d.teams.find(x => x.id === my.id) : null;
     const isAdmin = state.isStaff;
 
@@ -729,7 +745,7 @@
   const L_STATUS = { brouillon: "Brouillon", inscriptions: "Inscriptions ouvertes", en_cours: "En cours", termine: "Terminée" };
   const L_PILL = { brouillon: "wait", inscriptions: "ok", en_cours: "live", termine: "done" };
   const lPill = s => `<span class="pill t-${L_PILL[s]}">${L_STATUS[s]}</span>`;
-  const compFilter = { div: null, type: "all", init: false };
+  const compFilter = { div: null, type: "all", init: null };
   const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
   const dateTile = iso => {
     if (!iso) return `<div class="date-tile empty"><b>?</b><span>date à venir</span></div>`;
@@ -739,13 +755,18 @@
 
   async function viewTournaments(app) {
     if (!sb) { app.innerHTML = panel("Compétitions", `<p class="lead">Bientôt disponible.</p>`); return; }
-    if (state.session && !state.profile) await loadMe();
     const [cups, leagues] = await Promise.all([rpc("list_tournaments"), rpc("list_leagues").catch(() => [])]);
-    // Division par défaut : celle de mon équipe
-    if (!compFilter.init) {
-      compFilter.init = true;
-      if (state.session) { try { const tid = await rpc("my_team_id"); if (tid) { const t = (await rpc("list_teams")).find(x => x.id === tid); if (t && t.division) compFilter.div = t.division; } } catch (e) {} }
+    // Division par défaut : celle de mon équipe (une fois par compte)
+    const who = state.session ? state.session.user.id : "";
+    if (compFilter.init !== who) {
+      compFilter.init = who;
+      compFilter.div = state.team && state.team.status === "validee" && state.team.division ? state.team.division : null;
     }
+    renderComps(app, cups, leagues);
+  }
+
+  // Affichage de la page Compétitions : les filtres ne refont pas de requête
+  function renderComps(app, cups, leagues) {
     const items = [
       ...cups.map(t => ({ kind: "cup", id: t.id, name: t.name, division: t.division, date: t.starts_at, status: t.status,
         live: t.status === "en_cours", open: ["inscriptions", "checkin"].includes(t.status), done: t.status === "termine",
@@ -791,13 +812,12 @@
       <section class="comp-sec"><h3>Prochainement</h3>${next.length ? `<div class="comp-list">${next.map(row).join("")}</div>` : `<p class="small-note">Rien de prévu${compFilter.div ? " en D" + compFilter.div : ""} pour l'instant. Les annonces arrivent sur le Discord.</p>`}</section>
       <section class="comp-sec"><h3>Résultats</h3>${done.length ? `<div class="comp-list">${done.map(row).join("")}</div>` : `<p class="small-note">Pas encore de compétition terminée${compFilter.div ? " en D" + compFilter.div : ""}.</p>`}</section>`, "Compétition");
     app.querySelectorAll(".f-chip").forEach(b => b.onclick = () => {
-      const k = b.dataset.f; compFilter[k] = k === "div" ? (b.dataset.v ? +b.dataset.v : null) : b.dataset.v; viewTournaments(app);
+      const k = b.dataset.f; compFilter[k] = k === "div" ? (b.dataset.v ? +b.dataset.v : null) : b.dataset.v; renderComps(app, cups, leagues);
     });
   }
 
   // ---------- League ----------
   async function viewLeagueForm(app, l) {
-    await loadMe();
     if (!state.isStaff) { app.innerHTML = panel("Accès refusé", `<p class="lead">Réservé au staff.</p>`); return; }
     const v = l || { division: 2, starts_at: null, max_teams: 8, best_of: 1, description: "" };
     const locked = l && ["en_cours", "termine"].includes(l.status);
@@ -840,17 +860,12 @@
   async function viewLeague(app, id) {
     if (id === "nouveau") return viewLeagueForm(app, null);
     if (id.endsWith("/modifier")) { const d = await rpc("league_detail", { p_id: id.slice(0, -9) }); return viewLeagueForm(app, d.league); }
-    if (state.session) await loadMe();
     const d = await rpc("league_detail", { p_id: id });
     const l = d.league;
     if (!l) { app.innerHTML = panel("Saison introuvable", `<p class="lead">Cette saison n'existe pas ou n'est pas encore publiée.</p><div class="ctas"><a class="btn" href="#/tournois">Compétitions</a></div>`); return; }
     const st = d.standings, staff = state.isStaff;
     const team = tid => st.find(x => x.team_id === tid);
-    let my = null, isCap = false;
-    if (state.session) {
-      const tid = await rpc("my_team_id");
-      if (tid) { const [all, roster] = await Promise.all([rpc("list_teams"), rpc("team_roster", { p_team: tid })]); my = all.find(x => x.id === tid); isCap = roster.some(r => r.user_id === state.session.user.id && r.is_captain); }
-    }
+    const my = state.team, isCap = !!(my && my.is_captain);
     const reg = my ? team(my.id) : null;
 
     let action = "";
@@ -953,7 +968,6 @@
   // ---------- Staff ----------
   async function viewStaff(app) {
     if (!state.session) return needLogin(app, "Espace réservé aux admins.");
-    await loadMe();
     if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Seuls les admins peuvent gérer le staff.</p>`); return; }
     const ROLE = { admin: "Admin", arbitre: "Arbitre", joueur: "Joueur" };
     const rowHtml = p => `<div class="staff-person" data-u="${p.id}">
@@ -996,7 +1010,6 @@
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
     if (!state.session) return needLogin(app, "Espace réservé au staff.");
-    await loadMe();
     if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé au staff du réseau.</p>`); return; }
     const teams = await rpc("list_teams");
     const order = { en_attente: 0, validee: 1, refusee: 2 };
@@ -1052,7 +1065,7 @@
     sb.auth.onAuthStateChange(async (ev, session) => {
       if (ev === "SIGNED_IN" && (!state.session || state.session.user.id !== session.user.id)) {
         state.session = session; await loadMe(); renderAuth(); route();
-      } else if (ev === "SIGNED_OUT") { state.session = null; renderAuth(); }
+      } else if (ev === "SIGNED_OUT") { if (state.session) { state.session = null; clearMe(); renderAuth(); route(); } }
       else state.session = session;
     });
   }
