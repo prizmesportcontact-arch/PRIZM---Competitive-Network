@@ -296,3 +296,16 @@ details.team-row summary .tag-chip{order:0}
 .legal ul{margin:0;padding-left:20px;display:grid;gap:6px}
 .legal p,.legal li{color:var(--ink)}
 .legal .lead{color:var(--mute)}
+
+/* ===== Rang vérifié ===== */
+.rank-box{border:1px solid var(--line);padding:20px 22px;max-width:520px;display:grid;gap:8px;margin-top:8px}
+.rank-big{font-family:var(--display);font-size:2.4rem;line-height:1;text-transform:uppercase;font-weight:900}
+.rank-meta{display:flex;flex-wrap:wrap;align-items:center;gap:10px}
+.rank-ok{color:var(--ok);font-weight:700;margin-left:6px}
+.rank-unv{color:var(--warn);font-weight:700;margin-left:6px}
+.roster-tools{display:flex;flex-wrap:wrap;align-items:center;gap:14px;margin-top:6px}
+.admin-rank{display:inline-flex;gap:6px;align-items:center}
+.admin-rank select{font:500 .85rem var(--body);padding:4px 6px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.admin-row>*,.team-row,.roster-slot{min-width:0}
+.roster-slot{overflow-x:auto}
+.ar-actions{flex-wrap:wrap}

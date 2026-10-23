@@ -49,7 +49,7 @@
   async function loadMe() {
     state.profile = null; state.isAdmin = false;
     if (!sb || !state.session) return;
-    const { data, error } = await sb.from("profiles").select("id,username,avatar_url,riot_id,rank,is_admin").eq("id", state.session.user.id).maybeSingle();
+    const { data, error } = await sb.from("profiles").select("id,username,avatar_url,riot_id,rank,rank_source,rank_checked_at,is_admin").eq("id", state.session.user.id).maybeSingle();
     if (error) { if (isSetupError(error)) showSetupBanner(); return; }
     state.profile = data; state.isAdmin = !!(data && data.is_admin);
   }
@@ -245,19 +245,16 @@
     if (!state.session) return needLogin(app, "Ton profil joueur est lié à ton compte Discord.");
     await loadMe(); const p = state.profile;
     if (!p) { app.innerHTML = panel("Profil introuvable", `<p class="lead">La base de données n'est pas encore prête.</p>`); return; }
-    const div = rankDiv(p.rank);
     app.innerHTML = panel("Mon profil", `
       <div class="profile-head">${avatar(p.avatar_url, p.username, 64)}<div><b class="ph-name">${esc(p.username)}</b><span class="small-note">Compte Discord relié</span></div></div>
       <form class="form" id="profile-form" novalidate>
         <label for="riot-id">Riot ID</label>
         <input id="riot-id" name="riot" placeholder="Pseudo#TAG" value="${esc(p.riot_id || "")}" autocomplete="off" required>
-        <span class="hint">Exactement comme en jeu, avec le #.</span>
-        <label for="rank">Rang actuel</label>
-        <select id="rank" name="rank" required>${rankOptions(p.rank)}</select>
-        <p class="div-preview" id="div-preview">${div ? `Ce rang correspond à la <b>${DIV_NAMES[div]}</b>.` : "Choisis ton rang pour voir ta division."}</p>
-        <div class="ctas"><button class="btn solid" type="submit">Enregistrer</button></div>
+        <span class="hint">Exactement comme en jeu, avec le #. Ton rang est détecté automatiquement à partir de ton Riot ID.</span>
+        <div class="ctas"><button class="btn solid" type="submit" id="save-riot">${p.riot_id ? "Enregistrer et actualiser mon rang" : "Enregistrer et détecter mon rang"}</button></div>
         <p class="form-err" id="profile-err" role="alert"></p>
       </form>
+      <div class="rank-box" id="rank-box">${rankBox(p)}</div>
       <div class="card danger-zone">
         <h3>Supprimer mon compte</h3>
         <p class="small-note">Efface ton profil (pseudo, avatar, Riot ID, rang) et te retire de ton équipe. C'est définitif. Plus d'infos dans la <a href="#/confidentialite">politique de confidentialité</a>.</p>
@@ -269,18 +266,50 @@
       try { await rpc("delete_my_account"); await sb.auth.signOut(); state.session = null; state.profile = null; renderAuth(); toast("Ton compte a été supprimé."); location.hash = "#top"; }
       catch (x) { $("#delete-err").textContent = errMsg(x); }
     });
-    $("#rank").onchange = e => { const d = rankDiv(e.target.value === "" ? null : +e.target.value);
-      $("#div-preview").innerHTML = d ? `Ce rang correspond à la <b>${DIV_NAMES[d]}</b>.` : "Choisis ton rang pour voir ta division."; };
     $("#profile-form").onsubmit = async e => {
       e.preventDefault();
-      const riot = $("#riot-id").value.trim(), rank = $("#rank").value;
+      const riot = $("#riot-id").value.trim();
       const err = $("#profile-err"); err.textContent = "";
       if (!/^[^#]{3,16}#[A-Za-z0-9]{3,5}$/.test(riot)) { err.textContent = "Riot ID invalide. Format attendu : Pseudo#TAG (ex : Celyan#EUW)."; return; }
-      if (rank === "") { err.textContent = "Choisis ton rang."; return; }
-      const { error } = await sb.from("profiles").update({ riot_id: riot, rank: +rank }).eq("id", state.session.user.id);
-      if (error) { err.textContent = errMsg(error); return; }
-      toast("Profil enregistré."); await loadMe(); renderAuth();
+      const btn = $("#save-riot"); btn.disabled = true; btn.textContent = "Détection du rang…";
+      if (riot !== (p.riot_id || "")) {
+        const { error } = await sb.from("profiles").update({ riot_id: riot }).eq("id", state.session.user.id);
+        if (error) { err.textContent = errMsg(error); btn.disabled = false; btn.textContent = "Enregistrer et détecter mon rang"; return; }
+      }
+      const r = await rankSync({});
+      const mine = r && r.results ? Object.values(r.results)[0] : null;
+      if (r && r.error) err.textContent = r.error;
+      else if (mine && !mine.ok) err.textContent = mine.message;
+      else if (mine && mine.ok) toast(mine.rank == null ? "Compte trouvé, mais non classé pour l'instant." : "Rang détecté : " + mine.label + ".");
+      await loadMe(); renderAuth(); $("#rank-box").innerHTML = rankBox(state.profile);
+      btn.disabled = false; btn.textContent = "Enregistrer et actualiser mon rang";
     };
+  }
+
+  function rankBox(p) {
+    if (!p) return "";
+    const d = rankDiv(p.rank);
+    const when = p.rank_checked_at ? new Date(p.rank_checked_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "";
+    const src = p.rank_source === "auto" ? `<span class="pill ok">Vérifié</span><span class="small-note">Détecté automatiquement${when ? " le " + when : ""}</span>`
+      : p.rank_source === "staff" ? `<span class="pill ok">Fixé par le staff</span>${when ? `<span class="small-note">le ${when}</span>` : ""}`
+      : p.rank != null ? `<span class="pill wait">Non vérifié</span><span class="small-note">Clique sur le bouton ci-dessus pour le vérifier.</span>` : "";
+    if (p.rank == null) return `<span class="eyebrow">Rang actuel</span><b class="rank-big">${p.riot_id ? "Non classé" : "—"}</b>
+      <p class="small-note">${p.riot_id ? "Aucun rang compétitif trouvé pour ce Riot ID. Joue tes matchs de placement, ou demande au staff de fixer ton rang via un ticket dans #support." : "Renseigne ton Riot ID pour détecter ton rang."}</p>`;
+    return `<span class="eyebrow">Rang actuel</span><b class="rank-big">${esc(RANKS[p.rank])}</b>
+      <div class="rank-meta">${src}</div>
+      <p class="div-preview">Ce rang correspond à la <b>${DIV_NAMES[d]}</b>.</p>`;
+  }
+
+  // Appelle la fonction rank-sync (détection du rang via HenrikDev)
+  async function rankSync(body) {
+    try {
+      const { data, error } = await sb.functions.invoke("rank-sync", { body });
+      if (error) {
+        let msg = null; try { msg = (await error.context.json()).error; } catch (e) {}
+        return { error: msg || "La détection du rang est indisponible pour le moment." };
+      }
+      return data;
+    } catch (e) { return { error: "La détection du rang est indisponible pour le moment." }; }
   }
 
   // ---------- Vue : mon équipe ----------
@@ -345,6 +374,7 @@
       ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
       ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
       ${rosterTable(roster, isCap, me)}
+      <div class="roster-tools"><button class="link-btn" id="refresh-ranks" type="button">Actualiser les rangs de l'équipe</button><span class="small-note">✓ = rang vérifié · ? = rang non vérifié</span></div>
       <div class="cards3" style="margin-top:32px">
         <div class="card">
           <h3>Inviter des joueurs</h3>
@@ -373,6 +403,13 @@
         </div>
       </div>`, "Mon équipe");
 
+    $("#refresh-ranks").onclick = async () => {
+      const b = $("#refresh-ranks"); b.disabled = true; b.textContent = "Actualisation…";
+      const r = await rankSync({ team_id: teamId });
+      if (r.error) toast(r.error, "err");
+      else { const fails = Object.values(r.results).filter(x => !x.ok); toast(fails.length ? fails.map(x => (x.username || "?") + " : " + x.message).join(" · ") : "Rangs actualisés.", fails.length ? "err" : "ok"); }
+      viewMyTeam(app);
+    };
     if ($("#sync-me")) $("#sync-me").onclick = () => discordSync({ user_ids: [me] }, true);
     if ($("#logo-file")) $("#logo-file").onchange = async e => {
       const f = e.target.files[0]; if (!f) return; $("#logo-err").textContent = "Envoi en cours…";
@@ -395,13 +432,21 @@
     return `<span class="pill wait">En attente de validation</span>`;
   }
 
-  function rosterTable(roster, isCap, me) {
+  const rankCell = r => {
+    const label = r.rank != null ? esc(RANKS[r.rank]) : "—";
+    const mark = r.rank_source === "auto" ? `<span class="rank-ok" title="Rang vérifié automatiquement">✓</span>`
+      : r.rank_source === "staff" ? `<span class="rank-ok" title="Rang fixé par le staff">✓</span>`
+      : r.rank != null ? `<span class="rank-unv" title="Rang non vérifié">?</span>` : "";
+    return label + mark;
+  };
+
+  function rosterTable(roster, isCap, me, admin = false) {
     return `<div class="table-scroll"><table class="roster">
       <thead><tr><th>Joueur</th><th>Riot ID</th><th>Rang</th><th>Rôle</th>${isCap ? "<th><span class='sr'>Actions</span></th>" : ""}</tr></thead>
       <tbody>${roster.map(r => `<tr>
         <td><span class="pl">${avatar(r.avatar_url, r.username, 28)}<b>${esc(r.username)}</b>${r.is_captain ? '<span class="cap">Capitaine</span>' : ""}</span></td>
         <td class="mono">${esc(r.riot_id || "—")}</td>
-        <td>${r.rank != null ? esc(RANKS[r.rank]) : "—"}</td>
+        <td>${admin ? `<span class="admin-rank"><select data-rank-for="${r.user_id}" aria-label="Rang de ${esc(r.username)}"><option value="">Non classé</option>${RANKS.map((n, i) => `<option value="${i}" ${r.rank === i ? "selected" : ""}>${n}</option>`).join("")}</select><button class="link-btn" data-rank-save="${r.user_id}" type="button">Fixer</button></span> ${rankCell(r).replace(/^[^<]*/, "")}` : rankCell(r)}</td>
         <td>${r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</td>
         ${isCap ? `<td class="act">${r.user_id === me ? "" : `
           <button class="link-btn" data-act="role" data-u="${r.user_id}" data-r="${r.role === "titulaire" ? "remplacant" : "titulaire"}" type="button">${r.role === "titulaire" ? "Passer remplaçant" : "Passer titulaire"}</button>
@@ -437,12 +482,22 @@
   }
   const teamRow = t => `<details class="team-row" data-id="${t.id}"><summary>${teamLogo(t, 36)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
   function bindTeamRows(root, admin = false) {
-    root.querySelectorAll("details.team-row").forEach(d => d.addEventListener("toggle", async () => {
-      if (!d.open || d.dataset.loaded) return; d.dataset.loaded = "1";
-      try { const r = await rpc("team_roster", { p_team: d.dataset.id }); $(".roster-slot", d).innerHTML = rosterTable(r, false, null); }
-      catch (x) { $(".roster-slot", d).innerHTML = `<p class="form-err">${esc(errMsg(x))}</p>`; }
+    const load = async d => {
+      try {
+        const r = await rpc("team_roster", { p_team: d.dataset.id });
+        $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin);
+        if (admin) d.querySelectorAll("[data-rank-save]").forEach(b => b.onclick = async () => {
+          const u = b.dataset.rankSave, v = d.querySelector(`[data-rank-for="${u}"]`).value;
+          try { await rpc("admin_set_rank", { p_user: u, p_rank: v === "" ? null : +v }); toast("Rang fixé."); load(d); }
+          catch (x) { toast(errMsg(x), "err"); }
+        });
+      } catch (x) { $(".roster-slot", d).innerHTML = `<p class="form-err">${esc(errMsg(x))}</p>`; }
+    };
+    root.querySelectorAll("details.team-row").forEach(d => d.addEventListener("toggle", () => {
+      if (!d.open || d.dataset.loaded) return; d.dataset.loaded = "1"; load(d);
     }));
   }
+
 
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
@@ -464,6 +519,7 @@
             <button class="btn sm solid" data-review="validee" type="button">Valider</button>
             <button class="btn sm" data-review="refusee" type="button">Refuser</button>
             <button class="link-btn" data-sync type="button" title="Remet les rôles Discord de cette équipe à jour">Synchro Discord</button>
+            <button class="link-btn" data-ranks type="button" title="Redétecte le rang de chaque joueur">Actualiser les rangs</button>
           </div>
           <details class="team-row" data-id="${t.id}"><summary>Voir le roster</summary><div class="roster-slot"></div></details>
         </div>`).join("") || `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`}</div>`, "Staff");
@@ -472,6 +528,13 @@
       try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$("select", row).value });
         toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); await discordSync({ team_id: id }, true); viewAdmin(app); }
       catch (x) { toast(errMsg(x), "err"); }
+    });
+    app.querySelectorAll("[data-ranks]").forEach(b => b.onclick = async () => {
+      b.disabled = true; b.textContent = "Actualisation…";
+      const r = await rankSync({ team_id: b.closest(".admin-row").dataset.id });
+      if (r.error) toast(r.error, "err");
+      else toast(Object.values(r.results).map(x => (x.username || "?") + " : " + (x.ok ? (x.label || "Non classé") : x.message)).join(" · "));
+      viewAdmin(app);
     });
     app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => {
       b.disabled = true; await discordSync({ team_id: b.closest(".admin-row").dataset.id }, true); b.disabled = false; });
