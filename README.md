@@ -67,15 +67,14 @@ Dans `config.js` sur GitHub (icône crayon pour modifier), remplis `discord`, `t
 
 ## Espace équipe et Comp Builder
 
-- **Espace équipe** (`#/espace`, menu « Mon espace ») : tableau de bord privé de l'équipe. Ce qui demande une action (résultat de scrim à envoyer, dispos pas remplies…), prochains scrims, classement, état des compos, dispos de la semaine, roster et raccourcis.
-- **Comp Builder** (dossier `compo/`) : chaque équipe a le sien, visible seulement par ses membres. La connexion Discord est la même que sur le site. Les joueurs qui rejoignent l'équipe y apparaissent tout seuls.
-  - Le **capitaine** peut tout modifier et nomme des **éditeurs** (étoile sur la page Équipe du Comp Builder). Les autres joueurs consultent, cochent leurs dispos et règlent leurs rôles.
-  - **Réglages d'équipe** (roue dentée) : webhook Discord de l'équipe (annonces, votes, rappel 1 h avant chaque match) et reprise des données de l'ancien Comp Builder.
-  - Les votes ✅/❌ utilisent le bot du réseau : il doit être présent sur le serveur Discord de l'équipe.
+- **Espace équipe** (`#/espace`, menu « Mon espace ») : tableau de bord privé de l'équipe. Ce qui demande une action (résultat de scrim à envoyer, validation…), prochains scrims, classement, état des compos et roster.
+- **Comp Builder** (dossier `compo/`) : la préparation des compos, map par map (agents, joueurs, statut, notes). Chaque équipe a le sien, visible seulement par ses membres, avec la même connexion Discord que le site. Les joueurs qui rejoignent l'équipe y apparaissent tout seuls.
+  - Le **capitaine** peut tout modifier et nomme des **éditeurs** (étoile sur la page Équipe du Comp Builder). Les autres joueurs consultent et règlent leurs propres rôles.
+  - Scrims, classement et stats restent sur le site : le Comp Builder ne fait que les compos.
 - Code source du Comp Builder : dépôt `FroseFox/CompoBuilder`. Après une modification : `npm run build`, puis remplacer le dossier `compo/` par le contenu de `dist/`.
 
 ## Actualisation automatique
 
 Le site se met à jour tout seul (équipes, scrims, classement, recherche, espace équipe) grâce à la table `live_pulse` : chaque changement en base envoie juste « ce sujet a bougé », et la page ouverte se recharge. Si tu es en train d'écrire dans un formulaire, rien n'est effacé : une pastille « Du nouveau · actualiser » apparaît à la place. Pour rester dans le quota gratuit de Supabase, la connexion temps réel se coupe quand l'onglet reste caché plus de 2 minutes et rattrape les nouveautés au retour.
 
-Scripts SQL de cette version : `supabase/013_compo_builder_temps_reel.sql` et `supabase/014_rappels_comp_builder.sql` (déjà appliqués sur le projet, gardés pour l'historique). Fonctions Discord : `supabase/functions/cb-discord-notify` et `cb-discord-bot` (déjà déployées).
+Scripts SQL de cette version : `supabase/013_…`, `014_…` et `016_comp_builder_simplifie.sql` (déjà appliqués sur le projet, gardés pour l'historique ; le 016 retire matchs, dispos et Discord du Comp Builder).

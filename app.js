@@ -1036,23 +1036,20 @@
 
   // ================= Espace équipe : le tableau de bord =================
   const CB_STATUS = [["validated", "Prêtes", "ok"], ["testing", "En test", "warn"], ["needs_work", "À revoir", "bad"], ["todo", "Brouillons", "mute"]];
-  const DAY_LETTERS = ["D", "L", "M", "M", "J", "V", "S"];
-  const pad2 = n => String(n).padStart(2, "0");
-  const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
 
   async function viewDashboard(app) {
-    if (!state.session) return needLogin(app, "Ton espace équipe rassemble tes scrims, ton classement et le Comp Builder de ton équipe.");
+    if (!state.session) return needLogin(app, "Ton espace équipe rassemble tes scrims, ton classement, les compos et le roster de ton équipe.");
     await loadMe();
     const t = state.team;
     if (!t) {
       app.innerHTML = panel("Espace équipe", `
-        <p class="lead">Ici tu retrouveras tout ce qui concerne ton équipe : scrims à venir, classement, compos et dispos. Il te faut d'abord une équipe.</p>
+        <p class="lead">Ici tu retrouveras tout ce qui concerne ton équipe : scrims à venir, classement, compos et roster. Il te faut d'abord une équipe.</p>
         <div class="ctas" style="margin-top:24px"><a class="btn solid" href="#/mon-equipe">Créer ou rejoindre une équipe</a><a class="btn" href="#/recherche">Chercher une équipe</a></div>`, "Espace équipe");
       setLive("/espace", [], () => viewDashboard(app));
       return;
     }
     const [d, roster] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id })]);
-    const cb = (d && d.cb) || { comps: {}, maps: 0, next: [], dispo: [], my_dispo: 0, editor: false };
+    const cb = (d && d.cb) || { comps: {}, maps: 0, editor: false };
     const sc = (d && d.scrims) || { results: [], next: [] };
     const st = d && d.standing;
     const tit = roster.filter(r => r.role === "titulaire").length;
@@ -1063,17 +1060,7 @@
     if (d.todo) todo.push(`<a class="dash-todo" href="#/scrims"><b>${d.todo}</b><span>scrim${d.todo > 1 ? "s" : ""} attend${d.todo > 1 ? "ent" : ""} un résultat${t.is_captain ? "" : " (le capitaine s'en occupe)"}</span></a>`);
     if (t.status === "en_attente") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>${tit}/5</b><span>titulaires : l'équipe attend la validation du staff</span></a>`);
     if (t.status === "refusee") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>!</b><span>équipe refusée : contacte le staff dans #support</span></a>`);
-    if (!cb.my_dispo) todo.push(`<a class="dash-todo" href="compo/#/disponibilites"><b>0</b><span>créneau coché cette semaine : remplis tes dispos</span></a>`);
     if (t.status === "validee" && !sc.next.length && !d.open_posts && t.is_captain) todo.push(`<a class="dash-todo" href="#/scrims"><b>+</b><span>aucun scrim calé : propose un créneau</span></a>`);
-
-    // Dispos des 7 prochains jours (joueurs dispo au moins sur une période)
-    const byDay = new Map((cb.dispo || []).map(x => [x.date, x.players]));
-    const days = [...Array(7)].map((_, i) => { const x = new Date(); x.setDate(x.getDate() + i); return x; });
-    const size = Math.max(roster.length, 1);
-    const dispoBars = days.map((x, i) => {
-      const n = byDay.get(isoDay(x)) || 0, pct = Math.round(100 * Math.min(n, size) / size);
-      return `<div class="dash-day${n >= 5 ? " full" : ""}" title="${x.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} : ${n} joueur${n > 1 ? "s" : ""} dispo"><i style="--h:${pct}%"></i><b>${n}</b><span>${i === 0 ? "Auj." : DAY_LETTERS[x.getDay()]}</span></div>`;
-    }).join("");
 
     const nextLine = r => `<div class="t-line"><span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
         <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
@@ -1082,10 +1069,6 @@
         <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
         <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
         <span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`;
-    const cbLine = m => `<div class="t-line"><span class="t-res next">${new Date(m.match_date + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
-        <span class="t-opp"><b>${m.type === "scrim" ? "Scrim" : "Match"}${m.opponent_name ? " · " + esc(m.opponent_name) : ""}</b></span>
-        <span class="small-note">${m.match_time ? m.match_time.slice(0, 5).replace(":", "h") + " · " : ""}${esc((m.format || "").toUpperCase())}</span><span></span></div>`;
-
     app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
       <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct.</span></div>
 
@@ -1093,14 +1076,13 @@
 
       <div class="dash-grid">
         <div class="dash-card">
-          <div class="dash-head"><h3>Scrims</h3><a class="link-btn" href="#/scrims">Tout voir</a></div>
+          <div class="dash-head"><h3>Scrims</h3><a class="link-btn" href="#/scrims">Voir les scrims</a></div>
           ${sc.next.length ? `<div class="t-lines">${sc.next.map(nextLine).join("")}</div>` : `<p class="small-note">Aucun scrim calé.${d.open_posts ? ` ${d.open_posts} proposition${d.open_posts > 1 ? "s" : ""} en attente d'adversaire.` : ""}</p>`}
           ${sc.results.length ? `<p class="eyebrow dash-sub">Derniers résultats</p><div class="t-lines">${sc.results.slice(0, 3).map(resLine).join("")}</div>` : ""}
-          ${t.status === "validee" ? `<div class="ctas"><a class="btn sm" href="#/scrims">Trouver un scrim</a></div>` : ""}
         </div>
 
         <div class="dash-card">
-          <div class="dash-head"><h3>Classement</h3><a class="link-btn" href="#/classement">Voir</a></div>
+          <div class="dash-head"><h3>Classement</h3><a class="link-btn" href="#/classement">Voir le classement</a></div>
           ${st ? `<div class="t-stats dash-stats">
               <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
               <div><b>${st.points}</b><span>points</span></div>
@@ -1109,35 +1091,16 @@
             </div>` : `<p class="small-note">Ton équipe apparaîtra au classement après son premier scrim confirmé.</p>`}
         </div>
 
-        <div class="dash-card dash-cb">
-          <div class="dash-head"><h3>Comp Builder</h3><a class="link-btn" href="compo/">Ouvrir</a></div>
-          <div class="dash-comps">${CB_STATUS.map(([k, label, tone]) => `<a href="compo/" class="dash-comp ${tone}"><b>${(cb.comps || {})[k] || 0}</b><span>${label}</span></a>`).join("")}</div>
-          <p class="small-note">${totalComps ? `${totalComps} compo${totalComps > 1 ? "s" : ""} sur ${cb.maps} map${cb.maps > 1 ? "s" : ""}.` : "Aucune compo pour l'instant."} ${cb.editor ? "" : "Lecture seule : le capitaine peut te nommer éditeur."}</p>
-          ${cb.next.length ? `<p class="eyebrow dash-sub">Matchs prévus</p><div class="t-lines">${cb.next.map(cbLine).join("")}</div>` : ""}
-          <div class="ctas"><a class="btn sm solid" href="compo/">Ouvrir le Comp Builder</a><a class="btn sm" href="compo/#/matchcenter">Match Center</a></div>
+        <div class="dash-card">
+          <div class="dash-head"><h3>Compos</h3><a class="link-btn" href="compo/">Ouvrir le Comp Builder</a></div>
+          <div class="dash-comps">${CB_STATUS.map(([k, label, tone]) => `<div class="dash-comp ${tone}"><b>${(cb.comps || {})[k] || 0}</b><span>${label}</span></div>`).join("")}</div>
+          <p class="small-note">${totalComps ? `${totalComps} compo${totalComps > 1 ? "s" : ""} sur ${cb.maps} map${cb.maps > 1 ? "s" : ""}.` : "Aucune compo pour l'instant."}${cb.editor ? "" : " Lecture seule : le capitaine peut te nommer éditeur."}</p>
         </div>
 
         <div class="dash-card">
-          <div class="dash-head"><h3>Dispos de la semaine</h3><a class="link-btn" href="compo/#/disponibilites">Cocher</a></div>
-          <div class="dash-days" role="img" aria-label="Nombre de joueurs disponibles sur les 7 prochains jours">${dispoBars}</div>
-          <p class="small-note">${cb.my_dispo ? `Tu as coché ${cb.my_dispo} créneau${cb.my_dispo > 1 ? "x" : ""} cette semaine.` : "Tu n'as encore rien coché cette semaine."} En vert : 5 joueurs ou plus.</p>
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-head"><h3>Roster</h3><a class="link-btn" href="#/mon-equipe">Gérer</a></div>
+          <div class="dash-head"><h3>Roster</h3><a class="link-btn" href="#/mon-equipe">Gérer l'équipe</a></div>
           <div class="dash-roster">${roster.map(r => `<span class="dash-pl${r.role === "remplacant" ? " sub" : ""}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></span>`).join("")}</div>
           <p class="small-note">${tit}/5 titulaires · ${roster.length}/7 joueurs${d.lfg ? " · annonce de recrutement en ligne" : ""}</p>
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-head"><h3>Outils</h3></div>
-          <div class="dash-tools">
-            <a href="compo/">Comp Builder<span>Compos par map, votes Discord</span></a>
-            <a href="compo/#/matchcenter">Match Center<span>Matchs, scores, VOD</span></a>
-            <a href="compo/#/stats">Statistiques<span>Meilleure compo par map</span></a>
-            <a href="#/recherche">Recrutement<span>${d.lfg ? "Ton annonce est en ligne" : "Trouver un joueur"}</span></a>
-            <a href="#reglement">Règlement<span>Scrims et fiabilité</span></a>
-          </div>
         </div>
       </div>`, "Espace équipe");
     setLive("/espace", ["scrims", "team:" + t.id, "cb:" + t.id, "lfg"], () => viewDashboard(app));
