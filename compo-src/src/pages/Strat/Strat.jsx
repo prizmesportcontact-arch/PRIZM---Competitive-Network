@@ -201,18 +201,20 @@ export default function Strat() {
     setSelectedId(null)
   }
 
+  // Après chaque élément posé ou tracé, on revient sur « Déplacer » et on sélectionne ce qu'on vient d'ajouter
   const onBoardChange = (items, { selectId, editText } = {}) => {
+    const before = new Set(step.items.map((i) => i.id))
+    const added = items.filter((i) => !before.has(i.id)).pop()
     setItems(items)
-    if (selectId) setSelectedId(selectId)
-    if (editText) setTimeout(() => textRef.current?.select(), 30)
-  }
-  // Un agent se pose une fois : on repasse en déplacement ; les capacités, elles, se posent à la chaîne
-  const onPlaced = (p) => {
-    if (p.t === 'agent') {
-      setPickAgent(p.a)
+    if (tool !== 'select' && tool !== 'erase') {
       setTool('select')
       setPlace(null)
     }
+    if (selectId || added) setSelectedId(selectId || added.id)
+    if (editText) setTimeout(() => textRef.current?.select(), 30)
+  }
+  const onPlaced = (p) => {
+    if (p.t === 'agent' || p.t === 'ability') setPickAgent(p.a)
   }
 
   // ---------- Clavier ----------
@@ -321,7 +323,7 @@ export default function Strat() {
   const hint = placingAgent ? { img: placingAgent.icon, text: `Clique sur la carte pour placer ${placingAgent.name}.` }
     : placingAbility ? { img: placingAbility.icon, text: placingSpec && placingSpec.k !== 'circle' && placingSpec.k !== 'ring'
         ? `${placingAbility.name} : clique où elle part, puis tire dans la direction voulue${placingSpec.max ? ' (la distance règle la longueur)' : ''}.`
-        : `${placingAbility.name} : clique pour la poser, à sa vraie taille. Échap pour arrêter.` }
+        : `${placingAbility.name} : clique pour la poser, à sa vraie taille.` }
     : tool === 'place' ? { text: 'Clique sur la carte pour poser le spike.' }
     : tool === 'select' ? { text: 'Clique un élément pour le choisir, fais-le glisser pour le déplacer.' }
     : tool === 'arrow' ? { text: 'Clique et tire : la flèche part de là où tu cliques.' }
