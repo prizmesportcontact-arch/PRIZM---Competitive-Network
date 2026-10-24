@@ -683,6 +683,8 @@
   const SCRIM_FORMATS = ["24 rounds", "2 maps", "BO1", "BO3"];
   // Filtre des propositions : "near" = ma division et les voisines, "all" = tout, 1 à 4 = une seule division
   const scrimFilter = { div: undefined };
+  let scrimCtx = { reco: () => [] };
+  const recoLine = other => { const r = scrimCtx.reco(other); return r.length ? `<span class="scx-reco" title="Maps que les deux équipes jouent, sans ban">Maps conseillées : <b>${r.map(esc).join(", ")}</b></span>` : ""; };
   const DAY = 86400000;
   // « Aujourd'hui », « Demain », « Hier » ou « sam. 26 oct. »
   const dayLabel = iso => {
@@ -697,12 +699,148 @@
   const when = iso => `<div class="scx-when"><span>${dayLabel(iso)}</span><b>${hourLabel(iso)}</b></div>`;
   const tags = s => [s.format, s.maps].filter(Boolean).map(x => `<span class="scx-tag">${esc(x)}</span>`).join("");
   const opponent = x => x ? `<a class="scx-team pl-link" href="${teamHref(x.tag)}">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</a>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
+
+  // ---------- Map pool ----------
+  // Liste des maps du jeu (API Valorant, gardée pour la session) ; liste de secours si l'API ne répond pas
+  const MAP_FALLBACK = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset"];
+  const POOL_LEVELS = [["forte", "Forte"], ["jouable", "Jouable"], ["ban", "Ban"]];
+  const POOL_SCORE = { forte: 2, jouable: 1 };
+  let mapListP = null;
+  function mapList() {
+    if (mapListP) return mapListP;
+    try { const c = JSON.parse(sessionStorage.getItem("prizm_maps") || "null"); if (c && c.length) return (mapListP = Promise.resolve(c)); } catch (e) {}
+    mapListP = fetch("https://valorant-api.com/v1/maps").then(r => r.json()).then(j => {
+      const seen = new Set(), out = [];
+      for (const m of j.data || []) {
+        if (!m.displayName || !m.tacticalDescription || /range|tutorial|npe/i.test(m.mapUrl || "")) continue;
+        const k = m.displayName.trim().toLowerCase(); if (seen.has(k)) continue; seen.add(k);
+        out.push({ name: m.displayName.trim(), img: m.listViewIcon || null });
+      }
+      out.sort((a, b) => a.name.localeCompare(b.name));
+      if (!out.length) throw new Error("vide");
+      try { sessionStorage.setItem("prizm_maps", JSON.stringify(out)); } catch (e) {}
+      return out;
+    }).catch(() => MAP_FALLBACK.map(name => ({ name, img: null })));
+    return mapListP;
+  }
+  // Tous les map pools (une petite ligne par équipe) : { team_id: { Ascent: "forte", ... } }
+  async function loadPools() {
+    if (!sb) return {};
+    const { data, error } = await sb.from("team_map_pools").select("team_id,pool");
+    if (error) return {};
+    return Object.fromEntries((data || []).map(r => [r.team_id, r.pool || {}]));
+  }
+  // Maps conseillées entre deux équipes : aucune des deux ne la bannit, et les deux la jouent au moins
+  function poolMatch(a, b, maps) {
+    a = a || {}; b = b || {};
+    return maps.map(m => m.name)
+      .filter(n => a[n] !== "ban" && b[n] !== "ban" && POOL_SCORE[a[n]] && POOL_SCORE[b[n]])
+      .sort((x, y) => (POOL_SCORE[b[y]] + POOL_SCORE[a[y]]) - (POOL_SCORE[b[x]] + POOL_SCORE[a[x]]) || x.localeCompare(y));
+  }
+  const hasPool = p => p && Object.keys(p).length > 0;
+  // Affichage en lecture : Fortes / Jouables / Bans
+  function poolView(pool, maps, hi = []) {
+    if (!hasPool(pool)) return `<p class="small-note">Map pool pas encore renseigné.</p>`;
+    const group = (lvl, label) => {
+      const list = maps.filter(m => pool[m.name] === lvl);
+      return list.length ? `<div class="pool-group"><span class="pool-lbl ${lvl}">${label}</span><div class="pool-chips">${list.map(m =>
+        `<span class="pool-chip ${lvl}${hi.includes(m.name) ? " hi" : ""}">${esc(m.name)}</span>`).join("")}</div></div>` : "";
+    };
+    return `<div class="pool-view">${group("forte", "Fortes")}${group("jouable", "Jouables")}${group("ban", "Bans")}</div>`;
+  }
+  // Maps citées dans les derniers scrims d'une équipe (le champ « maps » est du texte libre)
+  function mapsSeen(texts, maps) {
+    const count = {};
+    for (const t of texts || []) for (const m of maps) if (new RegExp(`\\b${m.name}\\b`, "i").test(t)) count[m.name] = (count[m.name] || 0) + 1;
+    return Object.entries(count).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  }
+
+  // ---------- Fiche adversaire ----------
+  function closeBrief() { const o = $("#brief-ov"); if (o) { o.remove(); document.body.classList.remove("no-scroll"); } }
+  async function openBrief(teamId) {
+    closeBrief();
+    const ov = document.createElement("div");
+    ov.id = "brief-ov"; ov.className = "brief-ov";
+    ov.innerHTML = `<aside class="brief" role="dialog" aria-modal="true" aria-label="Fiche adversaire"><p class="eyebrow">Chargement…</p></aside>`;
+    document.body.appendChild(ov); document.body.classList.add("no-scroll");
+    ov.onclick = e => { if (e.target === ov || e.target.closest("[data-close]")) closeBrief(); };
+    let d, maps;
+    try { [d, maps] = await Promise.all([rpc("opponent_brief", { p_team: teamId }), mapList()]); }
+    catch (e) { $(".brief", ov).innerHTML = `<p class="lead">${esc(errMsg(e))}</p><button class="btn" data-close type="button">Fermer</button>`; return; }
+    if (!$("#brief-ov")) return;
+    if (!d) { $(".brief", ov).innerHTML = `<p class="lead">Équipe introuvable.</p><button class="btn" data-close type="button">Fermer</button>`; return; }
+    const t = d.team, st = d.standing, recent = d.recent || [], h2h = d.h2h || [], roster = d.roster || [];
+    const mineIsMe = state.team && state.team.id === t.id;
+    const common = hasPool(d.my_pool) && hasPool(d.pool) ? poolMatch(d.my_pool, d.pool, maps) : [];
+    const myBans = maps.filter(m => (d.my_pool || {})[m.name] === "ban").map(m => m.name);
+    const theirBans = maps.filter(m => (d.pool || {})[m.name] === "ban").map(m => m.name);
+    const seen = mapsSeen(d.maps_played, maps);
+    const res = r => r.no_show ? "ABS" : r.us > r.them ? "V" : r.us < r.them ? "D" : "N";
+    const cls = r => r.no_show ? "ff" : r.us > r.them ? "w" : r.us < r.them ? "l" : "d";
+    const hw = h2h.filter(r => !r.no_show && r.us > r.them).length, hl = h2h.filter(r => !r.no_show && r.us < r.them).length;
+    const order = r => (r.is_captain ? 0 : r.role === "titulaire" ? 1 : 2);
+    roster.sort((a, b) => order(a) - order(b));
+    const avgRank = (() => { const r = roster.filter(x => x.role === "titulaire" && x.rank != null).map(x => x.rank); return r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : null; })();
+
+    $(".brief", ov).innerHTML = `
+      <div class="brief-head">
+        <span class="eyebrow">Fiche adversaire</span>
+        <button class="brief-x" data-close type="button" aria-label="Fermer">×</button>
+        <div class="brief-id">${teamLogo(t, 56)}<div><h3>${esc(t.name)} <span class="tag-chip">${esc(t.tag)}</span></h3>
+          <span class="small-note">${t.division ? DIV_NAMES[t.division] : "Division à venir"}${d.captain ? ` · capitaine ${esc(d.captain)}` : ""}</span></div></div>
+      </div>
+
+      ${st ? `<div class="brief-stats">
+          <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
+          <div><b>${st.wins}-${st.draws}-${st.losses}</b><span>V · N · D</span></div>
+          <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>rounds</span></div>
+          <div class="${st.reliability < 80 ? "warn" : ""}"><b>${st.reliability}<small>%</small></b><span>fiabilité</span></div>
+        </div>
+        ${st.no_shows || st.late_cancels ? `<p class="callout brief-warn">${[st.no_shows && `${st.no_shows} absence${st.no_shows > 1 ? "s" : ""}`, st.late_cancels && `${st.late_cancels} annulation${st.late_cancels > 1 ? "s" : ""} tardive${st.late_cancels > 1 ? "s" : ""}`].filter(Boolean).join(" et ")} sur le réseau.</p>` : ""}`
+        : `<p class="small-note">Pas encore de scrim confirmé sur le réseau.</p>`}
+
+      <div class="brief-sec"><h4>Forme</h4>
+        ${recent.length ? `<div class="brief-form">${recent.slice(0, 5).map(r => `<span class="t-res ${cls(r)}" title="${esc(r.opp)} · ${shortDate(r.starts_at)}${r.no_show ? "" : ` · ${r.us} – ${r.them}`}">${res(r)}</span>`).join("")}<span class="small-note">du plus récent au plus ancien</span></div>
+          <div class="t-lines">${recent.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span>${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)}</span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>`
+          : `<p class="small-note">Aucun résultat pour l'instant.</p>`}
+      </div>
+
+      <div class="brief-sec"><h4>Maps</h4>
+        ${common.length ? `<div class="brief-reco"><span class="eyebrow">Conseillées pour ce scrim</span><div class="pool-chips">${common.slice(0, 5).map(n => `<span class="pool-chip hi">${esc(n)}</span>`).join("")}</div></div>`
+          : !mineIsMe && state.team && !hasPool(d.my_pool) ? `<p class="small-note">Renseigne le map pool de ton équipe dans <a href="#/espace">Mon espace</a> pour voir les maps conseillées.</p>` : ""}
+        ${poolView(d.pool, maps)}
+        ${!mineIsMe && (myBans.length || theirBans.length) && hasPool(d.my_pool) ? `<p class="small-note">À éviter : ${esc([...new Set([...myBans, ...theirBans])].join(", "))}.</p>` : ""}
+        ${seen.length ? `<p class="small-note brief-seen">Vues dans leurs derniers scrims : ${seen.map(([n, c]) => `<b>${esc(n)}</b> ×${c}`).join(", ")}</p>` : ""}
+      </div>
+
+      ${!mineIsMe && state.team ? `<div class="brief-sec"><h4>Face à vous</h4>
+        ${h2h.length ? `<p class="brief-h2h"><b>${hw}</b> victoire${hw > 1 ? "s" : ""} · <b>${hl}</b> défaite${hl > 1 ? "s" : ""} en ${h2h.length} scrim${h2h.length > 1 ? "s" : ""}</p>
+          <div class="t-lines">${h2h.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span><span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span></span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>`
+          : `<p class="small-note">Premier scrim entre vos deux équipes.</p>`}
+      </div>` : ""}
+
+      <div class="brief-sec"><h4>Roster${avgRank != null ? ` <span class="small-note">· titulaires en moyenne ${esc(RANKS[avgRank])}</span>` : ""}</h4>
+        <div class="brief-roster">${roster.map(r => `<a class="brief-pl${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}">${avatar(r.avatar_url, r.username, 30)}<b>${esc(r.username)}</b><span class="small-note">${r.rank != null ? rankLabel(r.rank, 16) : "Non classé"}</span>${r.is_captain ? `<span class="pub-role">Cap.</span>` : ""}</a>`).join("") || `<p class="small-note">Aucun joueur.</p>`}</div>
+      </div>
+
+      <div class="ctas brief-ctas">${d.contact && !mineIsMe && state.session ? `<a class="btn solid sm" href="https://discord.com/users/${esc(d.contact)}" target="_blank" rel="noopener">Contacter ${esc(d.captain || "le capitaine")}</a>` : ""}<a class="btn sm" href="${teamHref(t.tag)}">Page de l'équipe</a></div>`;
+    ov.querySelectorAll("a[href^='#']").forEach(a => a.addEventListener("click", closeBrief));
+    $(".brief-x", ov).focus();
+  }
+  document.addEventListener("keydown", e => { if (e.key === "Escape") closeBrief(); });
+  window.addEventListener("hashchange", closeBrief);
+  document.addEventListener("click", e => { const b = e.target.closest && e.target.closest("[data-brief]"); if (b) { e.preventDefault(); openBrief(b.dataset.brief); } });
+  const briefBtn = (id, label = "Fiche adversaire") => id ? `<button class="link-btn brief-btn" data-brief="${id}" type="button">${label}</button>` : "";
   const scSection = (title, sub, body, cls = "") => `<section class="scx-sec ${cls}"><div class="scx-sec-head"><h3>${title}</h3>${sub ? `<span class="small-note">${sub}</span>` : ""}</div>${body}</section>`;
 
   async function viewScrims(app) {
     if (!sb) { app.innerHTML = panel("Scrims", `<p class="lead">Bientôt disponible.</p>`); return; }
-    const data = await rpc("list_scrims");
+    const [data, pools, maps] = await Promise.all([rpc("list_scrims"), loadPools(), mapList()]);
     const t = state.team, isCap = !!(t && t.is_captain), canPlay = isCap && t.status === "validee";
+    const myPool = t ? pools[t.id] : null;
+    // Maps conseillées face à une équipe (si les deux map pools sont remplis)
+    const reco = other => other && hasPool(myPool) && hasPool(pools[other.id]) ? poolMatch(myPool, pools[other.id], maps).slice(0, 3) : [];
+    scrimCtx = { reco, t };
     if (scrimFilter.div === undefined) scrimFilter.div = canPlay ? "near" : "all";
     if (scrimFilter.div === "near" && !canPlay) scrimFilter.div = "all";
 
@@ -739,6 +877,10 @@
               <div><label for="sc-format">Format</label><select id="sc-format">${SCRIM_FORMATS.map(x => `<option>${x}</option>`).join("")}</select></div>
             </div>
             <label for="sc-maps">Maps <span class="hint">(optionnel)</span></label><input id="sc-maps" maxlength="60" placeholder="ex : Ascent + Lotus, ou « au choix »">
+            <div class="pool-pick" aria-label="Ajouter une map">${hasPool(myPool)
+              ? maps.filter(m => myPool[m.name] && myPool[m.name] !== "ban").sort((a, b) => POOL_SCORE[myPool[b.name]] - POOL_SCORE[myPool[a.name]] || a.name.localeCompare(b.name))
+                  .map(m => `<button type="button" class="pool-chip ${myPool[m.name]}" data-addmap="${esc(m.name)}">+ ${esc(m.name)}</button>`).join("")
+              : `<span class="small-note">Astuce : remplis ton <a href="#/espace">map pool</a> pour ajouter tes maps en un clic.</span>`}</div>
             <label for="sc-note">Message <span class="hint">(optionnel)</span></label><input id="sc-note" maxlength="200" placeholder="ex : on travaille nos rétakes">
             <div class="ctas"><button class="btn solid" type="submit">Publier</button><button class="link-btn" id="sc-close" type="button">Annuler</button></div>
             <p class="form-err" id="sc-err" role="alert"></p>
@@ -792,13 +934,13 @@
     }
     if (!isCap) act = `<span class="small-note">Le capitaine s'en occupe</span>`;
     return `<div class="scx-card sc-row" data-s="${s.id}">${when(s.starts_at)}
-      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<p class="scx-msg">${msg}</p></div>
+      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<p class="scx-msg">${msg}</p>${opp ? briefBtn(opp.id) : ""}</div>
       <div class="scx-act">${act}</div><div class="sc-form" hidden></div></div>`;
   }
   function upcomingCard(s, t, isCap) {
     const home = s.host.id === t.id, opp = home ? s.guest : s.host;
     return `<div class="scx-card">${when(s.starts_at)}
-      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<div class="scx-tags">${tags(s)}</div></div>
+      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<div class="scx-tags">${tags(s)}${recoLine(opp)}</div>${opp ? briefBtn(opp.id) : ""}</div>
       <div class="scx-act">${isCap ? `${opp && opp.discord_id ? `<a class="btn sm" href="https://discord.com/users/${esc(opp.discord_id)}" target="_blank" rel="noopener">Contacter ${esc(opp.captain || "le capitaine")}</a>` : ""}
         <button class="link-btn danger-t" data-cancel="${s.id}" type="button">${home ? "Annuler" : "Se désister"}</button>` : `<span class="scx-status ok">Calé</span>`}</div></div>`;
   }
@@ -807,7 +949,7 @@
     const why = !state.session ? "Connecte-toi pour accepter" : !t ? "Il te faut une équipe" : !isCap ? "Réservé au capitaine"
       : t.status !== "validee" ? "Équipe pas encore validée" : !near ? "Hors de ton niveau" : "";
     return `<div class="scx-card${why ? " off" : ""}">${when(s.starts_at)}
-      <div class="scx-main">${opponent({ ...s.host, division: s.division })}<div class="scx-tags">${tags(s)}${s.note ? `<span class="scx-note">« ${esc(s.note)} »</span>` : ""}</div></div>
+      <div class="scx-main">${opponent({ ...s.host, division: s.division })}<div class="scx-tags">${tags(s)}${s.note ? `<span class="scx-note">« ${esc(s.note)} »</span>` : ""}${t ? recoLine(s.host) : ""}</div>${briefBtn(s.host.id, "Voir l'adversaire")}</div>
       <div class="scx-act">${canPlay && near ? `<button class="btn sm solid" data-accept="${s.id}" type="button">Accepter</button>` : `<span class="small-note">${why}</span>`}</div></div>`;
   }
   function resultRow(s, t) {
@@ -836,6 +978,12 @@
     const form = $("#scrim-form"), openBtn = $("#sc-open");
     if (openBtn) openBtn.onclick = () => { form.hidden = !form.hidden; openBtn.setAttribute("aria-expanded", String(!form.hidden)); if (!form.hidden) $("#sc-date").focus(); };
     if ($("#sc-close")) $("#sc-close").onclick = () => { form.hidden = true; openBtn.setAttribute("aria-expanded", "false"); };
+    app.querySelectorAll("[data-addmap]").forEach(b => b.onclick = () => {
+      const inp = $("#sc-maps"), cur = inp.value.split("+").map(x => x.trim()).filter(Boolean);
+      if (cur.some(x => x.toLowerCase() === b.dataset.addmap.toLowerCase())) return;
+      const v = [...cur, b.dataset.addmap].join(" + ");
+      if (v.length <= 60) { inp.value = v; b.classList.add("on"); }
+    });
     app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { const v = b.dataset.f; scrimFilter.div = /^\d$/.test(v) ? +v : v; rerender(); });
     if (form) form.onsubmit = async e => {
       e.preventDefault(); err.textContent = "";
@@ -1003,7 +1151,7 @@
   const memberSince = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
 
   async function viewTeamPublic(app, tag) {
-    const d = await rpc("team_public", { p_tag: tag });
+    const [d, maps] = await Promise.all([rpc("team_public", { p_tag: tag }), mapList()]);
     if (!d) { app.innerHTML = panel("Équipe introuvable", `<p class="lead">Aucune équipe avec le tag « ${esc(tag)} ».</p><div class="ctas" style="margin-top:24px"><a class="btn" href="#/equipes">Voir les équipes</a></div>`); return; }
     const t = d.team, st = d.standing, sc = d.scrims || { results: [], next: [] }, roster = d.roster || [];
     const order = r => (r.is_captain ? 0 : r.role === "titulaire" ? 1 : 2);
@@ -1026,11 +1174,12 @@
           <span class="small-note">${r.rank != null ? rankLabel(r.rank, 18) : "Non classé"}${rankMark(r)}</span>
           <span class="pub-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
         </a>`).join("") || `<p class="small-note">Aucun joueur.</p>`}</div>
+      <h3 class="t-h">Map pool</h3>${poolView(await teamPool(t.id), maps)}
       <div class="t-cols">
         <div><h3 class="t-h">Derniers résultats</h3>${sc.results.length ? `<div class="t-lines">${sc.results.map(r => `<div class="t-line">${resBadge(r)}${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>` : `<p class="small-note">Aucun résultat pour l'instant.</p>`}</div>
         <div><h3 class="t-h">Prochains scrims</h3>${sc.next.length ? `<div class="t-lines">${sc.next.map(r => `<div class="t-line"><span class="t-res next">${shortDate(r.starts_at)}</span>${oppLink(r)}<span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`).join("")}</div>` : `<p class="small-note">Aucun scrim calé.</p>`}</div>
       </div>
-      <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>` : ""}${mine ? `<a class="btn" href="#/espace">Mon espace équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
+      <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>${briefBtn(t.id, "Fiche adversaire")}` : ""}${mine ? `<a class="btn" href="#/espace">Mon espace équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
     setLive(location.hash.slice(1), ["teams", "scrims", "lfg", "team:" + t.id], () => viewTeamPublic(app, tag));
   }
 
@@ -1123,7 +1272,7 @@
       setLive("/espace", [], () => viewDashboard(app));
       return;
     }
-    const [d, roster] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id })]);
+    const [d, roster, myPool, maps] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id }), teamPool(t.id), mapList()]);
     const cb = (d && d.cb) || { comps: {}, maps: 0, editor: false };
     const sc = (d && d.scrims) || { results: [], next: [] };
     const st = d && d.standing;
@@ -1177,8 +1326,41 @@
           <div class="dash-roster">${roster.map(r => `<a class="dash-pl${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></a>`).join("")}</div>
           <p class="small-note">${tit}/5 titulaires · ${roster.length}/7 joueurs${d.lfg ? " · annonce de recrutement en ligne" : ""}</p>
         </div>
+      </div>
+
+      <div class="dash-card dash-pool">
+        <div class="dash-head"><h3>Map pool</h3><span class="small-note" id="pool-state">${t.is_captain ? "Clique pour classer chaque map · enregistré automatiquement" : "Fixé par le capitaine"}</span></div>
+        <p class="small-note">Sert à trier les maps quand vous proposez un scrim et à conseiller les maps face à chaque adversaire. Visible sur la page publique de l'équipe.</p>
+        ${t.is_captain ? `<div class="pool-edit">${maps.map(m => `<div class="pool-row" data-map="${esc(m.name)}">
+            <span class="pool-name"${m.img ? ` style="--img:url('${esc(m.img)}')"` : ""}>${esc(m.name)}</span>
+            <div class="pool-seg" role="group" aria-label="${esc(m.name)}">${POOL_LEVELS.map(([v, l]) => `<button type="button" class="${v}${myPool[m.name] === v ? " on" : ""}" data-lvl="${v}" aria-pressed="${myPool[m.name] === v}">${l}</button>`).join("")}</div>
+          </div>`).join("")}</div>` : poolView(myPool, maps)}
       </div>`, "Espace équipe");
+    if (t.is_captain) bindPoolEditor(app, myPool);
     setLive("/espace", ["scrims", "team:" + t.id, "cb:" + t.id, "lfg"], () => viewDashboard(app));
+  }
+
+  async function teamPool(id) {
+    if (!sb) return {};
+    const { data } = await sb.from("team_map_pools").select("pool").eq("team_id", id).maybeSingle();
+    return (data && data.pool) || {};
+  }
+  // Éditeur du map pool : un clic classe la map, re-cliquer la retire ; on enregistre 600 ms après le dernier clic
+  function bindPoolEditor(app, pool) {
+    pool = { ...pool };
+    const info = $("#pool-state", app);
+    let timer = null;
+    app.querySelectorAll(".pool-row").forEach(row => row.querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
+      const m = row.dataset.map, v = b.dataset.lvl;
+      if (pool[m] === v) delete pool[m]; else pool[m] = v;
+      row.querySelectorAll("[data-lvl]").forEach(x => { const on = pool[m] === x.dataset.lvl; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on)); });
+      live.editing = row; info.textContent = "Enregistrement…";
+      clearTimeout(timer);
+      timer = setTimeout(async () => {
+        try { await rpc("set_map_pool", { p_pool: pool }); info.textContent = "Enregistré"; live.editing = null; }
+        catch (x) { info.textContent = errMsg(x); }
+      }, 600);
+    }));
   }
 
   // ---------- Staff ----------

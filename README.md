@@ -90,3 +90,10 @@ Scripts SQL de cette version : `supabase/013_…`, `014_…` et `016_comp_builde
 Le bot du réseau écrit en privé au capitaine concerné quand un scrim est accepté, 30 minutes avant un scrim, quand un score attend sa confirmation, et quand son équipe est déclarée absente. Les messages passent par la file `notify_queue` et la fonction `discord-dm` ; un joueur qui bloque les messages privés ne les reçoit simplement pas.
 
 Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et clips supprimés), `018_pages_publiques.sql`, `019_messages_discord.sql`.
+
+### Map pool et fiche adversaire
+
+- **Map pool** : dans Mon espace, le capitaine classe chaque map en Forte, Jouable ou Ban (enregistré tout seul). Le pool est visible sur la page publique de l'équipe et sert à proposer les maps en un clic quand on publie un scrim.
+- **Maps conseillées** : sur chaque proposition et chaque scrim calé, les maps que les deux équipes jouent sans les bannir.
+- **Fiche adversaire** : bouton « Voir l'adversaire » / « Fiche adversaire » sur les scrims (et sur la page d'une équipe). Elle affiche le classement, la forme, la fiabilité, les maps, l'historique entre les deux équipes et le roster, à partir des données du réseau.
+- SQL : `020_map_pool_fiche_adversaire.sql` (table `team_map_pools`, fonctions `set_map_pool` et `opponent_brief`).
