@@ -1,0 +1,184 @@
+/* En-tête identique au site du PRIZM Competitive Network (partie réseau :
+   fond ardoise, accent ambre), puis un bandeau propre au Comp Builder. */
+.pz-wrap {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+
+.pz-top {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: color-mix(in srgb, var(--bg-base) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 2px solid var(--brand-red);
+}
+
+.pz-top__row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding-block: 12px;
+}
+
+.pz-top__brand img {
+  display: block;
+  height: 26px;
+  width: auto;
+}
+
+.pz-top__nav {
+  display: flex;
+  gap: 22px;
+  margin-left: auto;
+  font-weight: 600;
+  font-size: 0.92rem;
+}
+
+.pz-top__nav a {
+  color: var(--text-secondary);
+  text-decoration: none;
+}
+
+.pz-top__nav a:hover,
+.pz-top__nav a.on {
+  color: var(--text-primary);
+}
+
+@media (max-width: 820px) {
+  .pz-top__row {
+    flex-wrap: wrap;
+    row-gap: 8px;
+  }
+  .pz-top__row .auth-panel {
+    margin-left: auto;
+  }
+  .pz-top__nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-left: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    gap: 18px;
+    padding-bottom: 2px;
+    scrollbar-width: none;
+  }
+}
+
+/* Bandeau : titre, recherche, onglets — rayures en biais comme le site */
+.pz-band {
+  position: relative;
+  overflow: hidden;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.pz-band::after {
+  content: '';
+  position: absolute;
+  right: -8%;
+  top: 0;
+  bottom: 0;
+  width: 46%;
+  background: repeating-linear-gradient(-62deg, transparent 0 22px, rgba(255, 160, 67, 0.16) 22px 24px);
+  clip-path: polygon(30% 0, 100% 0, 100% 100%, 0 100%);
+  pointer-events: none;
+}
+
+.pz-band__inner {
+  position: relative;
+  z-index: 1;
+  padding-top: 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pz-eyebrow {
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.pz-band__title-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.pz-band__title {
+  font-family: var(--font-display);
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: clamp(2.6rem, 6vw, 4.4rem);
+  line-height: 0.9;
+  letter-spacing: 0.01em;
+  color: var(--text-primary);
+  text-decoration: none;
+}
+
+.pz-search {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 0 14px;
+  background: var(--bg-base);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-secondary);
+  font: 500 0.9rem var(--font-body);
+  cursor: pointer;
+}
+
+.pz-search:hover {
+  border-color: var(--text-secondary);
+  color: var(--text-primary);
+}
+
+.pz-search kbd {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  padding: 2px 6px;
+  border: 1px solid var(--border-subtle);
+}
+
+.pz-tabs {
+  display: flex;
+  gap: 28px;
+  margin-top: 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.pz-tab {
+  padding: 12px 0;
+  border-bottom: 3px solid transparent;
+  color: var(--text-secondary);
+  font-weight: 700;
+  font-size: 0.88rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.pz-tab:hover {
+  color: var(--text-primary);
+}
+
+.pz-tab.on {
+  color: var(--text-primary);
+  border-bottom-color: var(--brand-red);
+}
+
+@media (max-width: 560px) {
+  .pz-search span,
+  .pz-search kbd {
+    display: none;
+  }
+}

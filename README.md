@@ -71,10 +71,22 @@ Dans `config.js` sur GitHub (icône crayon pour modifier), remplis `discord`, `t
 - **Comp Builder** (dossier `compo/`) : la préparation des compos, map par map (agents, joueurs, statut, notes). Chaque équipe a le sien, visible seulement par ses membres, avec la même connexion Discord que le site. Les joueurs qui rejoignent l'équipe y apparaissent tout seuls.
   - Le **capitaine** peut tout modifier et nomme des **éditeurs** (étoile sur la page Équipe du Comp Builder). Les autres joueurs consultent et règlent leurs propres rôles.
   - Scrims, classement et stats restent sur le site : le Comp Builder ne fait que les compos.
-- Code source du Comp Builder : dépôt `FroseFox/CompoBuilder`. Après une modification : `npm run build`, puis remplacer le dossier `compo/` par le contenu de `dist/`.
+- Code source du Comp Builder : dossier `compo-src/`. À chaque modification poussée sur `main`, l'action GitHub « Construire le Comp Builder » reconstruit `compo/` toute seule (rien à installer).
 
 ## Actualisation automatique
 
 Le site se met à jour tout seul (équipes, scrims, classement, recherche, espace équipe) grâce à la table `live_pulse` : chaque changement en base envoie juste « ce sujet a bougé », et la page ouverte se recharge. Si tu es en train d'écrire dans un formulaire, rien n'est effacé : une pastille « Du nouveau · actualiser » apparaît à la place. Pour rester dans le quota gratuit de Supabase, la connexion temps réel se coupe quand l'onglet reste caché plus de 2 minutes et rattrape les nouveautés au retour.
 
 Scripts SQL de cette version : `supabase/013_…`, `014_…` et `016_comp_builder_simplifie.sql` (déjà appliqués sur le projet, gardés pour l'historique ; le 016 retire matchs, dispos et Discord du Comp Builder).
+
+## Pages publiques
+
+- `#/equipe/TAG` : la page d'une équipe (roster, bilan, derniers résultats, prochains scrims, annonce de recrutement).
+- `#/joueur/<id>` : la page d'un joueur (rang, équipe, recherche d'équipe). Le contact Discord n'apparaît que si le joueur a publié une recherche.
+- Les noms d'équipes et de joueurs du site mènent à ces pages.
+
+## Messages privés Discord
+
+Le bot du réseau écrit en privé au capitaine concerné quand un scrim est accepté, 30 minutes avant un scrim, quand un score attend sa confirmation, et quand son équipe est déclarée absente. Les messages passent par la file `notify_queue` et la fonction `discord-dm` ; un joueur qui bloque les messages privés ne les reçoit simplement pas.
+
+Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et clips supprimés), `018_pages_publiques.sql`, `019_messages_discord.sql`.

@@ -1,0 +1,48 @@
+name: Construire le Comp Builder
+
+# Reconstruit le dossier compo/ quand le code source du Comp Builder change.
+# Le site reste servi depuis la branche main (aucun réglage GitHub Pages à changer).
+on:
+  push:
+    branches: [main]
+    paths: ['compo-src/**', '.github/workflows/compo.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: compo-build
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: compo-src/package-lock.json
+
+      - name: Construire
+        working-directory: compo-src
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+
+      - name: Remplacer compo/ par la nouvelle version
+        run: |
+          rm -rf compo
+          cp -r compo-src/dist compo
+
+      - name: Publier
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A compo
+          if git diff --cached --quiet; then echo "Rien de changé"; exit 0; fi
+          git commit -m "Comp Builder reconstruit automatiquement"
+          git push

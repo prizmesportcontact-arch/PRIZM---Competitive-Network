@@ -85,7 +85,7 @@
   }
   async function logout() {
     await sb.auth.signOut(); state.session = null; clearMe();
-    renderAuth(); location.hash = "#/reseau"; route();
+    renderAuth(); location.hash = "#top"; route();
   }
 
   // ---------- Barre de connexion ----------
@@ -137,13 +137,21 @@
     const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
     document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h));
     stopLive();
-    // Deux espaces : la page de l'équipe PRIZM, et le Competitive Network (scrims, comptes, équipes…)
+    // Le Competitive Network est l'accueil ; la page de l'équipe PRIZM (qui organise le réseau) est sur #/prizm
     const anchor = h && !h.startsWith("#/") ? document.getElementById(h.slice(1)) : null;
-    const inNet = !!path || (anchor && net.contains(anchor));
+    const inTeam = path === "/prizm" || !!(anchor && home.contains(anchor));
+    const inNet = !inTeam;
     document.body.classList.toggle("area-net", inNet);
     document.body.classList.toggle("area-team", !inNet);
-    if (path === "/reseau") {
-      home.hidden = true; app.hidden = true; net.hidden = false; window.scrollTo(0, 0); freshenStatic();
+    if (path === "/reseau" || path === "/prizm") {
+      home.hidden = inNet; app.hidden = true; net.hidden = !inNet; window.scrollTo(0, 0); freshenStatic();
+    } else if (path && /^\/(equipe|joueur)\/[^/]+$/.test(path)) {
+      // Pages publiques : #/equipe/TAG et #/joueur/<id>
+      const [, kind, arg] = path.split("/");
+      home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
+      app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
+      (kind === "equipe" ? viewTeamPublic : viewPlayer)(app, decodeURIComponent(arg))
+        .catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
     } else if (path && views[path]) {
       home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
@@ -282,6 +290,10 @@
       }
     } catch (e) { if (verbose) toast("Synchro Discord impossible.", "err"); }
   }
+
+  // Liens vers les pages publiques
+  const teamHref = tag => "#/equipe/" + encodeURIComponent(tag || "");
+  const playerHref = id => "#/joueur/" + encodeURIComponent(id || "");
 
   // Logo d'équipe (ou initiales du tag si pas de logo)
   const teamLogo = (t, size = 32) => t && t.logo_url
@@ -581,7 +593,7 @@
     return `<div class="table-scroll"><table class="roster">
       <thead><tr><th>Joueur</th><th>Riot ID</th><th>Rang</th><th>Rôle</th>${isCap ? "<th><span class='sr'>Actions</span></th>" : ""}</tr></thead>
       <tbody>${roster.map(r => `<tr>
-        <td><span class="pl">${avatar(r.avatar_url, r.username, 28)}<b>${esc(r.username)}</b>${r.is_captain ? '<span class="cap">Capitaine</span>' : ""}</span></td>
+        <td><span class="pl">${avatar(r.avatar_url, r.username, 28)}<a class="pl-link" href="${playerHref(r.user_id)}"><b>${esc(r.username)}</b></a>${r.is_captain ? '<span class="cap">Capitaine</span>' : ""}</span></td>
         <td class="mono">${esc(r.riot_id || "—")}</td>
         <td>${admin ? `<span class="admin-rank"><select data-rank-for="${r.user_id}" aria-label="Rang de ${esc(r.username)}"><option value="">Non classé</option>${RANKS.map((n, i) => `<option value="${i}" ${r.rank === i ? "selected" : ""}>${n}</option>`).join("")}</select><button class="link-btn" data-rank-save="${r.user_id}" type="button">Fixer</button></span> ${rankMark(r)}` : rankCell(r)}</td>
         <td>${r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</td>
@@ -618,12 +630,12 @@
     bindTeamRows(app);
     setLive("/equipes", ["teams"], () => viewTeams(app));
   }
-  const teamRow = t => `<details class="team-row" data-id="${t.id}"><summary>${teamLogo(t, 36)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
+  const teamRow = t => `<details class="team-row" data-id="${t.id}" data-tag="${esc(t.tag)}"><summary>${teamLogo(t, 36)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
   function bindTeamRows(root, admin = false) {
     const load = async d => {
       try {
         const r = await rpc("team_roster", { p_team: d.dataset.id });
-        $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin) + (admin ? `<p class="small-note open-roster">Roster bloqué pendant une compétition ? <button class="link-btn" data-open-roster type="button">Autoriser les changements pendant 24 h</button></p>` : "");
+        $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin) + `<p class="small-note"><a class="link-btn" href="${teamHref(d.dataset.tag)}">Voir la page de l'équipe →</a></p>` + (admin ? `<p class="small-note open-roster">Roster bloqué pendant une compétition ? <button class="link-btn" data-open-roster type="button">Autoriser les changements pendant 24 h</button></p>` : "");
         if (admin) { const ob = $("[data-open-roster]", d); ob.onclick = async () => {
           try { const until = await rpc("admin_open_roster", { p_team: d.dataset.id }); toast("Changements autorisés jusqu'à " + new Date(until).toLocaleString("fr-FR", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + "."); }
           catch (x) { toast(errMsg(x), "err"); } }; }
@@ -684,7 +696,7 @@
   const hourLabel = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
   const when = iso => `<div class="scx-when"><span>${dayLabel(iso)}</span><b>${hourLabel(iso)}</b></div>`;
   const tags = s => [s.format, s.maps].filter(Boolean).map(x => `<span class="scx-tag">${esc(x)}</span>`).join("");
-  const opponent = x => x ? `<span class="scx-team">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</span>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
+  const opponent = x => x ? `<a class="scx-team pl-link" href="${teamHref(x.tag)}">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</a>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
   const scSection = (title, sub, body, cls = "") => `<section class="scx-sec ${cls}"><div class="scx-sec-head"><h3>${title}</h3>${sub ? `<span class="small-note">${sub}</span>` : ""}</div>${body}</section>`;
 
   async function viewScrims(app) {
@@ -942,7 +954,7 @@
   const ago = iso => { const d = Math.floor((Date.now() - new Date(iso)) / 86400000); return d <= 0 ? "aujourd'hui" : d === 1 ? "hier" : `il y a ${d} jours`; };
   function playerCard(x) {
     return `<article class="lfg-card">
-      <div class="lfg-head">${avatar(x.avatar_url, x.username, 40)}<div><b>${esc(x.username)}</b><span class="small-note">${x.rank != null ? rankLabel(x.rank, 18) + (x.rank_source === "auto" ? " ✓" : "") : "Non classé"} · ${esc(x.riot_id || "")}</span></div>${divChip(x.division)}</div>
+      <div class="lfg-head">${avatar(x.avatar_url, x.username, 40)}<div><a class="pl-link" href="${playerHref(x.user_id)}"><b>${esc(x.username)}</b></a><span class="small-note">${x.rank != null ? rankLabel(x.rank, 18) + (x.rank_source === "auto" ? " ✓" : "") : "Non classé"} · ${esc(x.riot_id || "")}</span></div>${divChip(x.division)}</div>
       <div class="lfg-roles">${roleTags(x.roles)}</div>
       ${x.dispo ? `<p class="lfg-line"><span>Dispo</span>${esc(x.dispo)}</p>` : ""}${x.message ? `<p class="lfg-msg">${esc(x.message)}</p>` : ""}
       <div class="lfg-foot"><span class="small-note">${ago(x.created_at)}</span>${x.mine ? `<span class="small-note">Ton annonce</span>` : discordLink(x.discord_id, "Contacter sur Discord")}${state.isStaff && !x.mine ? `<button class="link-btn danger-t" data-lfdel="${x.id}" type="button">Supprimer</button>` : ""}</div>
@@ -950,7 +962,7 @@
   }
   function teamCard(x) {
     return `<article class="lfg-card">
-      <div class="lfg-head">${teamLogo(x, 40)}<div><b>${esc(x.name)}</b><span class="small-note">${esc(x.tag)} · ${x.members}/7 joueurs${x.status !== "validee" ? " · en attente de validation" : ""}</span></div>${divChip(x.division)}</div>
+      <div class="lfg-head">${teamLogo(x, 40)}<div><a class="pl-link" href="${teamHref(x.tag)}"><b>${esc(x.name)}</b></a><span class="small-note">${esc(x.tag)} · ${x.members}/7 joueurs${x.status !== "validee" ? " · en attente de validation" : ""}</span></div>${divChip(x.division)}</div>
       <div class="lfg-roles"><span class="small-note">Cherche :</span>${roleTags(x.roles)}</div>
       ${x.dispo ? `<p class="lfg-line"><span>Dispo</span>${esc(x.dispo)}</p>` : ""}${x.message ? `<p class="lfg-msg">${esc(x.message)}</p>` : ""}
       <div class="lfg-foot"><span class="small-note">${ago(x.created_at)}</span>${x.mine ? `<span class="small-note">Ton annonce</span>` : discordLink(x.discord_id, "Contacter " + esc(x.captain || "le capitaine"))}${state.isStaff && !x.mine ? `<button class="link-btn danger-t" data-lfdel="${x.id}" type="button">Supprimer</button>` : ""}</div>
@@ -971,7 +983,7 @@
         ${list.length ? `<div class="table-scroll"><table class="standings rank-table">
           <thead><tr><th>#</th><th>Équipe</th><th title="Scrims joués">J</th><th title="Victoires">V</th><th title="Nuls">N</th><th title="Défaites">D</th><th title="Différence de rounds">+/-</th><th>Pts</th><th title="Scrims honorés">Fiab.</th></tr></thead>
           <tbody>${list.map((r, i) => `<tr class="${state.team && r.team_id === state.team.id ? "me" : ""}"><td class="pos">${i + 1}</td>
-            <td><span class="pl">${teamLogo(r, 26)}<b>${esc(r.name)}</b></span></td><td>${r.played}</td><td>${r.wins}</td><td>${r.draws}</td><td>${r.losses}</td>
+            <td><a class="pl pl-link" href="${teamHref(r.tag)}">${teamLogo(r, 26)}<b>${esc(r.name)}</b></a></td><td>${r.played}</td><td>${r.wins}</td><td>${r.draws}</td><td>${r.losses}</td>
             <td>${r.rf - r.ra > 0 ? "+" : ""}${r.rf - r.ra}</td><td class="pts">${r.points}</td>
             <td><span class="fiab${r.reliability >= 90 ? " ok" : r.reliability >= 70 ? " mid" : " bad"}" title="${r.no_shows} absence(s), ${r.late_cancels} annulation(s) tardive(s)">${r.reliability} %</span></td></tr>`).join("")}</tbody></table></div>
           <p class="small-note legend">Un résultat compte quand l'adversaire le confirme, ou automatiquement 48 h après s'il ne répond pas.</p>`
@@ -981,6 +993,69 @@
     };
     render();
     setLive("/classement", ["scrims", "teams"], () => viewClassement(app));
+  }
+
+
+  // ================= Pages publiques : équipe et joueur =================
+  const resBadge = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`;
+  const oppLink = r => `<a class="t-opp pl-link" href="${teamHref(r.opp_tag)}">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></a>`;
+  const shortDate = iso => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
+  const memberSince = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+
+  async function viewTeamPublic(app, tag) {
+    const d = await rpc("team_public", { p_tag: tag });
+    if (!d) { app.innerHTML = panel("Équipe introuvable", `<p class="lead">Aucune équipe avec le tag « ${esc(tag)} ».</p><div class="ctas" style="margin-top:24px"><a class="btn" href="#/equipes">Voir les équipes</a></div>`); return; }
+    const t = d.team, st = d.standing, sc = d.scrims || { results: [], next: [] }, roster = d.roster || [];
+    const order = r => (r.is_captain ? 0 : r.role === "titulaire" ? 1 : 2);
+    roster.sort((a, b) => order(a) - order(b));
+    const mine = state.team && state.team.id === t.id;
+    const canChallenge = state.team && state.team.is_captain && state.team.status === "validee" && !mine;
+    app.innerHTML = panel(`${teamLogo(t, 72)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
+      <div class="team-status">${statusPill(t)}<span class="small-note">Sur le réseau depuis ${memberSince(t.created_at)} · ${roster.length} joueur${roster.length > 1 ? "s" : ""}</span></div>
+      ${st ? `<div class="t-stats pub-stats">
+          <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
+          <div><b>${st.wins}<i>-</i>${st.draws}<i>-</i>${st.losses}</b><span>victoires, nuls, défaites</span></div>
+          <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>différence de rounds</span></div>
+          <div><b>${st.reliability}<small>%</small></b><span>fiabilité${st.no_shows ? ` · ${st.no_shows} absence${st.no_shows > 1 ? "s" : ""}` : ""}</span></div>
+        </div>` : `<p class="small-note pub-gap">Pas encore de scrim confirmé : le bilan apparaîtra après le premier.</p>`}
+      ${d.recruit ? `<div class="callout info pub-gap"><b>L'équipe recrute</b>${d.recruit.roles && d.recruit.roles.length ? " : " + esc(d.recruit.roles.join(", ")) : ""}.${d.recruit.dispo ? ` Dispos : ${esc(d.recruit.dispo)}.` : ""}${d.recruit.message ? `<br>${esc(d.recruit.message)}` : ""}${d.contact && !mine ? ` <a href="https://discord.com/users/${esc(d.contact)}" target="_blank" rel="noopener">Contacter le capitaine</a>` : ""}</div>` : ""}
+      <h3 class="t-h">Roster</h3>
+      <div class="pub-roster">${roster.map(r => `<a class="pub-player${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}">
+          ${avatar(r.avatar_url, r.username, 56)}
+          <b>${esc(r.username)}</b>
+          <span class="small-note">${r.rank != null ? rankLabel(r.rank, 18) : "Non classé"}${rankMark(r)}</span>
+          <span class="pub-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
+        </a>`).join("") || `<p class="small-note">Aucun joueur.</p>`}</div>
+      <div class="t-cols">
+        <div><h3 class="t-h">Derniers résultats</h3>${sc.results.length ? `<div class="t-lines">${sc.results.map(r => `<div class="t-line">${resBadge(r)}${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>` : `<p class="small-note">Aucun résultat pour l'instant.</p>`}</div>
+        <div><h3 class="t-h">Prochains scrims</h3>${sc.next.length ? `<div class="t-lines">${sc.next.map(r => `<div class="t-line"><span class="t-res next">${shortDate(r.starts_at)}</span>${oppLink(r)}<span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`).join("")}</div>` : `<p class="small-note">Aucun scrim calé.</p>`}</div>
+      </div>
+      <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>` : ""}${mine ? `<a class="btn" href="#/espace">Mon espace équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
+    setLive(location.hash.slice(1), ["teams", "scrims", "lfg", "team:" + t.id], () => viewTeamPublic(app, tag));
+  }
+
+  async function viewPlayer(app, id) {
+    const d = /^[0-9a-f-]{36}$/i.test(id) ? await rpc("player_public", { p_user: id }) : null;
+    if (!d) { app.innerHTML = panel("Joueur introuvable", `<p class="lead">Ce profil n'existe pas ou a été supprimé.</p>`); return; }
+    const p = d.profile, t = d.team, me = state.session && state.session.user.id === p.id;
+    app.innerHTML = panel(`${avatar(p.avatar_url, p.username, 72)}<span>${esc(p.username)}</span>${p.staff ? ` <span class="tag-chip">Staff</span>` : ""}`, `
+      <div class="pub-grid">
+        <div class="card">
+          <span class="eyebrow">Rang</span>
+          <div class="pub-rank">${p.rank != null ? rankLabel(p.rank, 48) : "<b>Non classé</b>"}${rankMark(p)}</div>
+          <p class="small-note">${p.rank_source === "auto" ? "Vérifié automatiquement depuis le compte Riot." : p.rank_source === "staff" ? "Fixé par le staff." : p.rank != null ? "Déclaré par le joueur, pas encore vérifié." : ""}</p>
+          ${p.riot_id ? `<p class="mono">${esc(p.riot_id)}</p>` : ""}
+        </div>
+        <div class="card">
+          <span class="eyebrow">Équipe</span>
+          ${t ? `<a class="pub-team pl-link" href="${teamHref(t.tag)}">${teamLogo(t, 48)}<span><b>${esc(t.name)}</b><span class="small-note">${t.is_captain ? "Capitaine" : t.role === "titulaire" ? "Titulaire" : "Remplaçant"}${t.status === "validee" && t.division ? " · " + DIV_NAMES[t.division] : ""}</span></span></a>`
+               : `<p class="small-note">Sans équipe pour l'instant.</p>`}
+        </div>
+      </div>
+      ${d.lfg ? `<div class="callout info pub-gap"><b>Cherche une équipe</b>${d.lfg.roles && d.lfg.roles.length ? " : " + esc(d.lfg.roles.join(", ")) : ""}.${d.lfg.dispo ? ` Dispos : ${esc(d.lfg.dispo)}.` : ""}${d.lfg.message ? `<br>${esc(d.lfg.message)}` : ""}${d.contact && !me ? ` <a href="https://discord.com/users/${esc(d.contact)}" target="_blank" rel="noopener">Contacter sur Discord</a>` : ""}</div>` : ""}
+      <p class="small-note pub-gap">Sur le réseau depuis ${memberSince(p.created_at)}.</p>
+      ${me ? `<div class="ctas" style="margin-top:20px"><a class="btn" href="#/profil">Modifier mon profil</a></div>` : ""}`, "Joueur");
+    setLive(location.hash.slice(1), ["teams", "lfg"], () => viewPlayer(app, id));
   }
 
   // ================= Page de l'équipe PRIZM =================
@@ -995,12 +1070,12 @@
       const [roster, lb, lfg] = await Promise.all([rpc("team_roster", { p_team: t.id }), rpc("scrim_leaderboard").catch(() => []), rpc("list_lfg").catch(() => null)]);
       const order = r => (r.role === "titulaire" ? 0 : 1);
       roster.sort((a, b) => order(a) - order(b) || (b.is_captain - a.is_captain));
-      box.innerHTML = roster.map(r => `<article class="t-player${r.role === "remplacant" ? " sub" : ""}">
+      box.innerHTML = roster.map(r => `<a class="t-player${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}">
           ${r.avatar_url ? `<img src="${esc(r.avatar_url)}" alt="" width="96" height="96" referrerpolicy="no-referrer" loading="lazy">` : `<span class="t-initial">${esc((r.username || "?").slice(0, 1).toUpperCase())}</span>`}
           <b class="t-name${(r.username || "").length > 9 ? " long" : ""}">${esc(r.username)}</b>
           <span class="t-meta">${r.rank != null ? rankLabel(r.rank, 20) : "Non classé"}</span>
           <span class="t-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
-        </article>`).join("");
+        </a>`).join("");
       // Bilan : chiffres du classement + derniers résultats + prochains scrims (toujours affiché)
       const rec = await rpc("team_recent_scrims", { p_team: t.id }).catch(() => ({ results: [], next: [] }));
       const me = lb.find(r => r.team_id === t.id) || { played: 0, wins: 0, draws: 0, losses: 0, rf: 0, ra: 0, reliability: 100, division: t.division };
@@ -1070,7 +1145,7 @@
         <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
         <span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`;
     app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
-      <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct.</span></div>
+      <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct. <a class="link-btn" href="${teamHref(t.tag)}">Page publique de l'équipe</a></span></div>
 
       ${todo.length ? `<div class="dash-sec"><h3 class="t-h">À faire</h3><div class="dash-todos">${todo.join("")}</div></div>` : ""}
 
@@ -1099,7 +1174,7 @@
 
         <div class="dash-card">
           <div class="dash-head"><h3>Roster</h3><a class="link-btn" href="#/mon-equipe">Gérer l'équipe</a></div>
-          <div class="dash-roster">${roster.map(r => `<span class="dash-pl${r.role === "remplacant" ? " sub" : ""}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></span>`).join("")}</div>
+          <div class="dash-roster">${roster.map(r => `<a class="dash-pl${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></a>`).join("")}</div>
           <p class="small-note">${tit}/5 titulaires · ${roster.length}/7 joueurs${d.lfg ? " · annonce de recrutement en ligne" : ""}</p>
         </div>
       </div>`, "Espace équipe");
