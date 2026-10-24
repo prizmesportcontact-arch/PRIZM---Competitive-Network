@@ -829,17 +829,29 @@
           <span class="t-meta">${r.rank != null ? esc(RANKS[r.rank]) : "Non classé"}</span>
           <span class="t-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
         </article>`).join("");
-      const me = lb.find(r => r.team_id === t.id);
-      if (me) {
-        const div = lb.filter(r => r.division === me.division), pos = div.findIndex(r => r.team_id === t.id) + 1;
-        $("#team-bilan").innerHTML = `<div class="t-stats">
+      // Bilan : chiffres du classement + derniers résultats + prochains scrims (toujours affiché)
+      const rec = await rpc("team_recent_scrims", { p_team: t.id }).catch(() => ({ results: [], next: [] }));
+      const me = lb.find(r => r.team_id === t.id) || { played: 0, wins: 0, draws: 0, losses: 0, rf: 0, ra: 0, reliability: 100, division: t.division };
+      const div = lb.filter(r => r.division === me.division), pos = div.findIndex(r => r.team_id === t.id) + 1;
+      const diff = me.rf - me.ra;
+      const res = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`;
+      const line = (r, past) => `<div class="t-line">${past ? res(r) : `<span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>`}
+          <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 28)}<b>${esc(r.opp)}</b></span>
+          <span class="small-note">${past ? new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " : new Date(r.starts_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + " · "}${esc(r.format)}</span>
+          ${past ? `<span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span>` : `<span></span>`}</div>`;
+      $("#team-bilan").innerHTML = `<div class="t-stats">
           <div><b>${me.played}</b><span>scrims joués</span></div>
           <div><b>${me.wins}<i>-</i>${me.draws}<i>-</i>${me.losses}</b><span>victoires, nuls, défaites</span></div>
-          <div><b>${me.rf - me.ra > 0 ? "+" : ""}${me.rf - me.ra}</b><span>différence de rounds</span></div>
-          <div><b>${pos}<sup>${pos === 1 ? "er" : "e"}</sup></b><span>sur ${div.length} en D${me.division}</span></div>
-        </div><div class="ctas" style="margin-top:20px"><a class="btn" href="#/classement">Voir le classement</a></div>`;
-        $("#bilan").hidden = false;
-      }
+          <div><b>${diff > 0 ? "+" : ""}${diff}</b><span>différence de rounds</span></div>
+          <div><b>${pos ? pos + `<sup>${pos === 1 ? "er" : "e"}</sup>` : "–"}</b><span>${pos ? `sur ${div.length} en D${me.division}` : `classement D${me.division || "?"}`}</span></div>
+        </div>
+        <div class="t-cols">
+          <div><h3 class="t-h">Derniers résultats</h3>${rec.results.length ? `<div class="t-lines">${rec.results.map(r => line(r, true)).join("")}</div>`
+            : `<p class="small-note">Pas encore de scrim joué cette saison. Le bilan se remplit après chaque scrim confirmé.</p>`}</div>
+          <div><h3 class="t-h">Prochains scrims</h3>${rec.next.length ? `<div class="t-lines">${rec.next.map(r => line(r, false)).join("")}</div>`
+            : `<p class="small-note">Aucun scrim calé pour l'instant.</p>`}
+            <div class="ctas" style="margin-top:18px"><a class="btn" href="#/classement">Classement</a><a class="btn" href="#/scrims">Nous défier en scrim</a></div></div>
+        </div>`;
       const post = lfg && lfg.teams.find(x => x.team_id === t.id);
       if (post) {
         $("#team-recrute").innerHTML = `<div class="t-recruit"><div><span class="eyebrow">On recrute</span><h2>PRIZM recrute${post.roles.length ? " : " + esc(post.roles.join(", ")) : ""}</h2>
