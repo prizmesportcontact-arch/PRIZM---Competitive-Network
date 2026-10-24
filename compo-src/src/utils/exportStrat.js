@@ -8,7 +8,7 @@ const FONT_DISPLAY = '"Big Shoulders Display", "Arial Narrow", sans-serif'
 const FONT_MONO = '"JetBrains Mono", monospace'
 const RING = { attaque: '#ff6170', defense: '#4cc9f0' }
 
-export async function renderStratPng({ map, strat, step, agentByUuid }) {
+export async function renderStratPng({ map, strat, step, agentByUuid, showNames = true }) {
   const canvas = document.createElement('canvas')
   canvas.width = W
   canvas.height = W + HEAD
@@ -122,6 +122,16 @@ export async function renderStratPng({ map, strat, step, agentByUuid }) {
             ctx.clip()
             ctx.drawImage(im, -r + 3 * k, -r + 3 * k, (r - 3 * k) * 2, (r - 3 * k) * 2)
             ctx.restore()
+            if (showNames && a) {
+              ctx.font = `700 ${19 * k}px "Instrument Sans", sans-serif`
+              const w = ctx.measureText(a.name).width + 18 * k
+              ctx.fillStyle = 'rgba(8,10,14,0.86)'
+              ctx.fillRect(-w / 2, r + 5 * k, w, 30 * k)
+              ctx.fillStyle = '#eef0f3'
+              ctx.textAlign = 'center'
+              ctx.textBaseline = 'middle'
+              ctx.fillText(a.name, 0, r + 20 * k)
+            }
           } else {
             ctx.drawImage(im, -r * 0.68, -r * 0.68, r * 1.36, r * 1.36)
           }

@@ -3,31 +3,39 @@
   width: 100%;
   height: auto;
   aspect-ratio: 1;
-  background: #0b0f15;
-  border: 1px solid var(--border-subtle);
+  background: #0a0d12;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
-.strat-board--mini { touch-action: auto; border: 0; }
-.strat-board__bg { fill: #0b0f15; }
-.strat-board__map { opacity: 0.92; }
+.strat-board--mini { touch-action: auto; }
+.strat-board__bg { fill: #0a0d12; }
+.strat-board__grid { stroke: rgba(255, 255, 255, 0.035); stroke-width: 1.5; }
+.strat-board__map { opacity: 0.96; filter: brightness(1.12) contrast(1.05); }
 .strat-board--edit { cursor: crosshair; }
 .strat-board--select { cursor: default; }
 .strat-board--select .sb-item { cursor: grab; }
-.strat-board--erase .sb-item { cursor: not-allowed; }
-.strat-board--erase .sb-item:hover { opacity: 0.45; }
+.strat-board--select .sb-item:active { cursor: grabbing; }
+.strat-board--erase { cursor: not-allowed; }
+.strat-board--erase .sb-item:hover { opacity: 0.35; }
 .sb-hit { stroke: transparent; stroke-width: 26; fill: none; pointer-events: stroke; }
-.sb-agent { fill: #0d1117; stroke-width: 5; }
-.sb-ability { fill: rgba(13, 17, 23, 0.88); stroke-width: 3; }
-.sb-spike { fill: #ff4655; stroke: #fff; stroke-width: 3; }
+.sb-agent { fill: #0d1117; stroke-width: 5; filter: drop-shadow(0 3px 6px rgba(0, 0, 0, 0.6)); }
+.sb-ability { fill: rgba(13, 17, 23, 0.92); stroke-width: 3; filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.55)); }
+.sb-spike { fill: #ff4655; stroke: #fff; stroke-width: 3; filter: drop-shadow(0 2px 5px rgba(0, 0, 0, 0.6)); }
 .sb-text {
   font: 800 30px var(--font-display);
   text-transform: uppercase;
   letter-spacing: 0.02em;
   paint-order: stroke;
-  stroke: rgba(5, 7, 10, 0.9);
+  stroke: rgba(5, 7, 10, 0.92);
   stroke-width: 7px;
   stroke-linejoin: round;
 }
-.sb-item--sel { filter: drop-shadow(0 0 6px #fff) drop-shadow(0 0 2px #fff); }
+.sb-name rect { fill: rgba(8, 10, 14, 0.86); }
+.sb-name text { font: 700 19px var(--font-body); fill: #eef0f3; letter-spacing: 0.02em; }
+.sb-selring { fill: none; stroke: #ffa043; stroke-width: 3; stroke-dasharray: 7 6; animation: sb-spin 6s linear infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes sb-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .sb-selring { animation: none; } }
+.sb-item--sel line:not(.sb-hit), .sb-item--sel polyline:not(.sb-hit), circle.sb-item--sel, text.sb-item--sel {
+  filter: drop-shadow(0 0 5px #ffa043) drop-shadow(0 0 1px #ffa043);
+}

@@ -1,9 +1,9 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { uid } from '../../services/strats'
 import './StratBoard.css'
 
 // Tailles dans le repère 0–1000 de la minimap
-export const SIZES = { agent: 30, ability: 20, spike: 18, line: 6, text: 30 }
+export const SIZES = { agent: 30, ability: 21, spike: 18, line: 6, text: 30 }
 const SIDE_RING = { attaque: '#ff6170', defense: '#4cc9f0' }
 
 const clamp = (v) => Math.max(0, Math.min(1000, Math.round(v)))
@@ -62,7 +62,9 @@ export default function StratBoard({
   onChange,
   onPlaced,
   mini = false,
+  showNames = false,
 }) {
+  const uidBase = useId().replace(/:/g, '')
   const svgRef = useRef(null)
   const [draft, setDraft] = useState(null) // élément en cours de tracé
   const [drag, setDrag] = useState(null) // { id, sx, sy, dx, dy }
@@ -161,7 +163,7 @@ export default function StratBoard({
   return (
     <svg
       ref={svgRef}
-      className={`strat-board${editable ? ` strat-board--edit strat-board--${tool}` : ''}${mini ? ' strat-board--mini' : ''}`}
+      className={`strat-board strat-board--${side}${editable ? ` strat-board--edit strat-board--${tool}` : ''}${mini ? ' strat-board--mini' : ''}`}
       viewBox="0 0 1000 1000"
       role="img"
       aria-label="Tableau tactique"
@@ -176,9 +178,17 @@ export default function StratBoard({
             <path d="M0 0 10 5 0 10z" fill={c} />
           </marker>
         ))}
-        <clipPath id="sb-agent-clip"><circle r={SIZES.agent - 3} /></clipPath>
+        <clipPath id={`${uidBase}-clip`}><circle r={SIZES.agent - 4} /></clipPath>
+        <pattern id={`${uidBase}-grid`} width="50" height="50" patternUnits="userSpaceOnUse">
+          <path d="M50 0H0V50" fill="none" className="strat-board__grid" />
+        </pattern>
+        <radialGradient id={`${uidBase}-vig`} cx="50%" cy="50%" r="70%">
+          <stop offset="55%" stopColor="#000" stopOpacity="0" />
+          <stop offset="100%" stopColor="#000" stopOpacity="0.55" />
+        </radialGradient>
       </defs>
       <rect width="1000" height="1000" className="strat-board__bg" />
+      {!mini && <rect width="1000" height="1000" fill={`url(#${uidBase}-grid)`} />}
       <g transform={flipped ? 'rotate(180 500 500)' : undefined}>
         {minimap && <image href={minimap} x="0" y="0" width="1000" height="1000" className="strat-board__map" />}
         {shown.map((it) => {
@@ -217,6 +227,7 @@ export default function StratBoard({
             const s = SIZES.spike
             return (
               <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
+                {sel && <circle r={s + 14} className="sb-selring" />}
                 <path d={`M0 ${-s * 1.3} L${s} 0 L0 ${s * 1.3} L${-s} 0Z`} className="sb-spike" />
                 <circle r="4" fill="#fff" />
               </g>
@@ -229,8 +240,9 @@ export default function StratBoard({
             return (
               <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
                 <title>{agent ? `${agent.name} · ${ab?.name || ''}` : 'Capacité'}</title>
+                {sel && <circle r={r + 9} className="sb-selring" />}
                 <circle r={r} className="sb-ability" stroke={ring} />
-                {ab && <image href={ab.icon} x={-r * 0.68} y={-r * 0.68} width={r * 1.36} height={r * 1.36} />}
+                {ab && <image href={ab.icon} x={-r * 0.66} y={-r * 0.66} width={r * 1.32} height={r * 1.32} />}
               </g>
             )
           }
@@ -239,14 +251,22 @@ export default function StratBoard({
             return (
               <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
                 <title>{agent?.name || 'Agent'}</title>
+                {sel && <circle r={r + 10} className="sb-selring" />}
                 <circle r={r} className="sb-agent" stroke={ring} />
-                {agent && <image href={agent.icon} x={-r + 3} y={-r + 3} width={(r - 3) * 2} height={(r - 3) * 2} clipPath="url(#sb-agent-clip)" />}
+                {agent && <image href={agent.icon} x={-r + 4} y={-r + 4} width={(r - 4) * 2} height={(r - 4) * 2} clipPath={`url(#${uidBase}-clip)`} />}
+                {showNames && agent && (
+                  <g className="sb-name" transform={`translate(0 ${r + 20})`}>
+                    <rect x={-(agent.name.length * 10.4 + 18) / 2} y="-15" width={agent.name.length * 10.4 + 18} height="30" />
+                    <text textAnchor="middle" dominantBaseline="central">{agent.name}</text>
+                  </g>
+                )}
               </g>
             )
           }
           return null
         })}
       </g>
+      {!mini && <rect width="1000" height="1000" fill={`url(#${uidBase}-vig)`} pointerEvents="none" />}
     </svg>
   )
 }
