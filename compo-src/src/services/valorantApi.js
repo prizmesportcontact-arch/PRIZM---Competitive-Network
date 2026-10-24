@@ -51,8 +51,19 @@ async function request(path) {
  */
 export async function fetchMaps() {
   const data = await request(`/maps?language=${LANG}`)
+  const seen = new Set()
   return data
-    .filter((map) => Boolean(map.coordinates) && Boolean(map.displayName))
+    // Maps à sites A/B(/C) uniquement : le stand d'entraînement, le tutoriel et
+    // les maps de Deathmatch par équipe n'ont pas de description tactique.
+    .filter((map) => Boolean(map.displayName) && Boolean(map.tacticalDescription))
+    .filter((map) => !/range|tutorial|npe/i.test(map.mapUrl || ''))
+    // Un même nom ne doit apparaître qu'une fois (variantes d'une map)
+    .filter((map) => {
+      const key = map.displayName.trim().toLowerCase()
+      if (seen.has(key)) return false
+      seen.add(key)
+      return true
+    })
     .map((map) => ({
       uuid: map.uuid,
       name: map.displayName,

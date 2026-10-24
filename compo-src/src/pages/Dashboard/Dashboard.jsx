@@ -21,7 +21,8 @@ const STAT_ICON = {
 }
 
 export default function Dashboard() {
-  const { maps, status } = useData()
+  const { maps: allMaps, status } = useData()
+  const maps = useMemo(() => allMaps.filter((m) => !m.free), [allMaps])
   const { compositionsByMap } = useCompositions()
 
   const stats = useMemo(

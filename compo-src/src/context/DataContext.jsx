@@ -1,6 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react'
 import { fetchAgents, fetchMaps } from '../services/valorantApi'
 
+// Compos qui ne dépendent d'aucune map (compo de base, compo anti-éco…)
+export const FREE_MAP = { uuid: 'libre', name: 'Sans map', image: null, thumbnail: null, minimap: null, free: true }
+
 const DataContext = createContext(null)
 
 export function DataProvider({ children }) {
@@ -17,7 +20,7 @@ export function DataProvider({ children }) {
         fetchMaps(),
         fetchAgents(),
       ])
-      setMaps(mapsData)
+      setMaps([FREE_MAP, ...mapsData])
       setAgents(agentsData)
       setStatus('ready')
     } catch (err) {

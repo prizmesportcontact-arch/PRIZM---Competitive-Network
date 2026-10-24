@@ -151,7 +151,7 @@ export default function Editor() {
         className="editor__banner accent-bar-static"
         style={composition ? { '--accent-card-color': STATUS_META[composition.status]?.color } : undefined}
       >
-        <img src={map?.image} alt="" className="editor__banner-image" />
+        {map?.image ? <img src={map.image} alt="" className="editor__banner-image" /> : <div className="editor__banner-free" aria-hidden="true" />}
         <div className="editor__banner-scrim" />
         <div className="container editor__banner-content">
           <button className="btn btn-ghost editor__back" onClick={() => navigate('/')}>

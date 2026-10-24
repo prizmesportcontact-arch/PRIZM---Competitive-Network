@@ -203,3 +203,9 @@
     width: 100%;
   }
 }
+
+.editor__banner-free {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover) repeating-linear-gradient(-62deg, transparent 0 22px, rgba(255, 160, 67, 0.14) 22px 24px);
+}

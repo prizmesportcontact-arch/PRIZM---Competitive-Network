@@ -36,19 +36,25 @@ export default function MapCard({ map, summary, players, index = 0 }) {
               qualité (splash) charge par-dessus puis apparaît en fondu —
               net et rapide à l'affichage, plutôt que net-mais-lent ou
               rapide-mais-flou. */}
-          <div
-            className="map-card__image-placeholder"
-            style={{ backgroundImage: `url(${map.thumbnail})` }}
-            aria-hidden="true"
-          />
-          <img
-            src={map.image}
-            alt=""
-            loading="lazy"
-            decoding="async"
-            className={`map-card__image ${loaded ? 'map-card__image--loaded' : ''}`}
-            onLoad={() => setLoaded(true)}
-          />
+          {map.free ? (
+            <div className="map-card__free" aria-hidden="true" />
+          ) : (
+            <>
+              <div
+                className="map-card__image-placeholder"
+                style={map.thumbnail ? { backgroundImage: `url(${map.thumbnail})` } : undefined}
+                aria-hidden="true"
+              />
+              <img
+                src={map.image}
+                alt=""
+                loading="lazy"
+                decoding="async"
+                className={`map-card__image ${loaded ? 'map-card__image--loaded' : ''}`}
+                onLoad={() => setLoaded(true)}
+              />
+            </>
+          )}
           <div className="map-card__scrim" />
           <span className={`map-card__count ${isComplete ? 'map-card__count--full' : ''}`}>
             {filledCount}/5

@@ -140,3 +140,10 @@
   color: var(--text-on-image);
   border: 1px solid rgba(255, 255, 255, 0.16);
 }
+
+/* Carte « Sans map » : rayures du site à la place de l'image */
+.map-card__free {
+  position: absolute;
+  inset: 0;
+  background: var(--bg-hover) repeating-linear-gradient(-62deg, transparent 0 18px, rgba(255, 160, 67, 0.14) 18px 20px);
+}

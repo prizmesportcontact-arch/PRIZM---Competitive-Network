@@ -55,25 +55,28 @@ export default function Home() {
       }
     })
 
+    // Les compos sans map restent toujours en tête de liste
+    withSummary.sort((a, b) => Number(Boolean(b.map.free)) - Number(Boolean(a.map.free)))
     return withSummary
   }, [maps, summaries, search, filter, statusFilter, sort])
 
-  const totalComplete = maps.filter((m) => summaries.get(m.uuid)?.filledCount === 5).length
+  const realMaps = maps.filter((m) => !m.free)
+  const totalComplete = realMaps.filter((m) => summaries.get(m.uuid)?.filledCount === 5).length
 
   return (
     <main className="home">
       <section className="home__hero container">
         <h1 className="home__title">Pool de maps</h1>
-        {status === 'ready' && maps.length > 0 && (
+        {status === 'ready' && realMaps.length > 0 && (
           <div className="home__progress">
             <div className="home__progress-bar">
               <div
                 className="home__progress-fill"
-                style={{ width: `${maps.length ? (totalComplete / maps.length) * 100 : 0}%` }}
+                style={{ width: `${realMaps.length ? (totalComplete / realMaps.length) * 100 : 0}%` }}
               />
             </div>
             <span className="home__progress-text">
-              <strong>{totalComplete}</strong> / {maps.length} maps avec une compo complète
+              <strong>{totalComplete}</strong> / {realMaps.length} maps avec une compo complète
             </span>
           </div>
         )}
