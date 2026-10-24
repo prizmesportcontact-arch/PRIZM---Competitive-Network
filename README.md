@@ -97,3 +97,12 @@ Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et c
 - **Maps conseillées** : sur chaque proposition et chaque scrim calé, les maps que les deux équipes jouent sans les bannir.
 - **Fiche adversaire** : bouton « Voir l'adversaire » / « Fiche adversaire » sur les scrims (et sur la page d'une équipe). Elle affiche le classement, la forme, la fiabilité, les maps, l'historique entre les deux équipes et le roster, à partir des données du réseau.
 - SQL : `020_map_pool_fiche_adversaire.sql` (table `team_map_pools`, fonctions `set_map_pool` et `opponent_brief`).
+- **Pool compétitif automatique** : le map pool et les maps conseillées n'utilisent que les maps du classé. La liste est vérifiée chaque jour à 6 h 17 (UTC) par la fonction `map-rotation` (lecture de valorant-spind.de, liste gardée telle quelle si la lecture échoue). Correction manuelle possible par un admin : `select public.admin_set_rotation(array['Abyss','Bind',...])`. SQL : `022_rotation_des_maps.sql`.
+
+### Tableau tactique (Comp Builder)
+
+- Onglet **Strats** du Comp Builder, et section « Strats » sur chaque map.
+- Minimap officielle, côté attaque ou défense, carte retournable. Agents (ceux de la compo liée sous la main), leurs 4 capacités, spike, flèches, traits, crayon, zones, texte, gomme, 6 couleurs, annuler / rétablir (Ctrl+Z / Ctrl+Y), raccourcis clavier (V, A, L, D, Z, T, E).
+- Plusieurs étapes par strat (Setup, Exécution, Post-plant…) : une nouvelle étape reprend la position de la précédente.
+- Sauvegarde automatique, mise à jour en direct chez les coéquipiers, lecture seule pour les joueurs non éditeurs, export PNG ou copie pour Discord.
+- SQL : `021_tableau_tactique.sql` (table `cb_strats`, mêmes droits que les compos). Une strat pèse quelques Ko.

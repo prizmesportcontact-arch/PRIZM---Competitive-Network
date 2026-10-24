@@ -1,0 +1,12 @@
+.strats { padding-top: var(--space-6); padding-bottom: var(--space-8); display: grid; gap: var(--space-6); }
+.strats__head { display: grid; gap: var(--space-2); }
+.strats__head p { color: var(--text-secondary); max-width: 62ch; }
+.strats__title { font-size: clamp(2rem, 5vw, 3rem); }
+.strats__map { display: grid; gap: var(--space-3); }
+.strats__map-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); border-bottom: 1px solid var(--border-subtle); padding-bottom: var(--space-2); }
+.strats__map-head h2 { font-size: 1.8rem; }
+.strats__open { color: var(--brand-red); font-weight: 600; font-size: 0.88rem; text-decoration: none; }
+.strats__others { display: grid; gap: var(--space-2); }
+.strats__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.strats__chip { padding: 7px 12px; border: 1px solid var(--border-subtle); color: var(--text-primary); text-decoration: none; font: 700 0.82rem var(--font-body); text-transform: uppercase; letter-spacing: 0.04em; }
+.strats__chip:hover { border-color: var(--brand-red); }

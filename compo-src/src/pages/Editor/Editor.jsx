@@ -17,6 +17,7 @@ import ExportCompositionButton from '../../components/ExportCompositionButton/Ex
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import CompositionCompareModal from '../../components/CompositionCompareModal/CompositionCompareModal'
 import Loader from '../../components/Loader/Loader'
+import StratList from '../../components/StratList/StratList'
 import './Editor.css'
 
 export default function Editor() {
@@ -258,6 +259,20 @@ export default function Editor() {
               </div>
             )}
           </section>
+
+          {map?.minimap && (
+            <section className="editor__section" id="strats">
+              <div className="editor__section-header">
+                <h2>Strats</h2>
+                <p>
+                  {isAdmin
+                    ? 'Dessine tes setups, exécutions et retakes sur la minimap. Une nouvelle strat est liée à la composition affichée.'
+                    : 'Setups, exécutions et retakes de l’équipe sur cette map.'}
+                </p>
+              </div>
+              <StratList mapUuid={mapId} compositionId={composition.id} comps={comps} />
+            </section>
+          )}
 
           <div className="editor__grid-two">
             <section className="editor__section">

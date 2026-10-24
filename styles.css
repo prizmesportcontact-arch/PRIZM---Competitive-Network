@@ -939,3 +939,4 @@ body.no-scroll{overflow:hidden}
 @media (max-width:480px){.brief{padding:20px 16px 32px}.brief-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.brief-stats>div:nth-child(3){border-left:0}.brief-stats>div:nth-child(n+3){border-top:1px solid var(--line)}}
 @media (prefers-reduced-motion:reduce){.brief,.brief-ov{animation:none}}
 .scx-main .brief-btn{justify-self:start;width:fit-content;padding:0;text-align:left}
+.riot-note{flex-basis:100%;font-size:.72rem;opacity:.75;line-height:1.5}

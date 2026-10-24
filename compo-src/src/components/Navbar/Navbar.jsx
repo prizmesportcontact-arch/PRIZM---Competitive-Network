@@ -11,6 +11,7 @@ import './Navbar.css'
 // vivent sur le site du réseau.
 const TABS = [
   { to: '/', label: 'Maps', end: true },
+  { to: '/strats', label: 'Strats' },
   { to: '/team', label: 'Équipe' },
   { to: '/dashboard', label: 'Avancement' },
 ]

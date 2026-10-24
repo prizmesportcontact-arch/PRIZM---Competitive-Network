@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from './context/AuthContext'
 import { DataProvider } from './context/DataContext'
 import { CompositionsProvider } from './context/CompositionsContext'
 import { PlayersProvider } from './context/PlayersContext'
+import { StratsProvider } from './context/StratsContext'
 import { ToastProvider } from './context/ToastContext'
 import { isSupabaseConfigured } from './services/supabaseClient'
 import Navbar from './components/Navbar/Navbar'
@@ -23,6 +24,8 @@ const Home = lazy(() => import('./pages/Home/Home'))
 const Editor = lazy(() => import('./pages/Editor/Editor'))
 const Team = lazy(() => import('./pages/Team/Team'))
 const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'))
+const Strats = lazy(() => import('./pages/Strats/Strats'))
+const Strat = lazy(() => import('./pages/Strat/Strat'))
 
 /** Rendu à l'intérieur du HashRouter : gère la transition animée entre les pages. */
 function AppRoutes() {
@@ -45,6 +48,8 @@ function AppRoutes() {
         <Route path="/" element={<PageTransition><Suspense fallback={pageFallback}><Home /></Suspense></PageTransition>} />
         <Route path="/editor/:mapId" element={<PageTransition><Suspense fallback={pageFallback}><Editor /></Suspense></PageTransition>} />
         <Route path="/team" element={<PageTransition><Suspense fallback={pageFallback}><Team /></Suspense></PageTransition>} />
+        <Route path="/strats" element={<PageTransition><Suspense fallback={pageFallback}><Strats /></Suspense></PageTransition>} />
+        <Route path="/strat/:stratId" element={<PageTransition><Suspense fallback={pageFallback}><Strat /></Suspense></PageTransition>} />
         <Route path="/dashboard" element={<PageTransition><Suspense fallback={pageFallback}><Dashboard /></Suspense></PageTransition>} />
         {/* Toute URL inconnue renvoie vers l'accueil plutôt que sur une page blanche. */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -106,7 +111,9 @@ function TeamScopedApp() {
     <DataProvider key={team.id}>
       <PlayersProvider>
         <CompositionsProvider>
-          <AppShell />
+          <StratsProvider>
+            <AppShell />
+          </StratsProvider>
         </CompositionsProvider>
       </PlayersProvider>
     </DataProvider>

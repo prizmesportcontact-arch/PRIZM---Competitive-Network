@@ -705,8 +705,23 @@
   const MAP_FALLBACK = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset"];
   const POOL_LEVELS = [["forte", "Forte"], ["jouable", "Jouable"], ["ban", "Ban"]];
   const POOL_SCORE = { forte: 2, jouable: 1 };
-  let mapListP = null;
-  function mapList() {
+  let mapListP = null, rotCache = null;
+  // Pool compétitif du moment (7 maps du classé), mis à jour chaque jour par la base
+  async function rotation() {
+    if (rotCache && Date.now() - rotCache.at < 60000) return rotCache.maps;
+    if (!sb) return null;
+    const { data } = await sb.from("map_rotation").select("maps").eq("id", 1).maybeSingle();
+    rotCache = { at: Date.now(), maps: data && data.maps && data.maps.length ? data.maps : null };
+    return rotCache.maps;
+  }
+  // Maps du map pool : seulement celles du pool compétitif (toutes si la rotation est inconnue)
+  async function mapList() {
+    const [all, rot] = await Promise.all([allMaps(), rotation().catch(() => null)]);
+    if (!rot) return all;
+    return rot.map(n => all.find(m => m.name.toLowerCase() === n.toLowerCase()) || { name: n, img: null })
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+  function allMaps() {
     if (mapListP) return mapListP;
     try { const c = JSON.parse(sessionStorage.getItem("prizm_maps") || "null"); if (c && c.length) return (mapListP = Promise.resolve(c)); } catch (e) {}
     mapListP = fetch("https://valorant-api.com/v1/maps").then(r => r.json()).then(j => {
@@ -1330,7 +1345,7 @@
 
       <div class="dash-card dash-pool">
         <div class="dash-head"><h3>Map pool</h3><span class="small-note" id="pool-state">${t.is_captain ? "Clique pour classer chaque map · enregistré automatiquement" : "Fixé par le capitaine"}</span></div>
-        <p class="small-note">Sert à trier les maps quand vous proposez un scrim et à conseiller les maps face à chaque adversaire. Visible sur la page publique de l'équipe.</p>
+        <p class="small-note">Les ${maps.length} maps du pool compétitif actuel (mis à jour automatiquement à chaque nouvel acte). Sert à trier les maps quand vous proposez un scrim et à conseiller les maps face à chaque adversaire. Visible sur la page publique de l'équipe.</p>
         ${t.is_captain ? `<div class="pool-edit">${maps.map(m => `<div class="pool-row" data-map="${esc(m.name)}">
             <span class="pool-name"${m.img ? ` style="--img:url('${esc(m.img)}')"` : ""}>${esc(m.name)}</span>
             <div class="pool-seg" role="group" aria-label="${esc(m.name)}">${POOL_LEVELS.map(([v, l]) => `<button type="button" class="${v}${myPool[m.name] === v ? " on" : ""}" data-lvl="${v}" aria-pressed="${myPool[m.name] === v}">${l}</button>`).join("")}</div>

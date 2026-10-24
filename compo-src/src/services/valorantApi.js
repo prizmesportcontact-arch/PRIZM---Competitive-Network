@@ -88,6 +88,10 @@ export async function fetchAgents() {
       name: agent.displayName,
       portrait: agent.fullPortrait || agent.displayIcon,
       icon: agent.displayIcon,
+      // Capacités (pour le tableau tactique) : C, Q, E, X — sans la passive
+      abilities: (agent.abilities || [])
+        .filter((ab) => ab.slot !== 'Passive' && ab.displayIcon)
+        .map((ab) => ({ slot: ab.slot, name: ab.displayName, icon: ab.displayIcon })),
       role: {
         name: agent.role.displayName,
         icon: agent.role.displayIcon,
