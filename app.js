@@ -5,6 +5,11 @@
     "Or 1","Or 2","Or 3","Platine 1","Platine 2","Platine 3","Diamant 1","Diamant 2","Diamant 3",
     "Ascendant 1","Ascendant 2","Ascendant 3","Immortel 1","Immortel 2","Immortel 3","Radiant"];
   const DIV_NAMES = {1:"D1 · Élite",2:"D2 · Haute",3:"D3 · Inter",4:"D4 · Open"};
+  // Icônes de rang officielles (hébergées par valorant-api.com). Si l'image ne charge pas, le nom du rang reste affiché.
+  const RANK_ICON_SET = "03621f52-342b-cf4e-4f86-9350a49c6d04";
+  const rankIcon = (r, size = 22) => r == null ? "" :
+    `<img class="rank-ico" src="https://media.valorant-api.com/competitivetiers/${RANK_ICON_SET}/${r + 3}/${size > 40 ? "largeicon" : "smallicon"}.png" alt="" width="${size}" height="${size}" loading="lazy" onerror="this.remove()">`;
+  const rankLabel = (r, size = 22) => r == null ? "" : `<span class="rank-lbl">${rankIcon(r, size)}${esc(RANKS[r])}</span>`;
   const rankDiv = r => r == null ? null : r <= 8 ? 4 : r <= 14 ? 3 : r <= 20 ? 2 : 1;
 
   const $ = (sel, root = document) => root.querySelector(sel);
@@ -329,7 +334,7 @@
       : p.rank != null ? `<span class="pill wait">Non vérifié</span><span class="small-note">Clique sur le bouton ci-dessus pour le vérifier.</span>` : "";
     if (p.rank == null) return `<span class="eyebrow">Rang actuel</span><b class="rank-big">${p.riot_id ? "Non classé" : "—"}</b>
       <p class="small-note">${p.riot_id ? "Aucun rang compétitif trouvé pour ce Riot ID. Joue tes matchs de placement, ou demande au staff de fixer ton rang via un ticket dans #support." : "Renseigne ton Riot ID pour détecter ton rang."}</p>`;
-    return `<span class="eyebrow">Rang actuel</span><b class="rank-big">${esc(RANKS[p.rank])}</b>
+    return `<span class="eyebrow">Rang actuel</span><b class="rank-big">${rankIcon(p.rank, 64)}${esc(RANKS[p.rank])}</b>
       <div class="rank-meta">${src}</div>
       <p class="div-preview">Ce rang correspond à la <b>${DIV_NAMES[d]}</b>.</p>`;
   }
@@ -482,11 +487,13 @@
   }
 
   const rankCell = r => {
-    const label = r.rank != null ? esc(RANKS[r.rank]) : "—";
-    const mark = r.rank_source === "auto" ? `<span class="rank-ok" title="Rang vérifié automatiquement">✓</span>`
+    const label = r.rank != null ? rankLabel(r.rank) : "—";
+    return label + rankMark(r);
+  };
+  const rankMark = r => {
+    return r.rank_source === "auto" ? `<span class="rank-ok" title="Rang vérifié automatiquement">✓</span>`
       : r.rank_source === "staff" ? `<span class="rank-ok" title="Rang fixé par le staff">✓</span>`
       : r.rank != null ? `<span class="rank-unv" title="Rang non vérifié">?</span>` : "";
-    return label + mark;
   };
 
   function rosterTable(roster, isCap, me, admin = false, noKick = false) {
@@ -495,7 +502,7 @@
       <tbody>${roster.map(r => `<tr>
         <td><span class="pl">${avatar(r.avatar_url, r.username, 28)}<b>${esc(r.username)}</b>${r.is_captain ? '<span class="cap">Capitaine</span>' : ""}</span></td>
         <td class="mono">${esc(r.riot_id || "—")}</td>
-        <td>${admin ? `<span class="admin-rank"><select data-rank-for="${r.user_id}" aria-label="Rang de ${esc(r.username)}"><option value="">Non classé</option>${RANKS.map((n, i) => `<option value="${i}" ${r.rank === i ? "selected" : ""}>${n}</option>`).join("")}</select><button class="link-btn" data-rank-save="${r.user_id}" type="button">Fixer</button></span> ${rankCell(r).replace(/^[^<]*/, "")}` : rankCell(r)}</td>
+        <td>${admin ? `<span class="admin-rank"><select data-rank-for="${r.user_id}" aria-label="Rang de ${esc(r.username)}"><option value="">Non classé</option>${RANKS.map((n, i) => `<option value="${i}" ${r.rank === i ? "selected" : ""}>${n}</option>`).join("")}</select><button class="link-btn" data-rank-save="${r.user_id}" type="button">Fixer</button></span> ${rankMark(r)}` : rankCell(r)}</td>
         <td>${r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</td>
         ${isCap ? `<td class="act">${r.user_id === me ? "" : `
           <button class="link-btn" data-act="role" data-u="${r.user_id}" data-r="${r.role === "titulaire" ? "remplacant" : "titulaire"}" type="button">${r.role === "titulaire" ? "Passer remplaçant" : "Passer titulaire"}</button>
@@ -851,7 +858,7 @@
   const ago = iso => { const d = Math.floor((Date.now() - new Date(iso)) / 86400000); return d <= 0 ? "aujourd'hui" : d === 1 ? "hier" : `il y a ${d} jours`; };
   function playerCard(x) {
     return `<article class="lfg-card">
-      <div class="lfg-head">${avatar(x.avatar_url, x.username, 40)}<div><b>${esc(x.username)}</b><span class="small-note">${x.rank != null ? esc(RANKS[x.rank]) + (x.rank_source === "auto" ? " ✓" : "") : "Non classé"} · ${esc(x.riot_id || "")}</span></div>${divChip(x.division)}</div>
+      <div class="lfg-head">${avatar(x.avatar_url, x.username, 40)}<div><b>${esc(x.username)}</b><span class="small-note">${x.rank != null ? rankLabel(x.rank, 18) + (x.rank_source === "auto" ? " ✓" : "") : "Non classé"} · ${esc(x.riot_id || "")}</span></div>${divChip(x.division)}</div>
       <div class="lfg-roles">${roleTags(x.roles)}</div>
       ${x.dispo ? `<p class="lfg-line"><span>Dispo</span>${esc(x.dispo)}</p>` : ""}${x.message ? `<p class="lfg-msg">${esc(x.message)}</p>` : ""}
       <div class="lfg-foot"><span class="small-note">${ago(x.created_at)}</span>${x.mine ? `<span class="small-note">Ton annonce</span>` : discordLink(x.discord_id, "Contacter sur Discord")}${state.isStaff && !x.mine ? `<button class="link-btn danger-t" data-lfdel="${x.id}" type="button">Supprimer</button>` : ""}</div>
@@ -906,7 +913,7 @@
       box.innerHTML = roster.map(r => `<article class="t-player${r.role === "remplacant" ? " sub" : ""}">
           ${r.avatar_url ? `<img src="${esc(r.avatar_url)}" alt="" width="96" height="96" referrerpolicy="no-referrer" loading="lazy">` : `<span class="t-initial">${esc((r.username || "?").slice(0, 1).toUpperCase())}</span>`}
           <b class="t-name${(r.username || "").length > 9 ? " long" : ""}">${esc(r.username)}</b>
-          <span class="t-meta">${r.rank != null ? esc(RANKS[r.rank]) : "Non classé"}</span>
+          <span class="t-meta">${r.rank != null ? rankLabel(r.rank, 20) : "Non classé"}</span>
           <span class="t-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
         </article>`).join("");
       // Bilan : chiffres du classement + derniers résultats + prochains scrims (toujours affiché)

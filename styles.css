@@ -814,3 +814,11 @@ section.scx-sec,.scx-sec{margin-top:44px;padding-block:0;border-top:0}
   .scx-rrow .small-note{grid-column:2/-1;grid-row:3;text-align:left}
   .scx-rrow .scx-res{grid-row:1/span 2}
 }
+
+/* ===== Icônes de rang ===== */
+.rank-ico{flex:none;object-fit:contain;vertical-align:middle}
+.rank-lbl{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.rank-big{display:flex;align-items:center;gap:14px}
+.rank-big .rank-ico{width:64px;height:64px}
+.div .ranks{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.div .ranks .rank-ico{margin-right:-1px}
