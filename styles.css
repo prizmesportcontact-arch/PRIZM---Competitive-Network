@@ -583,3 +583,84 @@ h2{font-size:clamp(2.1rem,6vw,4.4rem)}
 }
 .rg-pick>*{min-width:0;max-width:100%}.rg-pick select{width:100%;flex:1 1 260px}
 .own-match{margin-top:10px;font-size:.88rem;color:var(--warn)}
+
+/* ===== Scrims, recherche, classement, clips ===== */
+.roles{grid-template-columns:repeat(auto-fit,minmax(240px,1fr))}
+.post-card{margin:20px 0 8px}
+.post-card>summary{cursor:pointer;list-style:none;display:flex;flex-wrap:wrap;align-items:baseline;gap:4px}
+.post-card>summary::-webkit-details-marker{display:none}
+.post-card>summary{justify-content:flex-start}
+.post-card>summary::after{margin-left:auto}
+.post-card .form{margin-top:8px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0 16px}
+.form-grid>div{display:flex;flex-direction:column;min-width:0}
+section.sc-sec,section.team-scrims{padding-block:0;border-top:0}
+.sc-sec{margin-top:32px}
+.sc-sec>.t-h,.team-scrims>.t-h{margin-top:0}
+.sc-list{display:grid;border:1px solid var(--line);background:var(--paper)}
+.sc-row{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:10px 16px;padding:10px 14px;border-bottom:1px solid var(--line);color:inherit;text-decoration:none}
+.sc-list>.sc-row:last-child{border-bottom:0}
+.sc-row .date-tile{width:58px}
+.sc-row .date-tile b{font-size:1.4rem}
+a.link-row:hover{background:color-mix(in srgb,var(--accent) 6%,var(--paper))}
+.sc-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.sc-team{display:flex;align-items:center;gap:8px;min-width:0}
+.sc-team b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sc-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 12px}
+.sc-form{grid-column:1/-1}
+.sc-report{display:flex;flex-direction:column;gap:10px;padding:10px 0 4px;border-top:1px dashed var(--line)}
+.sc-score{font:700 1.1rem var(--mono)}
+.sc-score.win{color:var(--ok)}.sc-score.lose{color:var(--bad)}
+.staff-sc{margin-top:36px;border:1px dashed var(--line);padding:12px 14px}
+.staff-sc>summary{cursor:pointer}
+.staff-sc .sc-list{margin-top:12px}
+.team-scrims{margin:28px 0 8px}
+.team-scrims .staff-row{margin-top:12px}
+.post .sc-list{border:0;background:transparent}
+.post .sc-row{padding-inline:0}
+@media (max-width:600px){.sc-row{grid-template-columns:auto minmax(0,1fr)}.sc-act{grid-column:1/-1;justify-content:flex-start}}
+
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin-top:28px;flex-wrap:wrap}
+.tab{font:600 .95rem var(--body);background:none;border:0;border-bottom:3px solid transparent;color:var(--mute);padding:10px 12px;cursor:pointer}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.tab .count{font:500 .75rem var(--mono);background:var(--panel);padding:2px 6px;margin-left:4px;border-radius:99px}
+.role-pick{border:0;padding:0;margin:4px 0 8px;display:flex;flex-wrap:wrap;gap:8px}
+.role-pick legend{font-weight:600;margin-bottom:8px;padding:0}
+.role-opt{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);padding:6px 12px;border-radius:99px;cursor:pointer;font-weight:500}
+.role-opt:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent)}
+.lfg-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px;margin-top:20px}
+.lfg-card{border:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.lfg-head{display:flex;align-items:center;gap:10px;min-width:0}
+.lfg-head>div{display:flex;flex-direction:column;min-width:0;flex:1}
+.lfg-head b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lfg-roles{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.role-tag{font:600 .75rem var(--body);padding:3px 9px;border-radius:99px;background:var(--panel);color:var(--ink)}
+.lfg-line{font-size:.9rem}
+.lfg-line span{font:500 .72rem var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mute);margin-right:8px}
+.lfg-msg{font-size:.92rem;color:var(--mute);overflow-wrap:anywhere}
+.lfg-foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:8px;margin-top:auto;padding-top:8px;border-top:1px solid var(--line)}
+
+.rank-table .fiab{font:600 .85rem var(--mono)}
+.fiab.ok{color:var(--ok)}.fiab.mid{color:var(--warn)}.fiab.bad{color:var(--bad)}
+@media (max-width:560px){.rank-table th:nth-child(5),.rank-table td:nth-child(5){display:none}}
+
+.clips-head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:8px;margin-top:28px}
+.clip-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:18px}
+.clip-card{border:1px solid var(--line);display:flex;flex-direction:column;min-width:0}
+.clip-media{position:relative;display:grid;place-items:center;aspect-ratio:16/9;width:100%;border:0;padding:0;background:#111318;color:#fff;cursor:pointer;overflow:hidden;text-decoration:none}
+.clip-media img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.clip-media .play{position:relative;width:52px;height:52px;display:grid;place-items:center;background:rgba(0,0,0,.6);border-radius:50%;font-size:1.2rem}
+.clip-ph{position:absolute;left:12px;top:10px;font:600 .75rem var(--mono);text-transform:uppercase;letter-spacing:.08em;color:#cfd2da}
+.clip-info{display:flex;flex-direction:column;gap:2px;padding:12px 14px 4px;min-width:0}
+.clip-info b{overflow-wrap:anywhere}
+.clip-foot{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 14px 12px}
+.vote{font:700 .9rem var(--mono);border:1px solid var(--line);background:transparent;color:var(--ink);padding:6px 12px;cursor:pointer;border-radius:99px}
+.vote.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.vote:disabled{cursor:default;opacity:.6}
+.clip-grid.past .clip-card{opacity:.92}
+
+section#communaute .comm{margin-top:8px}
+.comm-card{text-decoration:none;color:inherit}
+.comm-card b{font-family:var(--display);font-size:1.5rem;text-transform:uppercase}
+.comm-card p{color:var(--mute);font-size:.95rem}
+.comm-card:hover{border-color:var(--ink)}
