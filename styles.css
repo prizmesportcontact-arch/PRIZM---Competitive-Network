@@ -718,3 +718,99 @@ html{background:#0b0b0e}
 .t-opp b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .t-score{font:700 .95rem var(--mono)}
 @media (max-width:520px){.t-line{grid-template-columns:auto minmax(0,1fr) auto}.t-line .small-note{display:none}}
+
+/* ===== Couleurs : PRIZM (violet) / Competitive Network (ambre, fond ardoise) ===== */
+body.area-net{
+  --ink:#eef0f3; --paper:#0d1117; --panel:#161b23; --line:#29303b; --mute:#9aa3af;
+  --accent:#ffa043; --accent-ink:#1a1006; --rose:#ffb37a;
+  --ok:#4ade80; --warn:#f2d45c; --bad:#ff6170}
+html:has(body.area-net){background:#0d1117}
+body.area-net header.top{border-bottom:2px solid var(--accent)}
+body.area-net .hero::after{background:repeating-linear-gradient(-62deg,transparent 0 22px,rgba(255,160,67,.2) 22px 24px)}
+body.area-net .callout{border-left-color:var(--accent)}
+/* Le lien de bascule prend la couleur de l'espace vers lequel il mène */
+body.area-team header.top nav a.nav-switch{color:#ffa043}
+body.area-net header.top nav a.nav-switch{color:#9b84ff}
+/* L'encart « réseau » sur la page équipe annonce déjà la couleur du réseau */
+.net-teaser{--accent:#ffa043;--accent-ink:#1a1006;background:#161b23;border-left:4px solid #ffa043}
+/* Divisions : une couleur par niveau, lisible sur fond sombre */
+.div-chip{color:#0d1117}
+.div-chip.d1{background:#ff6b6b}.div-chip.d2{background:#38c9b0}.div-chip.d3{background:#e8c25a}.div-chip.d4{background:#a7b0bd}
+
+/* ===== Page Scrims ===== */
+.scx-top{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:16px 32px}
+.scx-top .lead{margin:0;max-width:62ch}
+.scx-propose{margin-top:20px;padding:22px 24px;background:var(--panel);border:1px solid var(--line);border-top:3px solid var(--accent);display:grid;gap:6px}
+.scx-propose-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:6px}
+.scx-propose-head b{font:800 1.4rem var(--display);text-transform:uppercase}
+.scx-propose .ctas{margin-top:12px;align-items:center}
+
+section.scx-sec,.scx-sec{margin-top:44px;padding-block:0;border-top:0}
+.scx-sec-head{display:flex;flex-wrap:wrap;align-items:baseline;gap:6px 14px;margin-bottom:14px}
+.scx-sec-head h3{font:900 clamp(1.6rem,3vw,2.1rem)/1 var(--display);text-transform:uppercase;margin:0}
+.scx-list{display:grid;gap:10px}
+.scx-empty{padding:22px;border:1px dashed var(--line);color:var(--mute);margin:0}
+
+.scx-card{display:grid;grid-template-columns:96px minmax(0,1fr) auto;align-items:center;gap:12px 20px;padding:16px 20px;background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--line)}
+.scx-card.off{opacity:.62}
+.scx-card.off:hover{opacity:1}
+.scx-when{display:grid;gap:2px}
+.scx-when span{font:600 .8rem var(--body);color:var(--mute)}
+.scx-when b{font:900 1.9rem/1 var(--display);letter-spacing:.01em}
+.scx-main{display:grid;gap:8px;min-width:0}
+.scx-vs{font:500 .72rem var(--mono);text-transform:uppercase;letter-spacing:.12em;color:var(--mute);margin-bottom:-4px}
+.scx-team{display:flex;align-items:center;gap:10px;min-width:0}
+.scx-team b{font-size:1.12rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scx-team b.mute{color:var(--mute);font-weight:600}
+.scx-tags{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.scx-tag{font:600 .78rem var(--body);padding:4px 10px;border:1px solid var(--line);border-radius:999px;color:var(--ink)}
+.scx-note{font-size:.86rem;color:var(--mute);font-style:italic}
+.scx-msg{margin:0;font-size:.95rem}
+.scx-act{display:flex;flex-wrap:wrap;align-items:center;justify-content:flex-end;gap:8px 14px}
+.scx-act .btn{white-space:nowrap}
+.scx-status{font:700 .78rem var(--body);text-transform:uppercase;letter-spacing:.08em}
+.scx-status.ok{color:var(--ok)}
+.scx-score{font:700 1.05rem var(--mono)}
+.scx-card .sc-form{grid-column:1/-1}
+.scx-card .sc-report{border-top:1px solid var(--line);padding-top:14px}
+
+/* Actions en attente : mises en avant */
+.scx-todo .scx-card{border-left-color:var(--accent);background:color-mix(in srgb,var(--accent) 9%,var(--panel))}
+.scx-todo .scx-sec-head h3{color:var(--accent)}
+
+/* Filtre des propositions */
+.scx-filter{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+.scx-fbtn{display:inline-flex;align-items:center;gap:8px;font:600 .9rem var(--body);padding:9px 14px;border:1px solid var(--line);background:transparent;color:var(--ink);cursor:pointer;border-radius:6px}
+.scx-fbtn small{font-size:.78rem;color:var(--mute);font-weight:500}
+.scx-fbtn i{font:600 .75rem var(--mono);font-style:normal;color:var(--mute);background:var(--line);padding:2px 7px;border-radius:999px}
+.scx-fbtn:hover{border-color:var(--ink)}
+.scx-fbtn.on{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.scx-fbtn.on small{color:inherit;opacity:.75}
+.scx-fbtn.on i{background:rgba(0,0,0,.18);color:inherit}
+
+/* Résultats */
+.scx-results{display:grid;border:1px solid var(--line)}
+.scx-rrow{display:grid;grid-template-columns:44px 110px minmax(0,1fr) auto minmax(0,auto);align-items:center;gap:14px;padding:10px 16px;border-bottom:1px solid var(--line)}
+.scx-results>.scx-rrow:last-child{border-bottom:0}
+.scx-res{display:grid;place-items:center;height:28px;font:700 .78rem var(--mono);border-radius:4px}
+.scx-res.w{background:var(--ok);color:#0d1117}
+.scx-res.l{background:var(--bad);color:#0d1117}
+.scx-res.d{background:var(--line);color:var(--ink)}
+.scx-res.x{background:transparent;border:1px solid var(--line);color:var(--mute)}
+.scx-rdate{font-size:.88rem;color:var(--mute)}
+.scx-ropp{display:flex;align-items:center;gap:8px;min-width:0}
+.scx-ropp b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.scx-rrow .small-note{text-align:right}
+
+@media (max-width:640px){
+  .scx-card{grid-template-columns:72px minmax(0,1fr);padding:14px 16px}
+  .scx-when b{font-size:1.5rem}
+  .scx-act{grid-column:1/-1;justify-content:flex-start}
+  .scx-top .btn{width:100%;justify-content:center}
+  .scx-rrow{grid-template-columns:40px minmax(0,1fr) auto;gap:4px 12px}
+  .scx-rdate{grid-column:2;grid-row:2;font-size:.8rem}
+  .scx-ropp{grid-column:2;grid-row:1}
+  .scx-rrow .scx-score{grid-column:3;grid-row:1}
+  .scx-rrow .small-note{grid-column:2/-1;grid-row:3;text-align:left}
+  .scx-rrow .scx-res{grid-row:1/span 2}
+}

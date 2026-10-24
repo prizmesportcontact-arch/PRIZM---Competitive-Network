@@ -578,73 +578,150 @@
   }
 
   // ---------- Scrims ----------
+  const sideName = x => x ? `${teamLogo(x, 28)}<b>${esc(x.name)}</b>` : `<span class="small-note">En attente d'un adversaire</span>`;
   const SCRIM_FORMATS = ["24 rounds", "2 maps", "BO1", "BO3"];
+  // Filtre des propositions : "near" = ma division et les voisines, "all" = tout, 1 à 4 = une seule division
   const scrimFilter = { div: undefined };
+  const DAY = 86400000;
+  // « Aujourd'hui », « Demain », « Hier » ou « sam. 26 oct. »
+  const dayLabel = iso => {
+    const d = new Date(iso), a = new Date(); a.setHours(0, 0, 0, 0);
+    const b = new Date(d); b.setHours(0, 0, 0, 0);
+    const n = Math.round((b - a) / DAY);
+    if (n === 0) return "Aujourd'hui"; if (n === 1) return "Demain"; if (n === -1) return "Hier";
+    const s = d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+  const hourLabel = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  const when = iso => `<div class="scx-when"><span>${dayLabel(iso)}</span><b>${hourLabel(iso)}</b></div>`;
+  const tags = s => [s.format, s.maps].filter(Boolean).map(x => `<span class="scx-tag">${esc(x)}</span>`).join("");
+  const opponent = x => x ? `<span class="scx-team">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</span>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
+  const scSection = (title, sub, body, cls = "") => `<section class="scx-sec ${cls}"><div class="scx-sec-head"><h3>${title}</h3>${sub ? `<span class="small-note">${sub}</span>` : ""}</div>${body}</section>`;
+
   async function viewScrims(app) {
     if (!sb) { app.innerHTML = panel("Scrims", `<p class="lead">Bientôt disponible.</p>`); return; }
     const data = await rpc("list_scrims");
     const t = state.team, isCap = !!(t && t.is_captain), canPlay = isCap && t.status === "validee";
-    if (scrimFilter.div === undefined) scrimFilter.div = t && t.status === "validee" ? t.division : null;
+    if (scrimFilter.div === undefined) scrimFilter.div = canPlay ? "near" : "all";
+    if (scrimFilter.div === "near" && !canPlay) scrimFilter.div = "all";
+
+    // On range les scrims de l'équipe : à faire, calés, résultats
+    const now = Date.now(), todo = [], upcoming = [], past = [];
+    if (t) for (const s of data.mine || []) {
+      const started = new Date(s.starts_at).getTime() <= now;
+      if (s.status === "cale" && !started) upcoming.push(s);
+      else if (s.status === "cale") todo.push(s);
+      else if (s.status === "termine" && !s.no_show && !s.confirmed && s.reported_by !== t.id) todo.push(s);
+      else if (s.status === "termine" || s.status === "annule") past.push(s);
+    }
+    upcoming.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    past.sort((a, b) => new Date(b.starts_at) - new Date(a.starts_at));
+    const myOpen = t ? data.open.filter(s => s.host.id === t.id) : [];
+    const othersOpen = data.open.filter(s => !t || s.host.id !== t.id);
+
     const render = () => {
-      const open = data.open.filter(s => !scrimFilter.div || Math.abs(s.division - scrimFilter.div) <= (scrimFilter.div === (t && t.division) ? 1 : 0));
-      app.innerHTML = panel("Scrims", `
-        <p class="lead">Propose un créneau ou accepte celui d'une autre équipe. Tu peux jouer contre ta division et les divisions voisines.</p>
-        ${canPlay ? `<details class="card post-card"${data.open.some(s => s.host.id === t.id) || data.mine.length ? "" : " open"}><summary><b>Proposer un scrim</b></summary>
-          <form class="form scrim-form" id="scrim-form" novalidate>
+      const f = scrimFilter.div;
+      const shown = othersOpen.filter(s => f === "all" ? true : f === "near" ? Math.abs(s.division - t.division) <= 1 : s.division === f);
+      const filterBtns = [
+        ...(canPlay ? [["near", `Mon niveau <small>D${Math.max(1, t.division - 1)} à D${Math.min(4, t.division + 1)}</small>`]] : []),
+        ["all", "Toutes"], [1, "D1"], [2, "D2"], [3, "D3"], [4, "D4"]];
+      const count = v => v === "all" ? othersOpen.length : v === "near" ? othersOpen.filter(s => Math.abs(s.division - t.division) <= 1).length : othersOpen.filter(s => s.division === v).length;
+
+      const head = `<div class="scx-top">
+          <p class="lead">Propose un créneau ou accepte celui d'une autre équipe. Tu peux scrimer contre ta division et les divisions juste au-dessus et en dessous.</p>
+          ${canPlay ? `<button class="btn solid" id="sc-open" type="button" aria-expanded="false" aria-controls="scrim-form">+ Proposer un scrim</button>` : ""}
+        </div>
+        ${canPlay ? `<form class="form scx-propose" id="scrim-form" novalidate hidden>
+            <div class="scx-propose-head"><b>Nouvelle proposition</b><span class="small-note">Elle s'affiche ici et sur le Discord de ta division.</span></div>
             <div class="form-grid">
               <div><label for="sc-date">Date et heure</label><input id="sc-date" type="datetime-local" required min="${toLocalInput(new Date(Date.now() + 15 * 60000).toISOString())}"></div>
-              <div><label for="sc-format">Format</label><select id="sc-format">${SCRIM_FORMATS.map(f => `<option>${f}</option>`).join("")}</select></div>
+              <div><label for="sc-format">Format</label><select id="sc-format">${SCRIM_FORMATS.map(x => `<option>${x}</option>`).join("")}</select></div>
             </div>
-            <label for="sc-maps">Maps (optionnel)</label><input id="sc-maps" maxlength="60" placeholder="ex : Ascent + Lotus, ou « au choix »">
-            <label for="sc-note">Message (optionnel)</label><input id="sc-note" maxlength="200" placeholder="ex : on travaille nos rétakes">
-            <div class="ctas"><button class="btn solid" type="submit">Publier la proposition</button></div>
+            <label for="sc-maps">Maps <span class="hint">(optionnel)</span></label><input id="sc-maps" maxlength="60" placeholder="ex : Ascent + Lotus, ou « au choix »">
+            <label for="sc-note">Message <span class="hint">(optionnel)</span></label><input id="sc-note" maxlength="200" placeholder="ex : on travaille nos rétakes">
+            <div class="ctas"><button class="btn solid" type="submit">Publier</button><button class="link-btn" id="sc-close" type="button">Annuler</button></div>
             <p class="form-err" id="sc-err" role="alert"></p>
-          </form></details>`
-          : state.session ? `<p class="callout">${t ? (isCap ? "Ton équipe doit d'abord être validée par le staff pour scrimer." : `Seul le capitaine de <b>${esc(t.name)}</b> peut proposer ou accepter un scrim.`) : `Il te faut une équipe pour scrimer. <a href="#/mon-equipe">Crée ou rejoins une équipe</a>, ou passe par la <a href="#/recherche">recherche d'équipe</a>.`}</p>`
-          : `<p class="callout">Connecte-toi avec Discord pour proposer ou accepter un scrim. <button class="link-btn" id="sc-login" type="button">Connexion</button></p>`}
-        ${t && data.mine.length ? `<section class="sc-sec"><h3 class="t-h">Nos scrims</h3><div class="sc-list">${data.mine.map(s => mineRow(s, t, isCap)).join("")}</div></section>` : ""}
-        <section class="sc-sec"><h3 class="t-h">Propositions ouvertes</h3>
-          <div class="filters">${chipRow("div", scrimFilter.div, [[null, "Toutes"], [1, "D1"], [2, "D2"], [3, "D3"], [4, "D4"]], "Division")}</div>
-          ${open.length ? `<div class="sc-list">${open.map(s => openRow(s, t, canPlay)).join("")}</div>`
-            : `<p class="small-note">Aucune proposition${scrimFilter.div ? " autour de la D" + scrimFilter.div : ""} pour l'instant. ${canPlay ? "Lance la tienne !" : ""}</p>`}
-        </section>
-        ${state.isStaff && data.staff && data.staff.length ? `<details class="sc-sec staff-sc"><summary><b>Modération</b> · scrims des 14 derniers jours</summary>
-          <div class="sc-list">${data.staff.map(staffRow).join("")}</div></details>` : ""}`, "Scrims");
+          </form>`
+        : state.session ? `<p class="callout">${t ? (isCap ? "Ton équipe doit d'abord être validée par le staff pour scrimer." : `Seul le capitaine de <b>${esc(t.name)}</b> peut proposer ou accepter un scrim.`) : `Il te faut une équipe pour scrimer. <a href="#/mon-equipe">Crée ou rejoins une équipe</a>, ou passe par la <a href="#/recherche">recherche d'équipe</a>.`}</p>`
+        : `<p class="callout">Connecte-toi avec Discord pour proposer ou accepter un scrim. <button class="link-btn" id="sc-login" type="button">Connexion</button></p>`}`;
+
+      const todoHtml = todo.length ? scSection("À faire", `${todo.length} action${todo.length > 1 ? "s" : ""} en attente`,
+        `<div class="scx-list">${todo.map(s => todoCard(s, t, isCap)).join("")}</div>`, "scx-todo") : "";
+
+      const upHtml = t ? scSection("Scrims calés", upcoming.length ? "" : "",
+        upcoming.length ? `<div class="scx-list">${upcoming.map(s => upcomingCard(s, t, isCap)).join("")}</div>`
+          : `<p class="scx-empty">Aucun scrim calé pour l'instant.${canPlay ? " Accepte une proposition plus bas ou publie la tienne." : ""}</p>`) : "";
+
+      const mineOpenHtml = myOpen.length ? scSection("Tes propositions", "En attente d'une équipe",
+        `<div class="scx-list">${myOpen.map(s => `<div class="scx-card">${when(s.starts_at)}
+          <div class="scx-main"><span class="scx-team"><b class="mute">En attente d'un adversaire</b></span><div class="scx-tags">${tags(s)}${s.note ? `<span class="scx-note">« ${esc(s.note)} »</span>` : ""}</div></div>
+          <div class="scx-act">${isCap ? `<button class="link-btn danger-t" data-cancel="${s.id}" type="button">Retirer</button>` : ""}</div></div>`).join("")}</div>`) : "";
+
+      const openHtml = scSection("Trouver un scrim", `${othersOpen.length} proposition${othersOpen.length > 1 ? "s" : ""} ouverte${othersOpen.length > 1 ? "s" : ""}`,
+        `<div class="scx-filter" role="group" aria-label="Filtrer par division">${filterBtns.map(([v, l]) =>
+          `<button type="button" class="scx-fbtn${f === v ? " on" : ""}" data-f="${v}" aria-pressed="${f === v}">${l}<i>${count(v)}</i></button>`).join("")}</div>
+        ${shown.length ? `<div class="scx-list">${shown.map(s => openCard(s, t, isCap, canPlay)).join("")}</div>`
+          : `<p class="scx-empty">Aucune proposition ${f === "near" ? "à ton niveau" : f === "all" ? "" : "en D" + f} pour l'instant.${canPlay ? " Lance la tienne avec « Proposer un scrim »." : ""}</p>`}`);
+
+      const pastHtml = past.length ? scSection("Résultats", "",
+        `<div class="scx-results">${past.slice(0, 10).map(s => resultRow(s, t)).join("")}</div>`) : "";
+
+      const staffHtml = state.isStaff && data.staff && data.staff.length ? `<details class="scx-sec staff-sc"><summary><b>Modération</b> · scrims des 14 derniers jours</summary>
+          <div class="sc-list">${data.staff.map(staffRow).join("")}</div></details>` : "";
+
+      app.innerHTML = panel("Scrims", head + todoHtml + upHtml + mineOpenHtml + openHtml + pastHtml + staffHtml, "Competitive Network");
       bindScrims(app, data, () => viewScrims(app), render);
     };
     render();
   }
-  const sideName = x => x ? `${teamLogo(x, 28)}<b>${esc(x.name)}</b>` : `<span class="small-note">En attente d'un adversaire</span>`;
-  function openRow(s, t, canPlay) {
-    const mine = t && s.host.id === t.id;
-    const can = canPlay && !mine && Math.abs(s.division - t.division) <= 1;
-    return `<div class="sc-row">${dateTile(s.starts_at)}
-      <div class="sc-main"><span class="sc-team">${sideName(s.host)}${divChip(s.division)}</span>
-        <span class="small-note">${esc(s.format)}${s.maps ? " · " + esc(s.maps) : ""}${s.note ? " · « " + esc(s.note) + " »" : ""}</span></div>
-      <div class="sc-act">${mine ? `<span class="small-note">Ta proposition</span><button class="link-btn danger-t" data-cancel="${s.id}" type="button">Retirer</button>`
-        : can ? `<button class="btn sm solid" data-accept="${s.id}" type="button">Accepter</button>` : ""}</div></div>`;
-  }
-  function mineRow(s, t, isCap) {
+
+  // Scrim qui demande une action (résultat à envoyer ou à confirmer)
+  function todoCard(s, t, isCap) {
     const home = s.host.id === t.id, opp = home ? s.guest : s.host;
-    const started = new Date(s.starts_at) <= new Date(), late15 = Date.now() >= new Date(s.starts_at).getTime() + 15 * 60000;
-    const ours = home ? s.host_score : s.guest_score, theirs = home ? s.guest_score : s.host_score;
-    let st = "", act = "";
-    if (s.status === "annule") st = `<span class="pill bad">Annulé${s.cancel_late ? " (tard)" : ""}</span>`;
-    else if (s.status === "cale" && !started) {
-      st = `<span class="pill ok">Calé</span>`;
-      if (isCap) act = `${discordLink(opp && opp.discord_id, "Contacter " + esc(opp ? opp.captain || "le capitaine" : ""))}<button class="link-btn danger-t" data-cancel="${s.id}" type="button">${home ? "Annuler" : "Se désister"}</button>`;
-    } else if (s.status === "cale") {
-      st = `<span class="pill wait">À déclarer</span>`;
-      if (isCap) act = `<button class="btn sm" data-report="${s.id}" type="button">Envoyer le résultat</button>${late15 ? `<button class="link-btn danger-t" data-noshow="${s.id}" type="button">Adversaire absent</button>` : ""}`;
-    } else if (s.status === "termine" && s.no_show) st = `<span class="pill bad">${s.no_show === t.id ? "Absence notée pour nous" : "Adversaire absent"}</span>`;
-    else if (s.status === "termine") {
-      st = `<span class="sc-score${ours > theirs ? " win" : ours < theirs ? " lose" : ""}">${ours} – ${theirs}</span>`;
-      if (!s.confirmed && s.reported_by !== t.id) { st += `<span class="small-note">déclaré par l'adversaire</span>`; if (isCap) act = `<button class="btn sm solid" data-confirm="${s.id}" type="button">Confirmer</button><button class="link-btn danger-t" data-refuse="${s.id}" type="button">Pas d'accord</button>`; }
-      else if (!s.confirmed) st += `<span class="small-note">en attente de l'adversaire</span>`;
+    let msg = "", act = "";
+    if (s.status === "cale") {
+      msg = "Le scrim est passé : envoie le score.";
+      const late15 = Date.now() >= new Date(s.starts_at).getTime() + 15 * 60000;
+      if (isCap) act = `<button class="btn sm solid" data-report="${s.id}" type="button">Envoyer le résultat</button>${late15 ? `<button class="link-btn danger-t" data-noshow="${s.id}" type="button">L'adversaire n'est pas venu</button>` : ""}`;
+    } else {
+      const ours = home ? s.host_score : s.guest_score, theirs = home ? s.guest_score : s.host_score;
+      msg = `L'adversaire a déclaré <b class="scx-score">${ours} – ${theirs}</b> (${ours > theirs ? "victoire" : ours < theirs ? "défaite" : "nul"} pour vous). C'est bon ?`;
+      if (isCap) act = `<button class="btn sm solid" data-confirm="${s.id}" type="button">Confirmer</button><button class="link-btn danger-t" data-refuse="${s.id}" type="button">Pas d'accord</button>`;
     }
-    return `<div class="sc-row" data-s="${s.id}">${dateTile(s.starts_at)}
-      <div class="sc-main"><span class="sc-team">vs ${sideName(opp)}</span><span class="small-note">${esc(s.format)}${s.maps ? " · " + esc(s.maps) : ""}</span></div>
-      <div class="sc-act">${st}${act}</div><div class="sc-form" hidden></div></div>`;
+    if (!isCap) act = `<span class="small-note">Le capitaine s'en occupe</span>`;
+    return `<div class="scx-card sc-row" data-s="${s.id}">${when(s.starts_at)}
+      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<p class="scx-msg">${msg}</p></div>
+      <div class="scx-act">${act}</div><div class="sc-form" hidden></div></div>`;
+  }
+  function upcomingCard(s, t, isCap) {
+    const home = s.host.id === t.id, opp = home ? s.guest : s.host;
+    return `<div class="scx-card">${when(s.starts_at)}
+      <div class="scx-main"><span class="scx-vs">contre</span>${opponent(opp)}<div class="scx-tags">${tags(s)}</div></div>
+      <div class="scx-act">${isCap ? `${opp && opp.discord_id ? `<a class="btn sm" href="https://discord.com/users/${esc(opp.discord_id)}" target="_blank" rel="noopener">Contacter ${esc(opp.captain || "le capitaine")}</a>` : ""}
+        <button class="link-btn danger-t" data-cancel="${s.id}" type="button">${home ? "Annuler" : "Se désister"}</button>` : `<span class="scx-status ok">Calé</span>`}</div></div>`;
+  }
+  function openCard(s, t, isCap, canPlay) {
+    const near = t && Math.abs(s.division - t.division) <= 1;
+    const why = !state.session ? "Connecte-toi pour accepter" : !t ? "Il te faut une équipe" : !isCap ? "Réservé au capitaine"
+      : t.status !== "validee" ? "Équipe pas encore validée" : !near ? "Hors de ton niveau" : "";
+    return `<div class="scx-card${why ? " off" : ""}">${when(s.starts_at)}
+      <div class="scx-main">${opponent({ ...s.host, division: s.division })}<div class="scx-tags">${tags(s)}${s.note ? `<span class="scx-note">« ${esc(s.note)} »</span>` : ""}</div></div>
+      <div class="scx-act">${canPlay && near ? `<button class="btn sm solid" data-accept="${s.id}" type="button">Accepter</button>` : `<span class="small-note">${why}</span>`}</div></div>`;
+  }
+  function resultRow(s, t) {
+    const home = s.host.id === t.id, opp = home ? s.guest : s.host;
+    let badge, score = "", note = "";
+    if (s.status === "annule") { badge = `<span class="scx-res x">ANN</span>`; note = s.cancel_late ? "Annulé tard" : "Annulé"; }
+    else if (s.no_show) { const us = s.no_show === t.id; badge = `<span class="scx-res ${us ? "l" : "w"}">${us ? "ABS" : "V"}</span>`; note = us ? "Absence notée pour nous" : "Adversaire absent"; }
+    else {
+      const ours = home ? s.host_score : s.guest_score, theirs = home ? s.guest_score : s.host_score;
+      const r = ours > theirs ? "w" : ours < theirs ? "l" : "d";
+      badge = `<span class="scx-res ${r}">${r === "w" ? "V" : r === "l" ? "D" : "N"}</span>`;
+      score = `<b class="scx-score">${ours} – ${theirs}</b>`;
+      if (!s.confirmed) note = "En attente de confirmation";
+    }
+    return `<div class="scx-rrow">${badge}<span class="scx-rdate">${dayLabel(s.starts_at)}</span>
+      <span class="scx-ropp">${opp ? `${teamLogo(opp, 24)}<b>${esc(opp.name)}</b>` : "—"}</span>${score}<span class="small-note">${note}</span></div>`;
   }
   function staffRow(s) {
     const res = s.no_show ? `absence de ${esc(s.no_show === s.host.id ? s.host.tag : s.guest && s.guest.tag)}` : s.host_score != null ? `${s.host_score} – ${s.guest_score}${s.confirmed ? "" : " (non confirmé)"}` : s.status === "cale" ? "calé" : s.status;
@@ -654,8 +731,11 @@
   function bindScrims(app, data, reload, rerender) {
     const err = $("#sc-err");
     if ($("#sc-login")) $("#sc-login").onclick = login;
-    app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { scrimFilter.div = b.dataset.v ? +b.dataset.v : null; rerender(); });
-    if ($("#scrim-form")) $("#scrim-form").onsubmit = async e => {
+    const form = $("#scrim-form"), openBtn = $("#sc-open");
+    if (openBtn) openBtn.onclick = () => { form.hidden = !form.hidden; openBtn.setAttribute("aria-expanded", String(!form.hidden)); if (!form.hidden) $("#sc-date").focus(); };
+    if ($("#sc-close")) $("#sc-close").onclick = () => { form.hidden = true; openBtn.setAttribute("aria-expanded", "false"); };
+    app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { const v = b.dataset.f; scrimFilter.div = /^\d$/.test(v) ? +v : v; rerender(); });
+    if (form) form.onsubmit = async e => {
       e.preventDefault(); err.textContent = "";
       const d = $("#sc-date").value; if (!d) return err.textContent = "Choisis la date et l'heure.";
       try {
@@ -677,10 +757,11 @@
       const f = $(`.sc-row[data-s="${b.dataset.report}"] .sc-form`, app);
       if (!f.hidden) { f.hidden = true; return; }
       f.hidden = false;
-      f.innerHTML = `<form class="sc-report"><div class="score-line"><label for="r1">Nous</label><input id="r1" type="number" min="0" max="99" inputmode="numeric">
-          <span>–</span><input id="r2" type="number" min="0" max="99" inputmode="numeric"><label for="r2">Eux</label></div>
-        <span class="hint">Rounds gagnés au total sur tout le scrim (ex : 21 – 18 sur 2 maps).</span>
-        <div class="staff-row"><button class="btn sm solid" type="submit">Envoyer</button></div><p class="form-err" role="alert"></p></form>`;
+      f.innerHTML = `<form class="sc-report"><span class="hint">Rounds gagnés au total sur tout le scrim (ex : 21 – 18 sur 2 maps).</span>
+        <div class="score-line"><label for="r1">Nous</label><input id="r1" type="number" min="0" max="99" inputmode="numeric">
+          <span>–</span><input id="r2" type="number" min="0" max="99" inputmode="numeric"><label for="r2">Eux</label>
+          <button class="btn sm solid" type="submit">Envoyer</button></div><p class="form-err" role="alert"></p></form>`;
+      $("#r1", f).focus();
       $("form", f).onsubmit = async e => {
         e.preventDefault(); const a = $("#r1", f).value, c = $("#r2", f).value, er = $(".form-err", f);
         if (a === "" || c === "") return er.textContent = "Entre les deux scores.";
@@ -693,7 +774,6 @@
     app.querySelectorAll("[data-sdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
       try { await rpc("admin_delete_scrim", { p_id: b.dataset.sdel }); toast("Scrim supprimé."); reload(); } catch (x) { toast(errMsg(x), "err"); } }));
   }
-
   // Petit résumé sur « Mon équipe »
   async function teamScrimsBox(box) {
     if (!box || !state.team) return;
