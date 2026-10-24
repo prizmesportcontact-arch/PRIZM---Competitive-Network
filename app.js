@@ -105,8 +105,10 @@
       <div class="me">
         <button class="me-btn" id="me-btn" type="button" aria-expanded="false" aria-haspopup="true">${avatar(p.avatar_url, p.username, 30)}<span class="me-name">${esc(p.username || "Mon compte")}</span></button>
         <div class="me-menu" id="me-menu" hidden>
-          <a href="#/profil">Mon profil</a>
+          <a href="#/espace">Espace équipe</a>
           <a href="#/mon-equipe">Mon équipe</a>
+          <a href="compo/">Comp Builder</a>
+          <a href="#/profil">Mon profil</a>
           ${state.isAdmin ? '<a href="#/admin">Admin</a>' : state.isStaff ? '<a href="#/scrims">Modération des scrims</a>' : ""}
           <button type="button" id="logout-btn">Déconnexion</button>
         </div>
@@ -126,10 +128,12 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
+    // Le Comp Builder vit dans le dossier compo/ (même connexion Discord)
+    if (path === "/compo") { location.href = "compo/"; return; }
     const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
     document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h));
     stopLive();
@@ -139,21 +143,106 @@
     document.body.classList.toggle("area-net", inNet);
     document.body.classList.toggle("area-team", !inNet);
     if (path === "/reseau") {
-      home.hidden = true; app.hidden = true; net.hidden = false; window.scrollTo(0, 0);
+      home.hidden = true; app.hidden = true; net.hidden = false; window.scrollTo(0, 0); freshenStatic();
     } else if (path && views[path]) {
       home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
       views[path](app).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
     } else {
-      app.hidden = true; home.hidden = inNet; net.hidden = !inNet;
+      app.hidden = true; home.hidden = inNet; net.hidden = !inNet; freshenStatic();
       if (anchor) anchor.scrollIntoView(); else window.scrollTo(0, 0);
     }
   }
   window.addEventListener("hashchange", route);
 
-  // Temps réel : une seule connexion ouverte à la fois, fermée quand on change de page
-  let live = null;
-  function stopLive() { if (live && sb) { sb.removeChannel(live); } live = null; }
+  // ---------- Actualisation automatique ----------
+  // Une seule connexion temps réel pour tout le site : on écoute la petite table « live_pulse ».
+  // Chaque changement en base (équipe, scrim, annonce…) y incrémente un sujet : « teams », « scrims »,
+  // « lfg », « team:<id> », « cb:<id> ». La page affichée dit quels sujets l'intéressent et se recharge
+  // toute seule, sans jamais effacer ce que tu es en train d'écrire.
+  const live = { topics: [], refresh: null, path: null, timer: null, dirty: false, editing: null, channel: null, hiddenAt: 0 };
+  const staleStatic = new Set();
+  const currentPath = () => { const h = location.hash || ""; return h.startsWith("#/") ? h.slice(1).split("?")[0] : null; };
+  function stopLive() { clearTimeout(live.timer); live.topics = []; live.refresh = null; live.dirty = false; live.editing = null; hideLivePill(); }
+  // Appelé par chaque vue à la fin de son affichage
+  function setLive(path, topics, refresh) {
+    if (path !== currentPath()) return; // on a déjà changé de page entre-temps
+    live.topics = topics.filter(Boolean); live.refresh = refresh; live.path = path;
+  }
+  function onPulse(topic) {
+    // Pages fixes (accueil PRIZM, accueil du réseau)
+    if (topic === "scrims" || topic === "teams" || topic === "lfg") { staleStatic.add("team"); }
+    if (topic === "scrims") staleStatic.add("scrims");
+    freshenStatic(true);
+    // Si le sujet touche mon équipe, on remet à jour le menu (capitaine, équipe quittée…)
+    if (state.team && topic === "team:" + state.team.id) loadMe().then(renderAuth);
+    if (live.refresh && live.topics.includes(topic)) scheduleRefresh();
+  }
+  function freshenStatic(debounced) {
+    clearTimeout(freshenStatic.t);
+    const run = () => {
+      if (document.hidden) return;
+      if (staleStatic.has("scrims") && !$("#view-network").hidden) { staleStatic.delete("scrims"); homeScrims(); }
+      if (staleStatic.has("team") && !$("#view-home").hidden) { staleStatic.delete("team"); teamHome(); }
+    };
+    if (debounced) freshenStatic.t = setTimeout(run, 800); else run();
+  }
+  function scheduleRefresh() { clearTimeout(live.timer); live.timer = setTimeout(runRefresh, 700); }
+  // Quelqu'un est en train d'écrire ou un formulaire est ouvert : on ne touche à rien
+  function busy() {
+    if (live.editing && live.editing.isConnected) return true;
+    if (document.querySelector("#view-app .armed")) return true;
+    const f = $("#scrim-form"); if (f && !f.hidden) return true;
+    return false;
+  }
+  async function runRefresh(force) {
+    if (!live.refresh || live.path !== currentPath()) return;
+    if (document.hidden) { live.dirty = true; return; }
+    if (!force && busy()) { live.dirty = true; showLivePill(); return; }
+    live.dirty = false; live.editing = null; hideLivePill();
+    const app = $("#view-app"), y = window.scrollY;
+    // Garde ouverts les blocs dépliés (rosters, modération…)
+    const open = [...app.querySelectorAll("details[open]")].map(d => d.dataset.id || d.className);
+    try { await live.refresh(); } catch (e) { return; }
+    app.querySelectorAll("details").forEach(d => {
+      if (open.includes(d.dataset.id || d.className) && !d.open) d.open = true;
+    });
+    window.scrollTo(0, y);
+  }
+  function showLivePill() {
+    let pill = $("#live-pill");
+    if (!pill) {
+      pill = document.createElement("button");
+      pill.id = "live-pill"; pill.type = "button"; pill.className = "live-pill";
+      pill.innerHTML = `<span aria-hidden="true"></span>Du nouveau · actualiser`;
+      pill.onclick = () => runRefresh(true);
+      document.body.appendChild(pill);
+    }
+    pill.hidden = false;
+  }
+  function hideLivePill() { const p = $("#live-pill"); if (p) p.hidden = true; }
+  // On retient le champ en cours de saisie, pour ne pas l'effacer
+  document.addEventListener("input", e => { if (e.target.closest && e.target.closest("#view-app")) live.editing = e.target; });
+  document.addEventListener("click", e => { const f = e.target.closest && e.target.closest("#view-app form"); if (f && e.target.closest("button:not([type=submit])")) live.editing = f; });
+  function startLive() {
+    if (!sb || live.channel) return;
+    live.channel = sb.channel("pulse")
+      .on("postgres_changes", { event: "*", schema: "public", table: "live_pulse" }, p => { const t = (p.new && p.new.topic) || (p.old && p.old.topic); if (t) onPulse(t); })
+      .subscribe(status => {
+        // Après une coupure (wifi, veille), on rattrape ce qu'on a pu manquer
+        if (status === "SUBSCRIBED" && live.wasDown) { live.wasDown = false; staleStatic.add("team"); staleStatic.add("scrims"); freshenStatic(); if (live.refresh) scheduleRefresh(); }
+        if (status === "CHANNEL_ERROR" || status === "TIMED_OUT" || status === "CLOSED") live.wasDown = true;
+      });
+  }
+  function stopLiveChannel() { if (live.channel && sb) { sb.removeChannel(live.channel); live.channel = null; } }
+  // Onglet caché plus de 2 minutes : on coupe la connexion (économise le quota gratuit), puis on rattrape au retour
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) { live.hiddenAt = Date.now(); setTimeout(() => { if (document.hidden && Date.now() - live.hiddenAt >= 120000) stopLiveChannel(); }, 120500); return; }
+    const away = live.hiddenAt ? Date.now() - live.hiddenAt : 0; live.hiddenAt = 0;
+    if (!live.channel) { startLive(); staleStatic.add("team"); staleStatic.add("scrims"); live.dirty = live.dirty || !!live.refresh; }
+    freshenStatic();
+    if (live.dirty || away > 30000) { if (live.refresh) scheduleRefresh(); }
+  });
 
   const panel = (title, inner, eyebrow = "") =>
     `<div class="wrap app-wrap">${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ""}<h2 class="app-title">${title}</h2>${inner}</div>`;
@@ -468,16 +557,8 @@
     bindRosterActions(app, () => viewMyTeam(app));
     teamScrimsBox($("#team-scrims"));
 
-    // Arrivées, départs, rôles, validation, logo : la page se met à jour toute seule
-    let pending = null;
-    const refresh = () => { clearTimeout(pending); pending = setTimeout(() => { if (location.hash.startsWith("#/mon-equipe")) viewMyTeam(app); }, 600); };
-    stopLive();
-    live = sb.channel("team-" + teamId)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "team_members", filter: "team_id=eq." + teamId }, refresh)
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "team_members", filter: "team_id=eq." + teamId }, refresh)
-      .on("postgres_changes", { event: "DELETE", schema: "public", table: "team_members" }, p => { if (p.old && p.old.team_id === teamId) refresh(); })
-      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "teams", filter: "id=eq." + teamId }, refresh)
-      .subscribe();
+    // Arrivées, départs, rôles, validation, logo, scrims : la page se met à jour toute seule
+    setLive("/mon-equipe", ["team:" + teamId, "scrims"], () => viewMyTeam(app));
   }
 
   function statusPill(t) {
@@ -535,6 +616,7 @@
           ${list.length ? `<div class="team-list">${list.map(teamRow).join("")}</div>` : `<p class="small-note">Aucune équipe pour l'instant.</p>`}</section>`;
       }).join("")}`, "Classement par division");
     bindTeamRows(app);
+    setLive("/equipes", ["teams"], () => viewTeams(app));
   }
   const teamRow = t => `<details class="team-row" data-id="${t.id}"><summary>${teamLogo(t, 36)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span><span class="small-note">${t.members} joueur${t.members > 1 ? "s" : ""}</span></summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>`;
   function bindTeamRows(root, admin = false) {
@@ -680,6 +762,7 @@
       bindScrims(app, data, () => viewScrims(app), render);
     };
     render();
+    setLive("/scrims", ["scrims", t && "team:" + t.id], () => viewScrims(app));
   }
 
   // Scrim qui demande une action (résultat à envoyer ou à confirmer)
@@ -838,6 +921,7 @@
       }
     };
     render();
+    setLive("/recherche", ["lfg"], () => viewRecherche(app));
   }
   function lfgForm(kind, post, p) {
     const v = post || { roles: [], dispo: "", message: "" };
@@ -896,6 +980,7 @@
       app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { rankFilter.div = +b.dataset.v; render(); });
     };
     render();
+    setLive("/classement", ["scrims", "teams"], () => viewClassement(app));
   }
 
   // ================= Page de l'équipe PRIZM =================
@@ -947,6 +1032,115 @@
         $("#recrute").hidden = false;
       }
     } catch (e) { box.innerHTML = `<p class="small-note">Le roster n'a pas pu être chargé.</p>`; }
+  }
+
+  // ================= Espace équipe : le tableau de bord =================
+  const CB_STATUS = [["validated", "Prêtes", "ok"], ["testing", "En test", "warn"], ["needs_work", "À revoir", "bad"], ["todo", "Brouillons", "mute"]];
+  const DAY_LETTERS = ["D", "L", "M", "M", "J", "V", "S"];
+  const pad2 = n => String(n).padStart(2, "0");
+  const isoDay = d => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+
+  async function viewDashboard(app) {
+    if (!state.session) return needLogin(app, "Ton espace équipe rassemble tes scrims, ton classement et le Comp Builder de ton équipe.");
+    await loadMe();
+    const t = state.team;
+    if (!t) {
+      app.innerHTML = panel("Espace équipe", `
+        <p class="lead">Ici tu retrouveras tout ce qui concerne ton équipe : scrims à venir, classement, compos et dispos. Il te faut d'abord une équipe.</p>
+        <div class="ctas" style="margin-top:24px"><a class="btn solid" href="#/mon-equipe">Créer ou rejoindre une équipe</a><a class="btn" href="#/recherche">Chercher une équipe</a></div>`, "Espace équipe");
+      setLive("/espace", [], () => viewDashboard(app));
+      return;
+    }
+    const [d, roster] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id })]);
+    const cb = (d && d.cb) || { comps: {}, maps: 0, next: [], dispo: [], my_dispo: 0, editor: false };
+    const sc = (d && d.scrims) || { results: [], next: [] };
+    const st = d && d.standing;
+    const tit = roster.filter(r => r.role === "titulaire").length;
+    const totalComps = Object.values(cb.comps || {}).reduce((a, b) => a + b, 0);
+
+    // À faire : ce qui demande une action, du plus urgent au moins urgent
+    const todo = [];
+    if (d.todo) todo.push(`<a class="dash-todo" href="#/scrims"><b>${d.todo}</b><span>scrim${d.todo > 1 ? "s" : ""} attend${d.todo > 1 ? "ent" : ""} un résultat${t.is_captain ? "" : " (le capitaine s'en occupe)"}</span></a>`);
+    if (t.status === "en_attente") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>${tit}/5</b><span>titulaires : l'équipe attend la validation du staff</span></a>`);
+    if (t.status === "refusee") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>!</b><span>équipe refusée : contacte le staff dans #support</span></a>`);
+    if (!cb.my_dispo) todo.push(`<a class="dash-todo" href="compo/#/disponibilites"><b>0</b><span>créneau coché cette semaine : remplis tes dispos</span></a>`);
+    if (t.status === "validee" && !sc.next.length && !d.open_posts && t.is_captain) todo.push(`<a class="dash-todo" href="#/scrims"><b>+</b><span>aucun scrim calé : propose un créneau</span></a>`);
+
+    // Dispos des 7 prochains jours (joueurs dispo au moins sur une période)
+    const byDay = new Map((cb.dispo || []).map(x => [x.date, x.players]));
+    const days = [...Array(7)].map((_, i) => { const x = new Date(); x.setDate(x.getDate() + i); return x; });
+    const size = Math.max(roster.length, 1);
+    const dispoBars = days.map((x, i) => {
+      const n = byDay.get(isoDay(x)) || 0, pct = Math.round(100 * Math.min(n, size) / size);
+      return `<div class="dash-day${n >= 5 ? " full" : ""}" title="${x.toLocaleDateString("fr-FR", { weekday: "long", day: "numeric", month: "long" })} : ${n} joueur${n > 1 ? "s" : ""} dispo"><i style="--h:${pct}%"></i><b>${n}</b><span>${i === 0 ? "Auj." : DAY_LETTERS[x.getDay()]}</span></div>`;
+    }).join("");
+
+    const nextLine = r => `<div class="t-line"><span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+        <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
+        <span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`;
+    const resLine = r => `<div class="t-line">${r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`}
+        <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
+        <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+        <span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`;
+    const cbLine = m => `<div class="t-line"><span class="t-res next">${new Date(m.match_date + "T12:00").toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
+        <span class="t-opp"><b>${m.type === "scrim" ? "Scrim" : "Match"}${m.opponent_name ? " · " + esc(m.opponent_name) : ""}</b></span>
+        <span class="small-note">${m.match_time ? m.match_time.slice(0, 5).replace(":", "h") + " · " : ""}${esc((m.format || "").toUpperCase())}</span><span></span></div>`;
+
+    app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
+      <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct.</span></div>
+
+      ${todo.length ? `<div class="dash-sec"><h3 class="t-h">À faire</h3><div class="dash-todos">${todo.join("")}</div></div>` : ""}
+
+      <div class="dash-grid">
+        <div class="dash-card">
+          <div class="dash-head"><h3>Scrims</h3><a class="link-btn" href="#/scrims">Tout voir</a></div>
+          ${sc.next.length ? `<div class="t-lines">${sc.next.map(nextLine).join("")}</div>` : `<p class="small-note">Aucun scrim calé.${d.open_posts ? ` ${d.open_posts} proposition${d.open_posts > 1 ? "s" : ""} en attente d'adversaire.` : ""}</p>`}
+          ${sc.results.length ? `<p class="eyebrow dash-sub">Derniers résultats</p><div class="t-lines">${sc.results.slice(0, 3).map(resLine).join("")}</div>` : ""}
+          ${t.status === "validee" ? `<div class="ctas"><a class="btn sm" href="#/scrims">Trouver un scrim</a></div>` : ""}
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-head"><h3>Classement</h3><a class="link-btn" href="#/classement">Voir</a></div>
+          ${st ? `<div class="t-stats dash-stats">
+              <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
+              <div><b>${st.points}</b><span>points</span></div>
+              <div><b>${st.wins}<i>-</i>${st.draws}<i>-</i>${st.losses}</b><span>V, N, D</span></div>
+              <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>rounds · fiabilité ${st.reliability} %</span></div>
+            </div>` : `<p class="small-note">Ton équipe apparaîtra au classement après son premier scrim confirmé.</p>`}
+        </div>
+
+        <div class="dash-card dash-cb">
+          <div class="dash-head"><h3>Comp Builder</h3><a class="link-btn" href="compo/">Ouvrir</a></div>
+          <div class="dash-comps">${CB_STATUS.map(([k, label, tone]) => `<a href="compo/" class="dash-comp ${tone}"><b>${(cb.comps || {})[k] || 0}</b><span>${label}</span></a>`).join("")}</div>
+          <p class="small-note">${totalComps ? `${totalComps} compo${totalComps > 1 ? "s" : ""} sur ${cb.maps} map${cb.maps > 1 ? "s" : ""}.` : "Aucune compo pour l'instant."} ${cb.editor ? "" : "Lecture seule : le capitaine peut te nommer éditeur."}</p>
+          ${cb.next.length ? `<p class="eyebrow dash-sub">Matchs prévus</p><div class="t-lines">${cb.next.map(cbLine).join("")}</div>` : ""}
+          <div class="ctas"><a class="btn sm solid" href="compo/">Ouvrir le Comp Builder</a><a class="btn sm" href="compo/#/matchcenter">Match Center</a></div>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-head"><h3>Dispos de la semaine</h3><a class="link-btn" href="compo/#/disponibilites">Cocher</a></div>
+          <div class="dash-days" role="img" aria-label="Nombre de joueurs disponibles sur les 7 prochains jours">${dispoBars}</div>
+          <p class="small-note">${cb.my_dispo ? `Tu as coché ${cb.my_dispo} créneau${cb.my_dispo > 1 ? "x" : ""} cette semaine.` : "Tu n'as encore rien coché cette semaine."} En vert : 5 joueurs ou plus.</p>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-head"><h3>Roster</h3><a class="link-btn" href="#/mon-equipe">Gérer</a></div>
+          <div class="dash-roster">${roster.map(r => `<span class="dash-pl${r.role === "remplacant" ? " sub" : ""}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></span>`).join("")}</div>
+          <p class="small-note">${tit}/5 titulaires · ${roster.length}/7 joueurs${d.lfg ? " · annonce de recrutement en ligne" : ""}</p>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-head"><h3>Outils</h3></div>
+          <div class="dash-tools">
+            <a href="compo/">Comp Builder<span>Compos par map, votes Discord</span></a>
+            <a href="compo/#/matchcenter">Match Center<span>Matchs, scores, VOD</span></a>
+            <a href="compo/#/stats">Statistiques<span>Meilleure compo par map</span></a>
+            <a href="#/recherche">Recrutement<span>${d.lfg ? "Ton annonce est en ligne" : "Trouver un joueur"}</span></a>
+            <a href="#reglement">Règlement<span>Scrims et fiabilité</span></a>
+          </div>
+        </div>
+      </div>`, "Espace équipe");
+    setLive("/espace", ["scrims", "team:" + t.id, "cb:" + t.id, "lfg"], () => viewDashboard(app));
   }
 
   // ---------- Staff ----------
@@ -1031,6 +1225,7 @@
     app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => {
       b.disabled = true; await discordSync({ team_id: b.closest(".admin-row").dataset.id }, true); b.disabled = false; });
     bindTeamRows(app, true);
+    setLive("/admin", ["teams"], () => viewAdmin(app));
   }
 
   // ---------- Démarrage ----------
@@ -1056,7 +1251,7 @@
     state.session = data.session; await loadMe(); renderAuth();
     let after = null; try { after = sessionStorage.getItem("prizm_after_login"); sessionStorage.removeItem("prizm_after_login"); } catch (e) {}
     if (after && state.session && location.hash !== after) { location.hash = after; } else route();
-    homeScrims(); teamHome();
+    homeScrims(); teamHome(); startLive();
     sb.auth.onAuthStateChange(async (ev, session) => {
       if (ev === "SIGNED_IN" && (!state.session || state.session.user.id !== session.user.id)) {
         state.session = session; await loadMe(); renderAuth(); route();

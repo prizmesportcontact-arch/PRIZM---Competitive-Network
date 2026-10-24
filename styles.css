@@ -822,3 +822,46 @@ section.scx-sec,.scx-sec{margin-top:44px;padding-block:0;border-top:0}
 .rank-big .rank-ico{width:64px;height:64px}
 .div .ranks{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
 .div .ranks .rank-ico{margin-right:-1px}
+
+/* ---------- Espace équipe (tableau de bord) ---------- */
+.dash-sec{margin-top:28px}
+.dash-todos{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}
+.dash-todo{display:flex;align-items:center;gap:14px;padding:14px 18px;border:1px solid var(--line);border-left:4px solid var(--warn);text-decoration:none;color:inherit;background:var(--panel)}
+.dash-todo:hover{border-color:var(--ink);border-left-color:var(--warn)}
+.dash-todo b{font:900 2rem/1 var(--display);min-width:1.4em;text-align:center}
+.dash-todo span{font-size:.92rem}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px;margin-top:32px}
+.dash-card{border:1px solid var(--line);padding:22px;display:grid;gap:14px;align-content:start;min-width:0}
+.dash-head{display:flex;align-items:baseline;justify-content:space-between;gap:12px}
+.dash-head h3{font-size:1.5rem}
+.dash-sub{margin-top:4px}
+.dash-card .ctas{margin-top:2px}
+.dash-stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dash-stats>div{padding:16px 14px}
+.dash-stats b{font-size:clamp(1.9rem,4vw,2.4rem)}
+.dash-comps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.dash-comp{background:var(--paper);padding:14px 10px;display:grid;gap:4px;text-decoration:none;color:inherit;border-top:3px solid var(--mute)}
+.dash-comp.ok{border-top-color:var(--ok)}.dash-comp.warn{border-top-color:var(--warn)}.dash-comp.bad{border-top-color:var(--bad)}
+.dash-comp b{font:900 2rem/1 var(--display)}
+.dash-comp span{font-size:.8rem;color:var(--mute)}
+.dash-comp:hover{background:var(--panel)}
+.dash-days{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px;align-items:end;height:120px}
+.dash-day{display:grid;grid-template-rows:1fr auto auto;justify-items:center;height:100%;gap:4px}
+.dash-day i{align-self:end;width:100%;max-width:34px;height:max(4px,var(--h));background:var(--accent);opacity:.75;transition:height .3s}
+.dash-day.full i{background:var(--ok);opacity:1}
+.dash-day b{font:800 .95rem var(--mono)}
+.dash-day span{font-size:.75rem;color:var(--mute)}
+.dash-roster{display:flex;flex-wrap:wrap;gap:12px}
+.dash-pl{display:grid;justify-items:center;gap:4px;width:60px}
+.dash-pl small{font-size:.74rem;max-width:60px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dash-pl.sub{opacity:.6}
+.dash-tools{display:grid;border:1px solid var(--line)}
+.dash-tools a{display:flex;justify-content:space-between;gap:12px;padding:12px 14px;border-bottom:1px solid var(--line);text-decoration:none;font-weight:600}
+.dash-tools a:last-child{border-bottom:0}
+.dash-tools a span{font-weight:400;font-size:.84rem;color:var(--mute);text-align:right}
+.dash-tools a:hover{background:var(--panel)}
+@media (max-width:420px){.dash-comps{grid-template-columns:repeat(2,minmax(0,1fr))}.dash-card{padding:18px 16px}}
+
+/* Pastille « Du nouveau » quand l'actualisation attend la fin d'une saisie */
+.live-pill{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:45;display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border:0;background:var(--ink);color:var(--paper);font:600 .88rem var(--body);cursor:pointer;box-shadow:0 10px 26px rgb(0 0 0/.25)}
+.live-pill span{width:8px;height:8px;border-radius:50%;background:var(--ok)}
