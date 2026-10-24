@@ -5,6 +5,7 @@ import { useStrats } from '../../context/StratsContext'
 import { useAuth } from '../../context/AuthContext'
 import { formatRelativeDate } from '../../utils/compositions'
 import StratBoard from '../StratBoard/StratBoard'
+import { mapScale } from '../../data/abilityShapes'
 import './StratList.css'
 
 /**
@@ -49,7 +50,7 @@ export default function StratList({ mapUuid, compositionId = null, comps = [], s
           return (
             <Link key={s.id} to={`/strat/${s.id}`} className="strat-card">
               <div className="strat-card__preview">
-                <StratBoard mini minimap={m?.minimap} flipped={s.flipped} side={s.side} items={first?.items || []} agentByUuid={agentByUuid} />
+                <StratBoard mini scale={mapScale(m)} minimap={m?.minimap} flipped={s.flipped} side={s.side} items={first?.items || []} agentByUuid={agentByUuid} />
               </div>
               <div className="strat-card__body">
                 <span className={`strat-card__side ${s.side}`}>{s.side === 'defense' ? 'Défense' : 'Attaque'}</span>

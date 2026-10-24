@@ -1,6 +1,7 @@
 // Image PNG d'une étape de strat (pour l'envoyer sur Discord), dessinée sur un canvas.
 import { loadImage } from './exportComposition'
 import { SIZES } from '../components/StratBoard/StratBoard'
+import { abilityGeometry, colorFor, mapScale, shapeFor } from '../data/abilityShapes'
 
 const W = 1080
 const HEAD = 120
@@ -103,6 +104,7 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
       }
     } else if (it.t === 'ability' || it.t === 'agent') {
       const a = agentByUuid.get(it.a)
+      if (it.t === 'ability') drawZone(ctx, k, shapeFor(a?.name, it.s), it, mapScale(map), colorFor(a?.name, shapeFor(a?.name, it.s)))
       const r = (it.t === 'agent' ? SIZES.agent : SIZES.ability) * k
       const icon = it.t === 'agent' ? a?.icon : a?.abilities?.find((x) => x.slot === it.s)?.icon
       upright(it.x, it.y, () => {
@@ -168,4 +170,38 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
   ctx.restore()
 
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
+}
+
+// Zone réelle d'une capacité (mêmes formes que sur le tableau)
+function drawZone(ctx, k, spec, it, scale, col) {
+  if (!spec) return
+  const { shapes } = abilityGeometry(spec, it, scale)
+  ctx.save()
+  for (const sh of shapes) {
+    ctx.beginPath()
+    if (sh.type === 'circle') ctx.arc(sh.cx * k, sh.cy * k, sh.r * k, 0, Math.PI * 2)
+    else {
+      sh.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)))
+      if (sh.type !== 'path') ctx.closePath()
+    }
+    ctx.strokeStyle = col
+    ctx.fillStyle = col
+    if (sh.type === 'path') {
+      ctx.setLineDash([3 * k, 9 * k])
+      ctx.lineWidth = 4 * k
+      ctx.globalAlpha = 0.9
+      ctx.stroke()
+      ctx.setLineDash([])
+      continue
+    }
+    const ring = sh.type === 'circle' && !sh.fill
+    ctx.globalAlpha = ring ? 0.05 : sh.solid ? 0.85 : spec.cat === 'smoke' ? 0.5 : 0.24
+    ctx.fill()
+    ctx.globalAlpha = 0.9
+    ctx.lineWidth = 2.5 * k
+    if (ring) ctx.setLineDash([10 * k, 8 * k])
+    ctx.stroke()
+    ctx.setLineDash([])
+  }
+  ctx.restore()
 }

@@ -197,7 +197,9 @@ input.sx-name:focus { border-bottom-color: var(--amber); outline: none; }
   font: 600 0.88rem var(--font-body);
 }
 .sx-ability img { width: 34px; height: 34px; object-fit: contain; padding: 4px; background: #0a0d12; }
-.sx-ability span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sx-ability span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: grid; }
+.sx-ability small { font-size: 0.74rem; font-weight: 500; color: var(--ink-3); overflow: hidden; text-overflow: ellipsis; }
+.sx-dims { color: var(--amber) !important; }
 .sx-ability kbd { font: 700 0.75rem var(--font-mono); color: var(--ink-3); background: #0a0d12; border: 1px solid var(--line); padding: 2px 7px; }
 .sx-ability:hover { border-color: var(--line); }
 .sx-ability.on { border-color: var(--amber); background: rgba(255, 160, 67, 0.12); }

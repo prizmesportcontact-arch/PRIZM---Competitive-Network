@@ -10,6 +10,7 @@ import { getCompsForMap } from '../../utils/compositions'
 import { renderStratPng } from '../../utils/exportStrat'
 import { slugify } from '../../utils/exportComposition'
 import StratBoard from '../../components/StratBoard/StratBoard'
+import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import Loader from '../../components/Loader/Loader'
 import './Strat.css'
@@ -309,6 +310,7 @@ export default function Strat() {
   const picked = agentByUuid.get(pickAgent)
   const placingAgent = tool === 'place' && place?.t === 'agent' ? agentByUuid.get(place.a) : null
   const placingAbility = tool === 'place' && place?.t === 'ability' ? agentByUuid.get(place.a)?.abilities?.find((x) => x.slot === place.s) : null
+  const placingSpec = placingAbility ? shapeFor(agentByUuid.get(place.a)?.name, place.s) : null
   const saveLabel = { saved: 'Enregistré', pending: 'Modifié', saving: 'Enregistrement…', error: 'Non enregistré' }[save]
   const stepIndex = strat.steps.findIndex((s) => s.id === step.id)
   const legend = agentsInStrat
@@ -317,7 +319,9 @@ export default function Strat() {
 
   // Ce que fait l'outil choisi, en une phrase
   const hint = placingAgent ? { img: placingAgent.icon, text: `Clique sur la carte pour placer ${placingAgent.name}.` }
-    : placingAbility ? { img: placingAbility.icon, text: `${placingAbility.name} : clique pour la poser, autant de fois que tu veux. Échap pour arrêter.` }
+    : placingAbility ? { img: placingAbility.icon, text: placingSpec && placingSpec.k !== 'circle' && placingSpec.k !== 'ring'
+        ? `${placingAbility.name} : clique où elle part, puis tire dans la direction voulue${placingSpec.max ? ' (la distance règle la longueur)' : ''}.`
+        : `${placingAbility.name} : clique pour la poser, à sa vraie taille. Échap pour arrêter.` }
     : tool === 'place' ? { text: 'Clique sur la carte pour poser le spike.' }
     : tool === 'select' ? { text: 'Clique un élément pour le choisir, fais-le glisser pour le déplacer.' }
     : tool === 'arrow' ? { text: 'Clique et tire : la flèche part de là où tu cliques.' }
@@ -442,6 +446,7 @@ export default function Strat() {
               onChange={onBoardChange}
               onPlaced={onPlaced}
               showNames={showNames}
+              scale={mapScale(map)}
             />
             {step.items.length === 0 && (
               <div className="sx-empty">
@@ -528,7 +533,7 @@ export default function Strat() {
                       className={`sx-ability${tool === 'place' && place?.t === 'ability' && place.a === picked.uuid && place.s === ab.slot ? ' on' : ''}`}
                       onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}>
                       <img src={ab.icon} alt="" />
-                      <span>{ab.name}</span>
+                      <span>{ab.name}<small>{shapeLabel(shapeFor(picked.name, ab.slot)) || 'Icône seule'}</small></span>
                       <kbd>{SLOT_KEY[ab.slot]}</kbd>
                     </button>
                   ))}
@@ -545,6 +550,9 @@ export default function Strat() {
                     <span>
                       <b>{selAbility ? selAbility.name : selAgent ? selAgent.name : ITEM_LABEL[selected.t]}</b>
                       <small>{selAbility ? `Capacité de ${selAgent?.name}` : selAgent ? 'Agent' : 'c' in selected ? 'Change la couleur à gauche' : 'Fais-le glisser pour le déplacer'}</small>
+                      {selAbility && shapeLabel(shapeFor(selAgent?.name, selected.s), selected) && (
+                        <small className="sx-dims">{shapeLabel(shapeFor(selAgent?.name, selected.s), selected)}{shapeFor(selAgent?.name, selected.s)?.k !== 'circle' && shapeFor(selAgent?.name, selected.s)?.k !== 'ring' ? ' · tire la poignée ambre pour l’orienter' : ''}</small>
+                      )}
                     </span>
                   </div>
                   {selected.t === 'text' && (

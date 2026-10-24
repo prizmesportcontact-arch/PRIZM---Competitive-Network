@@ -70,6 +70,8 @@ export async function fetchMaps() {
       image: map.splash || map.listViewIcon,
       thumbnail: map.listViewIcon || map.splash,
       minimap: map.displayIcon,
+      // Échelle officielle (minimap par unité du jeu, 1 unité = 1 cm) : sert aux vraies tailles des capacités
+      mult: map.xMultiplier || 0,
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

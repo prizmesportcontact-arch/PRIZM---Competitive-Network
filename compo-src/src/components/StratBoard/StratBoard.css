@@ -39,3 +39,14 @@
 .sb-item--sel line:not(.sb-hit), .sb-item--sel polyline:not(.sb-hit), circle.sb-item--sel, text.sb-item--sel {
   filter: drop-shadow(0 0 5px #ffa043) drop-shadow(0 0 1px #ffa043);
 }
+/* Zones réelles des capacités */
+.sb-z-fill { fill-opacity: 0.24; stroke-width: 2.5; stroke-opacity: 0.9; }
+.sb-zone--smoke .sb-z-fill { fill-opacity: 0.5; }
+.sb-z-ring { fill-opacity: 0.05; stroke-width: 2.5; stroke-dasharray: 10 8; stroke-opacity: 0.85; }
+.sb-z-solid { fill-opacity: 0.85; stroke-width: 1.5; }
+.sb-z-path { stroke-width: 4; stroke-dasharray: 3 9; stroke-linecap: round; stroke-opacity: 0.9; }
+.sb-handle line { stroke: #ffa043; stroke-width: 2; stroke-dasharray: 4 5; pointer-events: none; }
+.sb-handle circle { fill: #ffa043; stroke: #0d1117; stroke-width: 4; cursor: grab; }
+.sb-dim {
+  font: 700 22px var(--font-body); fill: #fff; paint-order: stroke; stroke: rgba(5, 7, 10, 0.92); stroke-width: 6px; pointer-events: none;
+}

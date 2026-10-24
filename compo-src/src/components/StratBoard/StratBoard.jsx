@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { uid } from '../../services/strats'
+import { abilityGeometry, colorFor, hasLength, isRotatable, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import './StratBoard.css'
 
 // Tailles dans le repère 0–1000 de la minimap
@@ -63,11 +64,27 @@ export default function StratBoard({
   onPlaced,
   mini = false,
   showNames = false,
+  scale = 7,
 }) {
   const uidBase = useId().replace(/:/g, '')
   const svgRef = useRef(null)
   const [draft, setDraft] = useState(null) // élément en cours de tracé
   const [drag, setDrag] = useState(null) // { id, sx, sy, dx, dy }
+  const [turn, setTurn] = useState(null) // { id, d, l } : capacité qu'on oriente avec la poignée
+
+  const specOf = (it) => (it && it.t === 'ability' ? shapeFor(agentByUuid?.get(it.a)?.name, it.s) : null)
+  // Direction (et longueur pour les murs réglables) d'une capacité visée depuis son point de pose
+  const aim = (it, spec, px, py) => {
+    const dist = Math.hypot(px - it.x, py - it.y)
+    if (dist < 6) return { d: it.d ?? -90, l: it.l }
+    const d = Math.round((Math.atan2(py - it.y, px - it.x) * 180) / Math.PI)
+    if (!hasLength(spec)) return { d, l: it.l }
+    let l = dist / scale
+    if (spec.k === 'wall' && spec.from === 'center') l *= 2
+    if (spec.k === 'rect') l -= spec.off || 0
+    l = Math.round(Math.min(spec.max, Math.max(spec.min || 0, l)) * 2) / 2
+    return { d, l }
+  }
 
   const toMap = (e) => {
     const svg = svgRef.current
@@ -84,6 +101,15 @@ export default function StratBoard({
     if (!editable || e.button > 0) return
     const [x, y] = toMap(e)
     const hitId = e.target.closest('[data-id]')?.getAttribute('data-id') || null
+    const handleId = e.target.closest('[data-handle]')?.getAttribute('data-handle') || null
+    if (handleId) {
+      const it = items.find((i) => i.id === handleId)
+      if (it) {
+        e.currentTarget.setPointerCapture(e.pointerId)
+        setTurn({ id: it.id, d: it.d ?? -90, l: it.l })
+      }
+      return
+    }
 
     if (tool === 'erase') {
       if (hitId) commit(items.filter((it) => it.id !== hitId))
@@ -99,6 +125,13 @@ export default function StratBoard({
     }
     if (tool === 'place' && place) {
       const it = { id: uid(), ...place, x, y }
+      const spec = place.t === 'ability' ? shapeFor(agentByUuid?.get(place.a)?.name, place.s) : null
+      if (isRotatable(spec)) {
+        // On tire pour choisir la direction (et la longueur des murs réglables)
+        e.currentTarget.setPointerCapture(e.pointerId)
+        setDraft({ ...it, d: -90, l: spec.l, aiming: true })
+        return
+      }
       commit([...items, it])
       onPlaced && onPlaced(place)
       return
@@ -115,8 +148,17 @@ export default function StratBoard({
   }
 
   const onPointerMove = (e) => {
-    if (!drag && !draft) return
+    if (!drag && !draft && !turn) return
     const [x, y] = toMap(e)
+    if (turn) {
+      const it = items.find((i) => i.id === turn.id)
+      if (it) setTurn({ id: it.id, ...aim(it, specOf(it), x, y) })
+      return
+    }
+    if (draft?.aiming) {
+      setDraft((d) => ({ ...d, ...aim(d, specOf(d), x, y) }))
+      return
+    }
     if (drag) {
       setDrag((d) => ({ ...d, dx: x - d.sx, dy: y - d.sy }))
       return
@@ -133,6 +175,20 @@ export default function StratBoard({
   }
 
   const onPointerUp = () => {
+    if (turn) {
+      const t = turn
+      setTurn(null)
+      commit(items.map((it) => (it.id === t.id ? { ...it, d: t.d, ...(t.l != null ? { l: t.l } : {}) } : it)))
+      return
+    }
+    if (draft?.aiming) {
+      const { aiming: _a, ...it } = draft
+      setDraft(null)
+      if (it.l == null) delete it.l
+      commit([...items, it])
+      onPlaced && onPlaced(place)
+      return
+    }
     if (drag) {
       const { id, dx, dy } = drag
       setDrag(null)
@@ -152,7 +208,11 @@ export default function StratBoard({
     commit([...items, d])
   }
 
-  const shown = items.map((it) => (drag && it.id === drag.id ? moveItem(it, drag.dx, drag.dy) : it))
+  const shown = items.map((it) => {
+    if (drag && it.id === drag.id) return moveItem(it, drag.dx, drag.dy)
+    if (turn && it.id === turn.id) return { ...it, d: turn.d, l: turn.l }
+    return it
+  })
   if (draft) shown.push(draft)
   // Les icônes restent droites quand la carte est retournée
   const up = (x, y) => (flipped ? `rotate(180 ${x} ${y})` : undefined)
@@ -179,6 +239,9 @@ export default function StratBoard({
           </marker>
         ))}
         <clipPath id={`${uidBase}-clip`}><circle r={SIZES.agent - 4} /></clipPath>
+        <marker id={`${uidBase}-zarrow`} viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
+          <path d="M0 0 10 5 0 10z" fill="#ffffff" fillOpacity="0.85" />
+        </marker>
         <pattern id={`${uidBase}-grid`} width="50" height="50" patternUnits="userSpaceOnUse">
           <path d="M50 0H0V50" fill="none" className="strat-board__grid" />
         </pattern>
@@ -237,12 +300,41 @@ export default function StratBoard({
           if (it.t === 'ability') {
             const ab = agent?.abilities?.find((x) => x.slot === it.s)
             const r = SIZES.ability
+            const spec = specOf(it)
+            const geo = abilityGeometry(spec, it, scale)
+            const col = colorFor(agent?.name, spec)
+            const live = (draft && draft.id === it.id) || (turn && turn.id === it.id)
             return (
-              <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
+              <g key={it.id}>
+                <g className={`sb-zone sb-zone--${spec?.cat || 'none'}`} pointerEvents="none">
+                  {geo.shapes.map((sh, i) => {
+                    if (sh.type === 'circle') {
+                      return sh.fill
+                        ? <circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={col} className="sb-z-fill" stroke={col} />
+                        : <circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={col} className="sb-z-ring" stroke={col} />
+                    }
+                    if (sh.type === 'path') {
+                      const [[x1, y1], [x2, y2]] = sh.pts
+                      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} className="sb-z-path" markerEnd={`url(#${uidBase}-zarrow)`} />
+                    }
+                    return <polygon key={i} points={sh.pts.map((p) => p.join(',')).join(' ')} fill={col} stroke={col} className={sh.solid ? 'sb-z-solid' : 'sb-z-fill'} />
+                  })}
+                </g>
+                {editable && sel && geo.tip && tool === 'select' && (
+                  <g data-handle={it.id} className="sb-handle">
+                    <line x1={it.x} y1={it.y} x2={geo.tip[0]} y2={geo.tip[1]} />
+                    <circle cx={geo.tip[0]} cy={geo.tip[1]} r="13" />
+                  </g>
+                )}
+                {live && geo.tip && (
+                  <text x={geo.tip[0]} y={geo.tip[1] - 22} transform={up(geo.tip[0], geo.tip[1] - 22)} className="sb-dim" textAnchor="middle">{shapeLabel(spec, it)}</text>
+                )}
+              <g {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
                 <title>{agent ? `${agent.name} · ${ab?.name || ''}` : 'Capacité'}</title>
                 {sel && <circle r={r + 9} className="sb-selring" />}
                 <circle r={r} className="sb-ability" stroke={ring} />
                 {ab && <image href={ab.icon} x={-r * 0.66} y={-r * 0.66} width={r * 1.32} height={r * 1.32} />}
+              </g>
               </g>
             )
           }
