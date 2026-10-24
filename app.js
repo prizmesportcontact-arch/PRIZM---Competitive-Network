@@ -80,7 +80,7 @@
   }
   async function logout() {
     await sb.auth.signOut(); state.session = null; clearMe();
-    renderAuth(); location.hash = "#top"; route();
+    renderAuth(); location.hash = "#/reseau"; route();
   }
 
   // ---------- Barre de connexion ----------
@@ -121,20 +121,27 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/clips": viewClips };
+  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement };
   function route() {
     const h = location.hash || "";
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
-    const home = $("#view-home"), app = $("#view-app");
+    const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
     document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h));
     stopLive();
-    if (path && views[path]) {
-      home.hidden = true; app.hidden = false; window.scrollTo(0, 0);
+    // Deux espaces : la page de l'équipe PRIZM, et le Competitive Network (scrims, comptes, équipes…)
+    const anchor = h && !h.startsWith("#/") ? document.getElementById(h.slice(1)) : null;
+    const inNet = !!path || (anchor && net.contains(anchor));
+    document.body.classList.toggle("area-net", inNet);
+    document.body.classList.toggle("area-team", !inNet);
+    if (path === "/reseau") {
+      home.hidden = true; app.hidden = true; net.hidden = false; window.scrollTo(0, 0);
+    } else if (path && views[path]) {
+      home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
       app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
       views[path](app).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
     } else {
-      app.hidden = true; home.hidden = false;
-      if (h && !h.startsWith("#/")) { const el = document.getElementById(h.slice(1)); if (el) el.scrollIntoView(); }
+      app.hidden = true; home.hidden = inNet; net.hidden = !inNet;
+      if (anchor) anchor.scrollIntoView(); else window.scrollTo(0, 0);
     }
   }
   window.addEventListener("hashchange", route);
@@ -544,7 +551,7 @@
   }
 
 
-  // ================= Scrims, recherche, classement, clips =================
+  // ================= Competitive Network : scrims, recherche, classement =================
   const divChip = d => d ? `<span class="div-chip d${d}">D${d}</span>` : "";
   const fmtDate = iso => iso ? new Date(iso).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Date à venir";
   const fmtShort = iso => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
@@ -804,52 +811,43 @@
     render();
   }
 
-  // ---------- Clips de la semaine ----------
-  const ytId = u => { const m = u.match(/(?:youtu\.be\/|v=|shorts\/)([\w-]{11})/); return m && m[1]; };
-  const twitchClip = u => { const m = u.match(/clips\.twitch\.tv\/([\w-]+)/) || u.match(/twitch\.tv\/[^/]+\/clip\/([\w-]+)/); return m && m[1]; };
-  function clipMedia(c) {
-    const y = ytId(c.url), tw = twitchClip(c.url);
-    if (y) return `<button type="button" class="clip-media" data-embed="https://www.youtube-nocookie.com/embed/${y}?autoplay=1" aria-label="Lire ${esc(c.title)}"><img src="https://i.ytimg.com/vi/${y}/hqdefault.jpg" alt="" loading="lazy" onerror="this.remove()"><span class="play">▶</span></button>`;
-    if (tw) return `<button type="button" class="clip-media" data-embed="https://clips.twitch.tv/embed?clip=${tw}&parent=${location.hostname}&autoplay=true" aria-label="Lire ${esc(c.title)}"><span class="clip-ph">Clip Twitch</span><span class="play">▶</span></button>`;
-    return `<a class="clip-media" href="${esc(c.url)}" target="_blank" rel="noopener"><span class="clip-ph">${esc(new URL(c.url).hostname.replace("www.", ""))}</span><span class="play">↗</span></a>`;
-  }
-  async function viewClips(app) {
-    if (!sb) { app.innerHTML = panel("Clips", `<p class="lead">Bientôt disponible.</p>`); return; }
-    const d = await rpc("list_clips");
-    const card = (c, past) => `<article class="clip-card">${clipMedia(c)}
-      <div class="clip-info"><b>${esc(c.title)}</b><span class="small-note">par ${esc(c.author)}</span></div>
-      <div class="clip-foot">${past ? `<span class="small-note">${c.votes} vote${c.votes > 1 ? "s" : ""}</span>`
-        : `<button type="button" class="vote${c.my_vote ? " on" : ""}" data-vote="${c.id}" ${!state.session || c.mine ? "disabled" : ""} aria-pressed="${!!c.my_vote}" title="${c.mine ? "Ton clip" : !state.session ? "Connecte-toi pour voter" : c.my_vote ? "Retirer mon vote" : "Voter"}">▲ ${c.votes}</button>`}
-        ${!past && (c.mine || state.isStaff) ? `<button class="link-btn danger-t" data-cdel="${c.id}" type="button">Supprimer</button>` : ""}</div></article>`;
-    const weekEnd = new Date(d.week); weekEnd.setDate(weekEnd.getDate() + 6);
-    app.innerHTML = panel("Clips de la semaine", `
-      <p class="lead">Poste ta meilleure action, vote pour celles des autres. Le clip le plus voté de la semaine passe en stream.</p>
-      ${state.session ? `<details class="card post-card"><summary><b>Poster un clip</b><span class="small-note"> · 2 par semaine</span></summary>
-        <form class="form" id="clip-form" novalidate>
-          <label for="cl-url">Lien du clip</label><input id="cl-url" type="url" placeholder="YouTube, clip Twitch, Medal, Streamable ou Outplayed" required>
-          <label for="cl-title">Titre</label><input id="cl-title" maxlength="80" placeholder="ex : 1v4 clutch sur Lotus" required>
-          <div class="ctas"><button class="btn solid" type="submit">Poster</button></div><p class="form-err" id="cl-err" role="alert"></p>
-        </form></details>`
-        : `<p class="callout">Connecte-toi avec Discord pour poster et voter. <button class="link-btn" id="cl-login" type="button">Connexion</button></p>`}
-      <div class="clips-head"><h3 class="t-h">Semaine du ${new Date(d.week).toLocaleDateString("fr-FR", { day: "numeric", month: "long" })} au ${weekEnd.toLocaleDateString("fr-FR", { day: "numeric", month: "long" })}</h3>
-        ${state.session ? `<span class="small-note">${d.votes_left} vote${d.votes_left > 1 ? "s" : ""} restant${d.votes_left > 1 ? "s" : ""}</span>` : ""}</div>
-      ${d.clips.length ? `<div class="clip-grid">${d.clips.map(c => card(c, false)).join("")}</div>` : `<p class="small-note">Pas encore de clip cette semaine. Sois le premier !</p>`}
-      ${d.winners.length ? `<h3 class="t-h" style="margin-top:40px">Clips des semaines précédentes</h3><div class="clip-grid past">${d.winners.map(c => card(c, true)).join("")}</div>` : ""}`, "Communauté");
-    if ($("#cl-login")) $("#cl-login").onclick = login;
-    if ($("#clip-form")) $("#clip-form").onsubmit = async e => {
-      e.preventDefault(); const er = $("#cl-err"); er.textContent = "";
-      try { const id = await rpc("submit_clip", { p_url: $("#cl-url").value, p_title: $("#cl-title").value }); feed("clip", id); toast("Clip posté, aussi sur le Discord."); viewClips(app); }
-      catch (x) { er.textContent = errMsg(x); }
-    };
-    app.querySelectorAll("[data-vote]").forEach(b => b.onclick = async () => {
-      try { await rpc("vote_clip", { p_id: b.dataset.vote }); viewClips(app); } catch (x) { toast(errMsg(x), "err"); } });
-    app.querySelectorAll("[data-cdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
-      try { await rpc("delete_clip", { p_id: b.dataset.cdel }); toast("Clip supprimé."); viewClips(app); } catch (x) { toast(errMsg(x), "err"); } }));
-    // La vidéo ne se charge qu'au clic (page plus légère)
-    app.querySelectorAll("[data-embed]").forEach(b => b.onclick = () => {
-      const f = document.createElement("iframe"); f.src = b.dataset.embed; f.allow = "autoplay; fullscreen; picture-in-picture"; f.allowFullscreen = true; f.title = b.getAttribute("aria-label") || "Clip";
-      f.className = "clip-media"; b.replaceWith(f);
-    });
+  // ================= Page de l'équipe PRIZM =================
+  // Le roster et le bilan viennent directement du site (l'équipe PRIZM y est inscrite comme les autres)
+  async function teamHome() {
+    const box = $("#team-roster"); if (!box) return;
+    if (!sb) { box.innerHTML = ""; return; }
+    try {
+      const tag = (CFG.teamTag || "PRZ").toUpperCase();
+      const teams = await rpc("list_teams"), t = teams.find(x => x.tag.toUpperCase() === tag);
+      if (!t) { box.innerHTML = `<p class="small-note">Le roster arrive bientôt.</p>`; return; }
+      const [roster, lb, lfg] = await Promise.all([rpc("team_roster", { p_team: t.id }), rpc("scrim_leaderboard").catch(() => []), rpc("list_lfg").catch(() => null)]);
+      const order = r => (r.role === "titulaire" ? 0 : 1);
+      roster.sort((a, b) => order(a) - order(b) || (b.is_captain - a.is_captain));
+      box.innerHTML = roster.map(r => `<article class="t-player${r.role === "remplacant" ? " sub" : ""}">
+          ${r.avatar_url ? `<img src="${esc(r.avatar_url)}" alt="" width="96" height="96" referrerpolicy="no-referrer" loading="lazy">` : `<span class="t-initial">${esc((r.username || "?").slice(0, 1).toUpperCase())}</span>`}
+          <b class="t-name${(r.username || "").length > 9 ? " long" : ""}">${esc(r.username)}</b>
+          <span class="t-meta">${r.rank != null ? esc(RANKS[r.rank]) : "Non classé"}</span>
+          <span class="t-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
+        </article>`).join("");
+      const me = lb.find(r => r.team_id === t.id);
+      if (me) {
+        const div = lb.filter(r => r.division === me.division), pos = div.findIndex(r => r.team_id === t.id) + 1;
+        $("#team-bilan").innerHTML = `<div class="t-stats">
+          <div><b>${me.played}</b><span>scrims joués</span></div>
+          <div><b>${me.wins}<i>-</i>${me.draws}<i>-</i>${me.losses}</b><span>victoires, nuls, défaites</span></div>
+          <div><b>${me.rf - me.ra > 0 ? "+" : ""}${me.rf - me.ra}</b><span>différence de rounds</span></div>
+          <div><b>${pos}<sup>${pos === 1 ? "er" : "e"}</sup></b><span>sur ${div.length} en D${me.division}</span></div>
+        </div><div class="ctas" style="margin-top:20px"><a class="btn" href="#/classement">Voir le classement</a></div>`;
+        $("#bilan").hidden = false;
+      }
+      const post = lfg && lfg.teams.find(x => x.team_id === t.id);
+      if (post) {
+        $("#team-recrute").innerHTML = `<div class="t-recruit"><div><span class="eyebrow">On recrute</span><h2>PRIZM recrute${post.roles.length ? " : " + esc(post.roles.join(", ")) : ""}</h2>
+          ${post.message ? `<p class="lead">${esc(post.message)}</p>` : ""}${post.dispo ? `<p class="small-note">Dispos : ${esc(post.dispo)}</p>` : ""}</div>
+          <div class="ctas">${post.discord_id ? `<a class="btn solid" href="https://discord.com/users/${esc(post.discord_id)}" target="_blank" rel="noopener">Contacter ${esc(post.captain || "le capitaine")}</a>` : ""}<a class="btn" href="#/recherche">Voir l'annonce</a></div></div>`;
+        $("#recrute").hidden = false;
+      }
+    } catch (e) { box.innerHTML = `<p class="small-note">Le roster n'a pas pu être chargé.</p>`; }
   }
 
   // ---------- Staff ----------
@@ -868,7 +866,7 @@
     app.innerHTML = panel("Staff", `
       ${adminTabs("staff")}
       <div class="roles-explain">
-        <div><b>Modérateur</b><p class="small-note">Gère les scrims (résultats contestés, absences), la recherche d'équipe et les clips.</p></div>
+        <div><b>Modérateur</b><p class="small-note">Gère les scrims (résultats contestés, absences), et la recherche d'équipe.</p></div>
         <div><b>Admin</b><p class="small-note">Tout ce que fait un modérateur, plus la validation des équipes, les rangs fixés à la main et la gestion du staff.</p></div>
       </div>
       <h3 class="t-h">Membres du staff</h3>
@@ -959,7 +957,7 @@
     state.session = data.session; await loadMe(); renderAuth();
     let after = null; try { after = sessionStorage.getItem("prizm_after_login"); sessionStorage.removeItem("prizm_after_login"); } catch (e) {}
     if (after && state.session && location.hash !== after) { location.hash = after; } else route();
-    homeScrims();
+    homeScrims(); teamHome();
     sb.auth.onAuthStateChange(async (ev, session) => {
       if (ev === "SIGNED_IN" && (!state.session || state.session.user.id !== session.user.id)) {
         state.session = session; await loadMe(); renderAuth(); route();

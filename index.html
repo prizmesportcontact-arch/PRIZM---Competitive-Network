@@ -3,19 +3,23 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>PRIZM Competitive Network</title>
-<meta name="description" content="Réseau de scrims Valorant par division de rang : scrims, recherche d'équipe, classement et clips.">
+<title>PRIZM · Équipe Valorant et Competitive Network</title>
+<meta name="description" content="PRIZM, équipe esport Valorant, et PRIZM Competitive Network, le réseau de scrims par division de rang.">
 <link rel="icon" href="logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;800;900&family=Instrument+Sans:wght@400;500;600&family=JetBrains+Mono:wght@500&display=swap">
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<body class="area-team">
 <header class="top">
   <div class="wrap">
-    <a href="#top" aria-label="Accueil"><img src="logo.png" alt="PRIZM Competitive Network"></a>
-    <nav aria-label="Sections">
-      <a href="#/scrims">Scrims</a><a href="#/recherche">Recherche</a><a href="#/classement">Classement</a><a href="#/clips">Clips</a><a href="#/equipes">Équipes</a><a href="#reglement">Règlement</a>
+    <a href="#top" class="brand brand-team" aria-label="PRIZM, accueil"><img src="logo-prizm.png" alt="PRIZM"></a>
+    <a href="#/reseau" class="brand brand-net" aria-label="PRIZM Competitive Network, accueil du réseau"><img src="logo.png" alt="PRIZM Competitive Network"></a>
+    <nav class="nav-team" aria-label="PRIZM">
+      <a href="#roster">Roster</a><a href="#bilan">Bilan</a><a href="#suivre">Nous suivre</a><a href="#/reseau" class="nav-switch">Le réseau →</a>
+    </nav>
+    <nav class="nav-net" aria-label="Competitive Network">
+      <a href="#/scrims">Scrims</a><a href="#/recherche">Recherche</a><a href="#/classement">Classement</a><a href="#/equipes">Équipes</a><a href="#reglement">Règlement</a><a href="#top" class="nav-switch">Équipe PRIZM →</a>
     </nav>
     <div id="auth-slot"></div>
   </div>
@@ -24,6 +28,61 @@
 <div id="setup-banner" class="setup-banner" hidden>Le site est en cours de configuration : les comptes et les équipes seront bientôt disponibles.</div>
 <main id="top">
 <div id="view-home">
+  <section class="t-hero">
+    <div class="wrap">
+      <span class="eyebrow">Équipe esport · Valorant</span>
+      <h1 class="sr">PRIZM</h1>
+      <img class="t-mark" src="logo-prizm.png" alt="PRIZM" width="1200" height="342">
+      <p class="t-tag">On scrime, on progresse, on monte ensemble.</p>
+      <div class="ctas">
+        <a class="btn solid" data-link="twitch" href="#suivre">Suivre sur Twitch</a>
+        <a class="btn" data-link="discord" href="#suivre">Rejoindre le Discord</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="roster">
+    <div class="wrap">
+      <div class="sec-head"><span class="eyebrow">Roster</span><h2>L'équipe</h2></div>
+      <div id="team-roster" class="t-roster"><p class="small-note">Chargement du roster…</p></div>
+    </div>
+  </section>
+
+  <section id="bilan" hidden>
+    <div class="wrap">
+      <div class="sec-head"><span class="eyebrow">Bilan</span><h2>En scrims</h2><p class="lead">Nos résultats sur le PRIZM Competitive Network, mis à jour après chaque scrim.</p></div>
+      <div id="team-bilan"></div>
+    </div>
+  </section>
+
+  <section id="recrute" hidden>
+    <div class="wrap"><div id="team-recrute"></div></div>
+  </section>
+
+  <section id="suivre">
+    <div class="wrap">
+      <div class="sec-head"><span class="eyebrow">Nous suivre</span><h2>Là où on joue</h2></div>
+      <div class="follow">
+        <a class="follow-card" data-link="twitch" href="#suivre"><b>Twitch</b><span>Nos matchs et nos sessions en direct.</span></a>
+        <a class="follow-card" data-link="youtube" href="#suivre"><b>YouTube</b><span>Replays et meilleurs moments.</span></a>
+        <a class="follow-card" data-link="discord" href="#suivre"><b>Discord</b><span>La communauté, les annonces et les scrims.</span></a>
+      </div>
+    </div>
+  </section>
+
+  <section class="net-teaser">
+    <div class="wrap">
+      <img src="logo.png" alt="PRIZM Competitive Network" class="net-logo">
+      <div>
+        <h2>On organise aussi un réseau de scrims</h2>
+        <p class="lead">Le PRIZM Competitive Network met en relation les équipes Valorant de même niveau : scrims calés en deux clics, recherche d'équipe et classement par division.</p>
+        <div class="ctas"><a class="btn solid" href="#/reseau">Découvrir le réseau</a><a class="btn" href="#/scrims">Voir les scrims</a></div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<div id="view-network" hidden>
   <div class="hero">
     <div class="wrap">
       <span class="eyebrow">Valorant · Réseau de scrims · Saison&nbsp;0</span>
@@ -129,7 +188,6 @@
       <div class="cards3 comm">
         <a class="card comm-card" href="#/recherche"><b>Recherche d'équipe</b><p>Tu cherches une équipe ? Ton équipe cherche un smoke ? Publie ton annonce, on se contacte sur Discord.</p><span class="link-btn">Voir les annonces</span></a>
         <a class="card comm-card" href="#/classement"><b>Classement des scrims</b><p>Victoires, différence de rounds et fiabilité, division par division. Les équipes sérieuses se repèrent vite.</p><span class="link-btn">Voir le classement</span></a>
-        <a class="card comm-card" href="#/clips"><b>Clips de la semaine</b><p>Poste ta meilleure action, vote pour les autres. Le clip gagnant passe en stream.</p><span class="link-btn">Voir les clips</span></a>
       </div>
       <div class="ctas" style="margin-top:24px"><a class="btn" data-link="twitch" href="#communaute">Twitch</a><a class="btn" data-link="youtube" href="#communaute">YouTube</a></div>
     </div>
@@ -144,7 +202,7 @@
       </div>
       <div class="roles">
         <div><b>Modérateurs</b><p>Faire vivre le Discord, gérer les litiges de scrims et garder une bonne ambiance.</p></div>
-        <div><b>Créateurs</b><p>Monter les clips de la semaine et animer le Twitch et le YouTube.</p></div>
+        <div><b>Créateurs</b><p>Animer le Twitch et le YouTube du réseau.</p></div>
       </div>
     </div>
   </section>
@@ -180,7 +238,7 @@
 
 <footer>
   <div class="wrap">
-    <span>© 2026 PRIZM Competitive Network</span>
+    <span>© 2026 PRIZM · PRIZM Competitive Network</span>
     <span><a href="#/confidentialite">Confidentialité</a> · Réseau communautaire non affilié à Riot Games.</span>
   </div>
 </footer>
