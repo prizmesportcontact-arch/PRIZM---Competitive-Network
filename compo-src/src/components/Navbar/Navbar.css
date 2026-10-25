@@ -183,7 +183,6 @@
   }
 }
 
-/* Tableau tactique : en-tête réduit aux onglets */
-.pz-band--compact .pz-eyebrow,
-.pz-band--compact .pz-band__title-row { display: none; }
-.pz-band--compact .pz-band__inner { padding-top: 6px; padding-bottom: 0; gap: 0; }
+/* Tableau tactique : pas de bandeau Comp Builder, toute la place va à la carte
+   (le retour se fait par le nom de la map, en haut à gauche) */
+.pz-band--compact { display: none; }

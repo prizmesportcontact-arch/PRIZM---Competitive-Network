@@ -352,6 +352,7 @@ export default function Strat() {
       <aside className="sb2-side">
         <div className="sb2-mapcard">
           <Link to={`/editor/${strat.mapUuid}`} className="sb2-map" title="Retour à la map">
+            <small>← Retour</small>
             <span>{map?.name || 'Map'}</span>
           </Link>
           <button type="button" className={`sb2-sidebtn ${strat.side}`} disabled={!editable}
@@ -455,7 +456,6 @@ export default function Strat() {
             )}
           </div>
         </div>
-        {editable && isDirty && <p className="sb2-unsaved" role="status">Modifications non enregistrées : clique « Enregistrer » (ou Ctrl+S) pour les garder.</p>}
 
         <div className="sb2-canvas">
           <div className={`sb2-board sb2-board--${strat.side}`} style={{ aspectRatio: `${view.w} / ${view.h}` }}>
@@ -484,6 +484,12 @@ export default function Strat() {
             )}
           </div>
 
+          {editable && (
+            <p className="sb2-hint" aria-live="polite">
+              {hint.img && <img src={hint.img} alt="" />}
+              {hint.text}
+            </p>
+          )}
           {editable && selected && (
             <div className="sb2-inspect">
               <div className="sb2-sel">
@@ -503,12 +509,6 @@ export default function Strat() {
           )}
         </div>
 
-        {editable && (
-          <p className="sb2-hint" aria-live="polite">
-            {hint.img && <img src={hint.img} alt="" />}
-            {hint.text}
-          </p>
-        )}
 
         {/* ---------- Bandeau des agents ---------- */}
         {editable ? (

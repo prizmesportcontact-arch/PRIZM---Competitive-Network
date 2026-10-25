@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from 'react'
+import { useEffect, useId, useRef, useState } from 'react'
 import { uid } from '../../services/strats'
 import { unrotate } from '../../utils/mapView'
 import { abilityGeometry, colorFor, hasLength, isRotatable, shapeFor, shapeLabel } from '../../data/abilityShapes'
@@ -73,6 +73,56 @@ export default function StratBoard({
   const [draft, setDraft] = useState(null) // élément en cours de tracé
   const [drag, setDrag] = useState(null) // { id, sx, sy, dx, dy }
   const [turn, setTurn] = useState(null) // { id, d, l } : capacité qu'on oriente avec la poignée
+  const [zoomView, setZoomView] = useState(null) // partie affichée quand on a zoomé (null = carte entière)
+  const [pan, setPan] = useState(null) // { cx, cy, x, y } : déplacement de la vue en cours
+  const base = view || { x: 0, y: 0, w: 1000, h: 1000 }
+  const baseKey = `${base.x}|${base.y}|${base.w}|${base.h}`
+  const [lastKey, setLastKey] = useState(baseKey)
+  if (lastKey !== baseKey) {
+    // Nouvelle carte ou autre côté : on revient à la vue entière
+    setLastKey(baseKey)
+    setZoomView(null)
+  }
+  const vb = zoomView || base
+  const zoom = base.w / vb.w
+
+  // Garde la vue dans les limites de la carte
+  const fit = (v) => {
+    const w = Math.min(base.w, Math.max(base.w / 5, v.w))
+    const h = (w / base.w) * base.h
+    const x = Math.min(base.x + base.w - w, Math.max(base.x, v.x))
+    const y = Math.min(base.y + base.h - h, Math.max(base.y, v.y))
+    return w >= base.w - 0.5 ? null : { x, y, w, h }
+  }
+  // Zoom autour d'un point (repère de la vue)
+  const zoomAt = (px, py, factor) => {
+    const w = vb.w / factor
+    const h = vb.h / factor
+    setZoomView(fit({ x: px - ((px - vb.x) / vb.w) * w, y: py - ((py - vb.y) / vb.h) * h, w, h }))
+  }
+  const toView = (e) => {
+    const svg = svgRef.current
+    const pt = svg.createSVGPoint()
+    pt.x = e.clientX
+    pt.y = e.clientY
+    return pt.matrixTransform(svg.getScreenCTM().inverse())
+  }
+  // Molette : zoom (écouteur non passif pour bloquer le défilement de la page)
+  const wheelRef = useRef(null)
+  useEffect(() => {
+    wheelRef.current = (e) => {
+      e.preventDefault()
+      const p = toView(e)
+      zoomAt(p.x, p.y, e.deltaY < 0 ? 1.2 : 1 / 1.2)
+    }
+  })
+  useEffect(() => {
+    const svg = svgRef.current
+    if (!svg || mini) return undefined
+    const h = (e) => wheelRef.current(e)
+    svg.addEventListener('wheel', h, { passive: false })
+    return () => svg.removeEventListener('wheel', h)
+  }, [mini])
 
   const specOf = (it) => (it && it.t === 'ability' ? shapeFor(agentByUuid?.get(it.a)?.name, it.s) : null)
   // Direction (et longueur pour les murs réglables) d'une capacité visée depuis son point de pose
@@ -100,10 +150,23 @@ export default function StratBoard({
 
   const commit = (next, extra) => onChange && onChange(next, extra || {})
 
+  const startPan = (e) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setPan({ cx: e.clientX, cy: e.clientY, x: vb.x, y: vb.y })
+  }
+
   const onPointerDown = (e) => {
+    if (mini) return
+    const hitId = e.target.closest('[data-id]')?.getAttribute('data-id') || null
+    // Clic molette / clic droit, ou fond de carte quand on a zoomé : on déplace la vue
+    if (e.button === 1 || e.button === 2 || (zoom > 1.01 && !hitId && (!editable || tool === 'select') && !e.target.closest('[data-handle]'))) {
+      e.preventDefault()
+      if (editable && tool === 'select' && e.button === 0) onSelect && onSelect(null)
+      startPan(e)
+      return
+    }
     if (!editable || e.button > 0) return
     const [x, y] = toMap(e)
-    const hitId = e.target.closest('[data-id]')?.getAttribute('data-id') || null
     const handleId = e.target.closest('[data-handle]')?.getAttribute('data-handle') || null
     if (handleId) {
       const it = items.find((i) => i.id === handleId)
@@ -151,6 +214,12 @@ export default function StratBoard({
   }
 
   const onPointerMove = (e) => {
+    if (pan) {
+      const r = svgRef.current.getBoundingClientRect()
+      const k = vb.w / r.width
+      setZoomView(fit({ ...vb, x: pan.x - (e.clientX - pan.cx) * k, y: pan.y - (e.clientY - pan.cy) * k }))
+      return
+    }
     if (!drag && !draft && !turn) return
     const [x, y] = toMap(e)
     if (turn) {
@@ -178,6 +247,10 @@ export default function StratBoard({
   }
 
   const onPointerUp = () => {
+    if (pan) {
+      setPan(null)
+      return
+    }
     if (turn) {
       const t = turn
       setTurn(null)
@@ -219,17 +292,17 @@ export default function StratBoard({
   if (draft) shown.push(draft)
   // Les icônes restent droites quand la carte est retournée
   const up = (x, y) => (rotation ? `rotate(${-rotation} ${x} ${y})` : undefined)
-  const vb = view || { x: 0, y: 0, w: 1000, h: 1000 }
   const ring = SIDE_RING[side] || SIDE_RING.attaque
   const order = { zone: 0, draw: 1, line: 1, ability: 2, spike: 3, agent: 4, text: 5 }
   shown.sort((a, b) => (order[a.t] ?? 9) - (order[b.t] ?? 9))
 
-  return (
+  const svg = (
     <svg
       ref={svgRef}
       className={`strat-board strat-board--${side}${editable ? ` strat-board--edit strat-board--${tool}` : ''}${mini ? ' strat-board--mini' : ''}`}
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-      style={{ aspectRatio: `${vb.w} / ${vb.h}` }}
+      style={{ aspectRatio: `${base.w} / ${base.h}` }}
+      onContextMenu={(e) => e.preventDefault()}
       role="img"
       aria-label="Tableau tactique"
       onPointerDown={onPointerDown}
@@ -355,5 +428,17 @@ export default function StratBoard({
         })}
       </g>
     </svg>
+  )
+  if (mini) return svg
+  return (
+    <div className={`sb-wrap${pan ? ' sb-wrap--pan' : ''}${zoom > 1.01 ? ' sb-wrap--zoomed' : ''}`}>
+      {svg}
+      <div className="sb-zoom" role="group" aria-label="Zoom">
+        <button type="button" onClick={() => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1.35)} aria-label="Zoomer" title="Zoomer (molette)">+</button>
+        <button type="button" onClick={() => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1 / 1.35)} disabled={zoom <= 1.01} aria-label="Dézoomer" title="Dézoomer (molette)">−</button>
+        <button type="button" className="sb-zoom__fit" onClick={() => setZoomView(null)} disabled={zoom <= 1.01} title="Voir toute la carte">Ajuster</button>
+        {zoom > 1.01 && <span>×{zoom.toFixed(1).replace('.', ',')}</span>}
+      </div>
+    </div>
   )
 }
