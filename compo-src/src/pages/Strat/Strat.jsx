@@ -32,7 +32,7 @@ const TOOLS = [
   { id: 'draw', label: 'Crayon', key: 'd', icon: 'M4 17c3-6 5 2 8-3s4-6 8-4', group: 'draw' },
   { id: 'zone', label: 'Zone', key: 'z', icon: 'M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16z', group: 'draw' },
   { id: 'text', label: 'Texte', key: 't', icon: 'M5 6h14M12 6v13', group: 'draw' },
-  { id: 'erase', label: 'Gomme', key: 'e', icon: 'M8 19h12M4 15l9-9 5 5-8 8H8z', group: 'main' },
+  { id: 'erase', label: 'Gomme', key: 'g', icon: 'M8 19h12M4 15l9-9 5 5-8 8H8z', group: 'main' },
 ]
 const ITEM_LABEL = { agent: 'Agent', ability: 'Capacité', spike: 'Spike', line: 'Trait', draw: 'Tracé', zone: 'Zone', text: 'Texte' }
 const canCopy = typeof window !== 'undefined' && Boolean(window.ClipboardItem) && navigator.clipboard?.write
@@ -50,7 +50,7 @@ export default function Strat() {
   const navigate = useNavigate()
   const { maps, agents, status: dataStatus } = useData()
   const { compositionsByMap } = useCompositions()
-  const { strats, status, dirty, patchLocal, saveStrat, revertStrat, removeStrat } = useStrats()
+  const { strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat } = useStrats()
   const { isAdmin } = useAuth()
   const { pushToast } = useToast()
 
@@ -69,6 +69,8 @@ export default function Strat() {
   const [selectedId, setSelectedId] = useState(null)
   const [pickAgent, setPickAgent] = useState(null)
   const [allOpen, setAllOpen] = useState(false)
+  const [enemy, setEnemy] = useState(false) // pose les agents et capacités dans l'équipe adverse
+  const [roleFilter, setRoleFilter] = useState(null)
   const [agentQuery, setAgentQuery] = useState('')
   const [saving, setSaving] = useState(false)
   const [leave, setLeave] = useState(null) // adresse visée quand on quitte sans avoir enregistré
@@ -203,8 +205,18 @@ export default function Strat() {
   }
   const startPlace = (p) => {
     setTool('place')
-    setPlace(p)
+    setPlace(p.t === 'agent' || p.t === 'ability' ? { ...p, ...(enemy ? { en: true } : {}) } : p)
     setSelectedId(null)
+  }
+  // Duplique l'élément sélectionné (Ctrl+D), un peu décalé
+  const duplicateSelected = () => {
+    if (!selected) return
+    const nid = uid()
+    const copy = selected.p
+      ? { ...selected, id: nid, p: selected.p.map((v) => Math.min(1000, v + 18)) }
+      : { ...selected, id: nid, x: Math.min(1000, selected.x + 18), y: Math.min(1000, selected.y + 18) }
+    setItems([...step.items, copy])
+    setSelectedId(nid)
   }
 
   // Après chaque élément posé ou tracé, on revient sur « Déplacer » et on sélectionne ce qu'on vient d'ajouter
@@ -240,6 +252,12 @@ export default function Strat() {
         else undo()
         return
       }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        if (typing) return
+        e.preventDefault()
+        duplicateSelected()
+        return
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y') {
         if (typing) return
         e.preventDefault()
@@ -255,6 +273,14 @@ export default function Strat() {
         return
       }
       if (e.key === 'Escape') return chooseTool('select')
+      // C, Q, E, X : capacité de l'agent choisi, comme en jeu
+      const slot = Object.keys(SLOT_KEY).find((k) => SLOT_KEY[k].toLowerCase() === e.key.toLowerCase())
+      const pk = agentByUuid.get(pickAgent)
+      if (slot && pk && pk.abilities?.some((x) => x.slot === slot)) {
+        e.preventDefault()
+        startPlace({ t: 'ability', a: pk.uuid, s: slot })
+        return
+      }
       const t = TOOLS.find((x) => x.key === e.key.toLowerCase())
       if (t) chooseTool(t.id)
     }
@@ -289,6 +315,20 @@ export default function Strat() {
       pushToast("Impossible de copier l'image.", 'error')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const duplicateStrat = async () => {
+    const id = await createStrat({
+      mapUuid: strat.mapUuid,
+      compositionId: strat.compositionId,
+      name: `${strat.name} (copie)`.slice(0, 60),
+      side: strat.side,
+      steps: strat.steps,
+    })
+    if (id) {
+      pushToast('Copie créée.', 'success')
+      navigate(`/strat/${id}`)
     }
   }
 
@@ -342,7 +382,8 @@ export default function Strat() {
     : tool === 'text' ? { text: 'Clique sur la carte, puis écris dans l’encart qui s’ouvre.' }
     : { text: 'Clique un élément pour l’effacer.' }
 
-  const stripAgents = allOpen || !compAgents.length ? filteredAgents : compAgents
+  const roles = [...new Set(agents.map((a) => a.role?.name).filter(Boolean))].sort()
+  const stripAgents = allOpen || !compAgents.length ? filteredAgents.filter((a) => !roleFilter || a.role?.name === roleFilter) : compAgents
   const isZoneSpec = (sp) => sp && sp.k !== 'circle' && sp.k !== 'ring'
 
 
@@ -391,6 +432,10 @@ export default function Strat() {
             <button type="button" className="sb2-del" onClick={deleteStep} disabled={strat.steps.length <= 1}>
               <Ico d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
               <span><b>Supprimer l’étape {stepIndex + 1}</b><small>{strat.steps.length <= 1 ? 'Il faut au moins une étape' : 'Les autres étapes restent'}</small></span>
+            </button>
+            <button type="button" className="sb2-del" onClick={duplicateStrat}>
+              <Ico d="M9 9h11v11H9zM5 15V4h11" />
+              <span><b>Dupliquer la strat</b><small>Crée une copie pour faire une variante</small></span>
             </button>
             <button type="button" className="sb2-del sb2-del--danger" onClick={() => setConfirmDelete(true)}>
               <Ico d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
@@ -504,7 +549,10 @@ export default function Strat() {
                   onChange={(e) => setSteps(strat.steps.map((s) => (s.id === step.id ? { ...s, items: s.items.map((i) => (i.id === selectedId ? { ...i, v: e.target.value } : i)) } : s)), { record: false })} />
               )}
               {selAbility && isZoneSpec(shapeFor(selAgent?.name, selected.s)) && <p className="sb2-note">Tire la poignée ambre pour l’orienter.</p>}
-              <button type="button" className="sb2-wide sb2-wide--danger" onClick={deleteSelected}>Effacer <kbd>Suppr</kbd></button>
+              <div className="sb2-row2">
+                <button type="button" className="sb2-wide sb2-wide--ghost" onClick={duplicateSelected}>Dupliquer <kbd>Ctrl+D</kbd></button>
+                <button type="button" className="sb2-wide sb2-wide--danger" onClick={deleteSelected}>Effacer <kbd>Suppr</kbd></button>
+              </div>
             </div>
           )}
         </div>
@@ -518,10 +566,21 @@ export default function Strat() {
                 <button type="button" className={`sb2-tab${!allOpen ? ' on' : ''}`} onClick={() => setAllOpen(false)}>Compo</button>
               )}
               <button type="button" className={`sb2-tab${allOpen || !compAgents.length ? ' on' : ''}`} onClick={() => setAllOpen(true)}>Tous</button>
-              {(allOpen || !compAgents.length) && (
-                <input className="sb2-search" placeholder="Chercher" value={agentQuery} onChange={(e) => setAgentQuery(e.target.value)} aria-label="Chercher un agent" />
-              )}
+              <div className="sb2-team" role="radiogroup" aria-label="Équipe des agents posés">
+                <button type="button" role="radio" aria-checked={!enemy} className={!enemy ? `on ${strat.side}` : ''} onClick={() => setEnemy(false)}>Alliés</button>
+                <button type="button" role="radio" aria-checked={enemy} className={enemy ? `on ${strat.side === 'attaque' ? 'defense' : 'attaque'}` : ''} onClick={() => setEnemy(true)}>Ennemis</button>
+              </div>
             </div>
+            {(allOpen || !compAgents.length) && (
+              <div className="sb2-roles">
+                <input className="sb2-search" placeholder="Chercher" value={agentQuery} onChange={(e) => setAgentQuery(e.target.value)} aria-label="Chercher un agent" />
+                <div className="sb2-rolechips" role="group" aria-label="Filtrer par rôle">
+                  {roles.map((r) => (
+                    <button key={r} type="button" className={roleFilter === r ? 'on' : ''} style={{ '--role': ROLE_COLOR[r] || '#9aa3af' }} onClick={() => setRoleFilter(roleFilter === r ? null : r)}>{r}</button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="sb2-agents">
               {stripAgents.map((a) => (
                 <button key={a.uuid} type="button"

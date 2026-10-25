@@ -102,7 +102,7 @@ Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et c
 ### Tableau tactique (Comp Builder)
 
 - Onglet **Strats** du Comp Builder, et section « Strats » sur chaque map.
-- Minimap officielle, côté attaque ou défense, carte retournable. Agents (ceux de la compo liée sous la main), leurs 4 capacités, spike, flèches, traits, crayon, zones, texte, gomme, 6 couleurs, annuler / rétablir (Ctrl+Z / Ctrl+Y), raccourcis clavier (V, A, L, D, Z, T, E).
+- Minimap officielle, côté attaque ou défense, carte retournable. Agents (ceux de la compo liée sous la main), leurs 4 capacités, spike, flèches, traits, crayon, zones, texte, gomme, 6 couleurs, annuler / rétablir (Ctrl+Z / Ctrl+Y), raccourcis clavier (V, A, L, D, Z, T, G pour la gomme ; C, Q, E, X pour les capacités de l'agent choisi ; Ctrl+D pour dupliquer un élément ; Ctrl+S pour enregistrer), agents alliés ou ennemis, filtre par rôle, duplication d'une strat.
 - Plusieurs étapes par strat (Setup, Exécution, Post-plant…) : une nouvelle étape reprend la position de la précédente.
 - Enregistrement manuel (bouton « Enregistrer » ou Ctrl+S) ; en quittant la page avec des changements, une fenêtre demande « Êtes-vous sûr de partir sans enregistrer ? ». Mise à jour en direct chez les coéquipiers, lecture seule pour les joueurs non éditeurs, image à télécharger ou à copier pour Discord.
 - Carte orientée automatiquement : ton spawn est en bas (attaquants en attaque, défenseurs en défense), d'après les positions des spawns fournies par valorant-api. La carte est cadrée sur la zone dessinée pour être la plus grande possible.

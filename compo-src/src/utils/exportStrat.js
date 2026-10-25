@@ -21,6 +21,7 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
   canvas.height = H + HEAD
   const ctx = canvas.getContext('2d')
   const ring = RING[strat.side] || RING.attaque
+  const ringEnemy = strat.side === 'defense' ? RING.attaque : RING.defense
 
   // Images nécessaires (minimap, agents, capacités)
   const urls = new Set([map?.minimap])
@@ -104,15 +105,17 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
     } else if (it.t === 'ability' || it.t === 'agent') {
       const a = agentByUuid.get(it.a)
       if (it.t === 'ability') drawZone(ctx, k, shapeFor(a?.name, it.s), it, mapScale(map), colorFor(a?.name, shapeFor(a?.name, it.s)))
-      const r = (it.t === 'agent' ? SIZES.agent : SIZES.ability) * k
+      const zspec = it.t === 'ability' ? shapeFor(a?.name, it.s) : null
+      const onZone = zspec?.k === 'circle'
+      const r = (it.t === 'agent' ? SIZES.agent : onZone ? Math.max(11, Math.min(SIZES.ability, zspec.r * mapScale(map) * 0.55)) : SIZES.ability) * k
       const icon = it.t === 'agent' ? a?.icon : a?.abilities?.find((x) => x.slot === it.s)?.icon
       upright(it.x, it.y, () => {
         ctx.beginPath()
         ctx.arc(0, 0, r, 0, Math.PI * 2)
-        ctx.fillStyle = '#0d1117'
+        ctx.fillStyle = onZone ? 'rgba(13,17,23,0.35)' : '#0d1117'
         ctx.fill()
-        ctx.lineWidth = (it.t === 'agent' ? 5 : 3) * k
-        ctx.strokeStyle = ring
+        ctx.lineWidth = (it.t === 'agent' ? 5 : onZone ? 2.5 : 3) * k
+        ctx.strokeStyle = it.en ? ringEnemy : ring
         ctx.stroke()
         const im = imgs.get(icon)
         if (im) {
@@ -171,36 +174,108 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/png'))
 }
 
-// Zone réelle d'une capacité (mêmes formes que sur le tableau)
+// Zone réelle d'une capacité (même rendu que sur le tableau)
+function rgba(hex, a) {
+  const n = parseInt(hex.slice(1), 16)
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${a})`
+}
 function drawZone(ctx, k, spec, it, scale, col) {
   if (!spec) return
   const { shapes } = abilityGeometry(spec, it, scale)
+  const cat = spec.cat
   ctx.save()
   for (const sh of shapes) {
-    ctx.beginPath()
-    if (sh.type === 'circle') ctx.arc(sh.cx * k, sh.cy * k, sh.r * k, 0, Math.PI * 2)
-    else {
-      sh.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)))
-      if (sh.type !== 'path') ctx.closePath()
+    ctx.setLineDash([])
+    if (sh.type === 'circle') {
+      const cx = sh.cx * k, cy = sh.cy * k, r = sh.r * k
+      ctx.beginPath()
+      ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r)
+      if (!sh.fill) {
+        g.addColorStop(0.55, rgba(col, 0))
+        g.addColorStop(1, rgba(col, 0.16))
+        ctx.fillStyle = g
+        ctx.fill()
+        ctx.setLineDash([12 * k, 8 * k])
+      } else if (cat === 'smoke') {
+        g.addColorStop(0, rgba(col, 0.82))
+        g.addColorStop(0.72, rgba(col, 0.66))
+        g.addColorStop(1, rgba(col, 0.5))
+        ctx.fillStyle = g
+        ctx.fill()
+      } else if (cat === 'fire' || cat === 'damage') {
+        g.addColorStop(0, 'rgba(255, 242, 194, 0.7)')
+        g.addColorStop(0.35, rgba(col, 0.62))
+        g.addColorStop(1, rgba(col, 0.32))
+        ctx.fillStyle = g
+        ctx.fill()
+      } else if (cat === 'slow') {
+        ctx.fillStyle = rgba(col, 0.16)
+        ctx.fill()
+        ctx.save()
+        ctx.clip()
+        ctx.strokeStyle = rgba(col, 0.55)
+        ctx.lineWidth = 3 * k
+        for (let d = -2 * r; d < 2 * r; d += 9 * k) {
+          ctx.beginPath()
+          ctx.moveTo(cx + d - r, cy - r)
+          ctx.lineTo(cx + d + r, cy + r)
+          ctx.stroke()
+        }
+        ctx.restore()
+        ctx.beginPath()
+        ctx.arc(cx, cy, r, 0, Math.PI * 2)
+      } else {
+        g.addColorStop(0, rgba(col, 0.14))
+        g.addColorStop(1, rgba(col, 0.45))
+        ctx.fillStyle = g
+        ctx.fill()
+      }
+      ctx.strokeStyle = rgba(col, 0.92)
+      ctx.lineWidth = (cat === 'smoke' && sh.fill ? 3 : 2.5) * k
+      ctx.stroke()
+      continue
     }
-    ctx.strokeStyle = col
-    ctx.fillStyle = col
+    if (sh.type === 'wire') {
+      const [[x1, y1], [x2, y2]] = sh.pts
+      ctx.strokeStyle = rgba(col, 0.95)
+      ctx.lineWidth = 3 * k
+      ctx.beginPath(); ctx.moveTo(x1 * k, y1 * k); ctx.lineTo(x2 * k, y2 * k); ctx.stroke()
+      for (const [px, py] of sh.pts) {
+        ctx.beginPath(); ctx.arc(px * k, py * k, 6 * k, 0, Math.PI * 2)
+        ctx.fillStyle = '#0d1117'; ctx.fill(); ctx.stroke()
+      }
+      continue
+    }
+    ctx.beginPath()
+    sh.pts.forEach(([x, y], i) => (i ? ctx.lineTo(x * k, y * k) : ctx.moveTo(x * k, y * k)))
     if (sh.type === 'path') {
       ctx.setLineDash([3 * k, 9 * k])
       ctx.lineWidth = 4 * k
-      ctx.globalAlpha = 0.9
+      ctx.strokeStyle = rgba(col, 0.9)
       ctx.stroke()
-      ctx.setLineDash([])
       continue
     }
-    const ring = sh.type === 'circle' && !sh.fill
-    ctx.globalAlpha = ring ? 0.05 : sh.solid ? 0.85 : spec.cat === 'smoke' ? 0.5 : 0.24
+    ctx.closePath()
+    if (sh.solid) {
+      ctx.shadowColor = col
+      ctx.shadowBlur = 8 * k
+      ctx.fillStyle = rgba(col, 0.92)
+      ctx.fill()
+      ctx.shadowBlur = 0
+      continue
+    }
+    if (sh.fade) {
+      const [[x1, y1], [x2, y2]] = sh.fade
+      const g = ctx.createLinearGradient(x1 * k, y1 * k, x2 * k, y2 * k)
+      g.addColorStop(0, rgba(col, 0.58))
+      g.addColorStop(1, rgba(col, 0.14))
+      ctx.fillStyle = g
+    } else ctx.fillStyle = rgba(col, 0.3)
     ctx.fill()
-    ctx.globalAlpha = 0.9
-    ctx.lineWidth = 2.5 * k
-    if (ring) ctx.setLineDash([10 * k, 8 * k])
+    ctx.strokeStyle = rgba(col, 0.75)
+    ctx.lineWidth = 2 * k
     ctx.stroke()
-    ctx.setLineDash([])
   }
   ctx.restore()
 }

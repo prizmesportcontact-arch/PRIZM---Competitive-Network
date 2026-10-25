@@ -316,6 +316,7 @@ export default function StratBoard({
   // Les icônes restent droites quand la carte est retournée
   const up = (x, y) => (rotation ? `rotate(${-rotation} ${x} ${y})` : undefined)
   const ring = SIDE_RING[side] || SIDE_RING.attaque
+  const ringEnemy = side === 'defense' ? SIDE_RING.attaque : SIDE_RING.defense
   const order = { zone: 0, draw: 1, line: 1, ability: 2, spike: 3, agent: 4, text: 5 }
   shown.sort((a, b) => (order[a.t] ?? 9) - (order[b.t] ?? 9))
 
@@ -396,22 +397,11 @@ export default function StratBoard({
             const geo = abilityGeometry(spec, it, scale)
             const col = colorFor(agent?.name, spec)
             const live = (draft && draft.id === it.id) || (turn && turn.id === it.id)
+            const onZone = spec?.k === 'circle'
+            const ri = onZone ? Math.max(11, Math.min(r, spec.r * scale * 0.55)) : r
             return (
               <g key={it.id}>
-                <g className={`sb-zone sb-zone--${spec?.cat || 'none'}`} pointerEvents="none">
-                  {geo.shapes.map((sh, i) => {
-                    if (sh.type === 'circle') {
-                      return sh.fill
-                        ? <circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={col} className="sb-z-fill" stroke={col} />
-                        : <circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={col} className="sb-z-ring" stroke={col} />
-                    }
-                    if (sh.type === 'path') {
-                      const [[x1, y1], [x2, y2]] = sh.pts
-                      return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} className="sb-z-path" markerEnd={`url(#${uidBase}-zarrow)`} />
-                    }
-                    return <polygon key={i} points={sh.pts.map((p) => p.join(',')).join(' ')} fill={col} stroke={col} className={sh.solid ? 'sb-z-solid' : 'sb-z-fill'} />
-                  })}
-                </g>
+                <Zone id={`${uidBase}-${it.id}`} arrow={`${uidBase}-zarrow`} spec={spec} geo={geo} col={col} />
                 {editable && sel && geo.tip && tool === 'select' && (
                   <g data-handle={it.id} className="sb-handle">
                     <line x1={it.x} y1={it.y} x2={geo.tip[0]} y2={geo.tip[1]} />
@@ -423,9 +413,10 @@ export default function StratBoard({
                 )}
               <g {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
                 <title>{agent ? `${agent.name} · ${ab?.name || ''}` : 'Capacité'}</title>
-                {sel && <circle r={r + 9} className="sb-selring" />}
-                <circle r={r} className="sb-ability" stroke={ring} />
-                {ab && <image href={ab.icon} x={-r * 0.66} y={-r * 0.66} width={r * 1.32} height={r * 1.32} />}
+                {sel && <circle r={ri + 9} className="sb-selring" />}
+                {/* Sur une zone ronde (smoke, molly…), l'icône est plus discrète pour laisser voir la zone */}
+                <circle r={ri} className={`sb-ability${onZone ? ' sb-ability--onzone' : ''}`} stroke={it.en ? ringEnemy : ring} />
+                {ab && <image href={ab.icon} x={-ri * 0.66} y={-ri * 0.66} width={ri * 1.32} height={ri * 1.32} />}
               </g>
               </g>
             )
@@ -436,7 +427,7 @@ export default function StratBoard({
               <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
                 <title>{agent?.name || 'Agent'}</title>
                 {sel && <circle r={r + 10} className="sb-selring" />}
-                <circle r={r} className="sb-agent" stroke={ring} />
+                <circle r={r} className={`sb-agent${it.en ? ' sb-agent--enemy' : ''}`} stroke={it.en ? ringEnemy : ring} />
                 {agent && <image href={agent.icon} x={-r + 4} y={-r + 4} width={(r - 4) * 2} height={(r - 4) * 2} clipPath={`url(#${uidBase}-clip)`} />}
                 {showNames && agent && (
                   <g className="sb-name" transform={`translate(0 ${r + 20})`}>
@@ -463,5 +454,97 @@ export default function StratBoard({
         {zoom > 1.01 && <span>×{zoom.toFixed(1).replace('.', ',')}</span>}
       </div>
     </div>
+  )
+}
+
+// Rendu d'une zone de capacité, au plus près du jeu : nuage pour les smokes,
+// cœur brûlant pour les mollys, hachures pour les slows, mur plein, fil tendu…
+function Zone({ id, arrow, spec, geo, col }) {
+  if (!spec || !geo.shapes.length) return null
+  const cat = spec.cat
+  const defs = []
+  const out = []
+  geo.shapes.forEach((sh, i) => {
+    const gid = `${id}-${i}`
+    if (sh.type === 'circle' && sh.fill) {
+      if (cat === 'smoke') {
+        defs.push(
+          <radialGradient key={gid} id={gid}>
+            <stop offset="0%" stopColor={col} stopOpacity="0.82" />
+            <stop offset="72%" stopColor={col} stopOpacity="0.66" />
+            <stop offset="100%" stopColor={col} stopOpacity="0.5" />
+          </radialGradient>
+        )
+        out.push(<circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={`url(#${gid})`} stroke={col} strokeWidth="3" strokeOpacity="0.95" className="sb-z-smoke" />)
+      } else if (cat === 'fire' || cat === 'damage') {
+        defs.push(
+          <radialGradient key={gid} id={gid}>
+            <stop offset="0%" stopColor="#fff2c2" stopOpacity="0.7" />
+            <stop offset="35%" stopColor={col} stopOpacity="0.62" />
+            <stop offset="100%" stopColor={col} stopOpacity="0.32" />
+          </radialGradient>
+        )
+        out.push(<circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={`url(#${gid})`} stroke={col} strokeWidth="2.5" />)
+      } else if (cat === 'slow') {
+        defs.push(
+          <pattern key={gid} id={gid} width="9" height="9" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+            <rect width="9" height="9" fill={col} fillOpacity="0.16" />
+            <line x1="0" y1="0" x2="0" y2="9" stroke={col} strokeWidth="3" strokeOpacity="0.55" />
+          </pattern>
+        )
+        out.push(<circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={`url(#${gid})`} stroke={col} strokeWidth="2.5" />)
+      } else {
+        defs.push(
+          <radialGradient key={gid} id={gid}>
+            <stop offset="0%" stopColor={col} stopOpacity="0.14" />
+            <stop offset="100%" stopColor={col} stopOpacity="0.45" />
+          </radialGradient>
+        )
+        out.push(<circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={`url(#${gid})`} stroke={col} strokeWidth="2.5" />)
+      }
+    } else if (sh.type === 'circle') {
+      // Rayon de détection / révélation : contour en pointillés, voile léger vers le bord
+      defs.push(
+        <radialGradient key={gid} id={gid}>
+          <stop offset="55%" stopColor={col} stopOpacity="0" />
+          <stop offset="100%" stopColor={col} stopOpacity="0.16" />
+        </radialGradient>
+      )
+      out.push(<circle key={i} cx={sh.cx} cy={sh.cy} r={sh.r} fill={`url(#${gid})`} stroke={col} strokeWidth="2.5" strokeDasharray="12 8" strokeOpacity="0.9" />)
+    } else if (sh.type === 'wire') {
+      const [[x1, y1], [x2, y2]] = sh.pts
+      out.push(
+        <g key={i}>
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth="3" strokeOpacity="0.95" />
+          <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} strokeWidth="9" strokeOpacity="0.18" />
+          <circle cx={x1} cy={y1} r="6" fill="#0d1117" stroke={col} strokeWidth="3" />
+          <circle cx={x2} cy={y2} r="6" fill="#0d1117" stroke={col} strokeWidth="3" />
+        </g>
+      )
+    } else if (sh.type === 'path') {
+      const [[x1, y1], [x2, y2]] = sh.pts
+      out.push(<line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke={col} className="sb-z-path" markerEnd={`url(#${arrow})`} />)
+    } else if (sh.solid) {
+      // Mur plein, avec un halo de sa couleur
+      out.push(<polygon key={i} points={sh.pts.map((p) => p.join(',')).join(' ')} fill={col} fillOpacity="0.92" stroke="#0d1117" strokeOpacity="0.6" strokeWidth="1.5" className="sb-z-wall" style={{ '--glow': col }} />)
+    } else if (sh.fade) {
+      // Zone orientée : forte au départ, s'estompe vers la fin
+      const [[x1, y1], [x2, y2]] = sh.fade
+      defs.push(
+        <linearGradient key={gid} id={gid} gradientUnits="userSpaceOnUse" x1={x1} y1={y1} x2={x2} y2={y2}>
+          <stop offset="0%" stopColor={col} stopOpacity="0.58" />
+          <stop offset="100%" stopColor={col} stopOpacity="0.14" />
+        </linearGradient>
+      )
+      out.push(<polygon key={i} points={sh.pts.map((p) => p.join(',')).join(' ')} fill={`url(#${gid})`} stroke={col} strokeWidth="2" strokeOpacity="0.75" />)
+    } else {
+      out.push(<polygon key={i} points={sh.pts.map((p) => p.join(',')).join(' ')} fill={col} fillOpacity="0.3" stroke={col} strokeWidth="2" />)
+    }
+  })
+  return (
+    <g className={`sb-zone sb-zone--${cat}`} pointerEvents="none">
+      {defs.length > 0 && <defs>{defs}</defs>}
+      {out}
+    </g>
   )
 }

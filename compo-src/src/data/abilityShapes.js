@@ -97,13 +97,13 @@ const S = {
   'Waylay:Ultimate': { k: 'rect', l: 36, w: 13.5, off: 3, cat: 'slow' }, // Convergent Paths
 
   // ---------- Sentinelles ----------
-  'Sage:Grenade': { k: 'wall', from: 'center', l: 10.4, w: 1.5, cat: 'wall' }, // Barrier Orb
+  'Sage:Grenade': { k: 'wall', from: 'center', l: 10.4, w: 1.5, seg: 4, cat: 'wall' }, // Barrier Orb (4 segments)
   'Sage:Ability1': { k: 'circle', r: 6.5, cat: 'slow', approx: true }, // Slow Orb
   'Killjoy:Grenade': { k: 'circle', r: 4.5, cat: 'damage' }, // Nanoswarm
   'Killjoy:Ability2': { k: 'cone', l: 20, a: 100, cat: 'damage', approx: true }, // TURRET
   'Killjoy:Ultimate': { k: 'ring', r: 32.5, cat: 'trap' }, // Lockdown
   'Cypher:Ability1': { k: 'circle', r: 3.72, cat: 'smoke' }, // Cyber Cage
-  'Cypher:Grenade': { k: 'wall', from: 'center', l: 8, min: 1, max: 15, w: 0.4, cat: 'trap' }, // Trapwire
+  'Cypher:Grenade': { k: 'wall', from: 'center', l: 8, min: 1, max: 15, w: 0.4, wire: true, cat: 'trap' }, // Trapwire
   'Chamber:Ability2': { k: 'ring', r: 18, cat: 'move' }, // Rendezvous
   'Chamber:Grenade': { k: 'circle', r: 6, cat: 'slow' }, // Trademark (zone de slow)
   'Chamber:Ultimate': { k: 'circle', r: 6, cat: 'slow' }, // Tour De Force (slow au kill)
@@ -120,14 +120,21 @@ const S = {
 }
 
 // Couleur des smokes et murs, comme en jeu
-const AGENT_SMOKE = {
-  Omen: '#9b8cff', Brimstone: '#d4dbe6', Viper: '#62d98a', Astra: '#c792ff', Harbor: '#38d0d6',
-  Clove: '#ff9ecf', Miks: '#7fa8ff', Jett: '#e6eef8', Cypher: '#e6eef8', Phoenix: '#ff7a45',
+// Couleur des capacités de chaque agent, comme en jeu
+const AGENT_COLOR = {
+  Omen: '#8a7dff', Brimstone: '#f0a35e', Viper: '#3fe07a', Astra: '#c07bff', Harbor: '#22c9cf',
+  Clove: '#ff82d2', Miks: '#6f9dff', Jett: '#cfe9ff', Cypher: '#eef1f5', Phoenix: '#ff7a2e',
+  Raze: '#ff9a2e', Reyna: '#d24bff', Yoru: '#4f6dff', Neon: '#3fb6ff', Iso: '#8f6bff',
+  Waylay: '#ff8fd0', Sova: '#5a95ff', Breach: '#ff8a3d', Skye: '#7be07b', 'KAY/O': '#86b6ff',
+  Fade: '#7a5cc9', Gekko: '#c4ff4a', Tejo: '#ffb648', Sage: '#73f0dc', Killjoy: '#ffd84a',
+  Chamber: '#f0c766', Deadlock: '#cfe2f0', Vyse: '#b77cff', Veto: '#9dff9d',
 }
+// Les smokes de Brimstone sont grises en jeu (ses autres capacités restent orange)
+const SMOKE_OVERRIDE = { Brimstone: '#c9d1dc' }
 export function colorFor(agentName, spec) {
   if (!spec) return '#ffffff'
-  if ((spec.cat === 'smoke' || spec.k === 'wall') && AGENT_SMOKE[agentName]) return AGENT_SMOKE[agentName]
-  return CAT_COLOR[spec.cat] || '#ffffff'
+  if (spec.cat === 'smoke' && SMOKE_OVERRIDE[agentName]) return SMOKE_OVERRIDE[agentName]
+  return AGENT_COLOR[agentName] || CAT_COLOR[spec.cat] || '#ffffff'
 }
 
 export function shapeFor(agentName, slot) {
@@ -175,7 +182,23 @@ export function abilityGeometry(spec, item, scale) {
       break
     case 'wall': {
       const hw = Math.max(spec.w * scale, 3) / 2
-      if (spec.from === 'center') {
+      if (spec.wire) {
+        // Fil tendu entre deux ancrages
+        const a = rot(-L / 2, 0, x, y, d)
+        const b = rot(L / 2, 0, x, y, d)
+        out.push({ type: 'wire', pts: [a, b] })
+        tip = b
+      } else if (spec.from === 'center' && spec.seg) {
+        // Mur en segments (Sage) : petits jours entre les blocs
+        const n = spec.seg
+        const gap = Math.min(2, L / (n * 8))
+        const part = (L - gap * (n - 1)) / n
+        for (let i = 0; i < n; i++) {
+          const x0 = -L / 2 + i * (part + gap)
+          out.push({ type: 'poly', pts: box(x0, x0 + part, hw, x, y, d), fill: true, solid: true })
+        }
+        tip = rot(L / 2, 0, x, y, d)
+      } else if (spec.from === 'center') {
         out.push({ type: 'poly', pts: box(-L / 2, L / 2, hw, x, y, d), fill: true, solid: true })
         tip = rot(L / 2, 0, x, y, d)
       } else {
@@ -186,7 +209,7 @@ export function abilityGeometry(spec, item, scale) {
     }
     case 'rect': {
       const off = (spec.off || 0) * scale
-      out.push({ type: 'poly', pts: box(off, off + L, (spec.w * scale) / 2, x, y, d), fill: true })
+      out.push({ type: 'poly', pts: box(off, off + L, (spec.w * scale) / 2, x, y, d), fill: true, fade: [rot(off, 0, x, y, d), rot(off + L, 0, x, y, d)] })
       tip = rot(off + L, 0, x, y, d)
       break
     }
@@ -194,7 +217,7 @@ export function abilityGeometry(spec, item, scale) {
       const half = spec.a / 2
       const pts = [[x, y]]
       for (let i = 0; i <= 16; i++) pts.push(rot(L, 0, x, y, d - half + (spec.a * i) / 16))
-      out.push({ type: 'poly', pts, fill: true })
+      out.push({ type: 'poly', pts, fill: true, fade: [[x, y], rot(L, 0, x, y, d)] })
       tip = rot(L, 0, x, y, d)
       break
     }

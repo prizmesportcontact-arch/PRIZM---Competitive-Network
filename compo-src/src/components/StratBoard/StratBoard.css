@@ -64,3 +64,6 @@
 .sb-zoom button:disabled { opacity: 0.4; cursor: default; }
 .sb-zoom .sb-zoom__fit { font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; }
 .sb-zoom span { margin-left: 4px; font: 600 0.78rem var(--font-mono); color: #ffa043; text-shadow: 0 1px 4px #000; }
+.sb-z-smoke { filter: drop-shadow(0 0 6px rgba(0, 0, 0, 0.45)); }
+.sb-z-wall { filter: drop-shadow(0 0 4px var(--glow)); }
+.sb-ability--onzone { fill: rgba(13, 17, 23, 0.35); stroke-width: 2.5; filter: none; }

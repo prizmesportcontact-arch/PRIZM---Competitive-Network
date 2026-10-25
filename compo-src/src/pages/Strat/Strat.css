@@ -273,3 +273,21 @@ button.sb2-save:disabled { cursor: default; }
 .sb2-modal__box h2 { font: 900 1.7rem/1 var(--font-display); text-transform: uppercase; margin: 0; }
 .sb2-modal__box p { color: var(--ink-2); }
 .sb2-modal__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; }
+
+/* Alliés / ennemis et filtre par rôle */
+.sb2-team { display: grid; grid-template-columns: 1fr 1fr; margin-top: 4px; }
+.sb2-team button {
+  padding: 5px 4px; cursor: pointer; background: transparent; border: 1px solid var(--line); color: var(--ink-2);
+  font: 700 0.68rem var(--font-body); text-transform: uppercase; letter-spacing: 0.04em;
+}
+.sb2-team button + button { border-left: 0; }
+.sb2-team button.on.attaque { background: var(--atk); border-color: var(--atk); color: #170608; }
+.sb2-team button.on.defense { background: var(--def); border-color: var(--def); color: #03131b; }
+.sb2-roles { display: grid; align-content: center; gap: 5px; padding: 6px 8px; flex: 0 0 170px; border-right: 1px solid var(--line); }
+.sb2-rolechips { display: flex; flex-wrap: wrap; gap: 3px; }
+.sb2-rolechips button {
+  padding: 3px 6px; cursor: pointer; background: transparent; border: 0; border-bottom: 2px solid var(--role);
+  color: var(--ink-2); font: 600 0.66rem var(--font-body);
+}
+.sb2-rolechips button.on { background: var(--role); color: #0d1117; }
+@media (max-width: 860px) { .sb2-roles { flex: 1 1 100%; border-right: 0; border-bottom: 1px solid var(--line); } }
