@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveSync } from '../hooks/useLiveSync'
-import { deleteStratRow, fetchStrats, insertStrat, rowToStrat, updateStratRow } from '../services/strats'
+import { deleteStratRow, fetchStrats, insertStrat, newStep, rowToStrat, uid, updateStratRow } from '../services/strats'
 import { useToast } from './ToastContext'
 
 const StratsContext = createContext(null)
@@ -41,7 +41,7 @@ export function StratsProvider({ children }) {
       setStrats((prev) => {
         const next = Object.fromEntries(list.map((s) => [s.id, s]))
         // On garde les changements non enregistrés
-        dirtyRef.current.forEach((id) => { if (prev[id] && next[id]) next[id] = prev[id] })
+        dirtyRef.current.forEach((id) => { if (prev[id] && (next[id] || id.startsWith('draft-'))) next[id] = prev[id] })
         return next
       })
       setStatus('ready')
@@ -101,6 +101,23 @@ export function StratsProvider({ children }) {
     [fail]
   )
 
+  /**
+   * Nouvelle strat (ou copie) : elle n'existe qu'à l'écran (id « draft-… ») et n'est créée
+   * dans la base qu'au premier « Enregistrer ». Partir sans enregistrer la fait disparaître.
+   */
+  const createDraft = useCallback(
+    (draft) => {
+      const id = `draft-${uid()}`
+      const now = Date.now()
+      const s = { id, draft: true, mapUuid: draft.mapUuid, compositionId: draft.compositionId || null, name: draft.name, side: draft.side || 'attaque',
+        flipped: false, steps: draft.steps?.length ? draft.steps : [newStep()], createdAt: now, updatedAt: now }
+      setStrats((prev) => ({ ...prev, [id]: s }))
+      markDirty(id, true)
+      return id
+    },
+    [markDirty]
+  )
+
   /** Modifie la strat à l'écran, sans l'enregistrer. */
   const patchLocal = useCallback(
     (id, patch) => {
@@ -110,10 +127,21 @@ export function StratsProvider({ children }) {
     [markDirty]
   )
 
-  /** Enregistre la version affichée. */
+  /** Enregistre la version affichée. Renvoie l'id enregistré (nouveau pour un brouillon), ou null. */
   const saveStrat = useCallback(
     async (id, current) => {
       try {
+        if (id.startsWith('draft-')) {
+          const s = await insertStrat({ mapUuid: current.mapUuid, compositionId: current.compositionId, name: current.name, side: current.side, steps: current.steps })
+          saved.current[s.id] = s
+          markDirty(id, false)
+          setStrats((prev) => {
+            const next = { ...prev, [s.id]: s }
+            delete next[id]
+            return next
+          })
+          return s.id
+        }
         const s = await updateStratRow(id, {
           name: current.name,
           side: current.side,
@@ -122,10 +150,10 @@ export function StratsProvider({ children }) {
         })
         saved.current[id] = s
         markDirty(id, false)
-        return true
+        return id
       } catch (err) {
         fail(err)
-        return false
+        return null
       }
     },
     [fail, markDirty]
@@ -135,7 +163,13 @@ export function StratsProvider({ children }) {
   const revertStrat = useCallback(
     (id) => {
       const s = saved.current[id]
-      if (s) setStrats((prev) => ({ ...prev, [id]: s }))
+      if (id.startsWith('draft-')) {
+        setStrats((prev) => {
+          const next = { ...prev }
+          delete next[id]
+          return next
+        })
+      } else if (s) setStrats((prev) => ({ ...prev, [id]: s }))
       markDirty(id, false)
     },
     [markDirty]
@@ -144,7 +178,7 @@ export function StratsProvider({ children }) {
   const removeStrat = useCallback(
     async (id) => {
       try {
-        await deleteStratRow(id)
+        if (!id.startsWith('draft-')) await deleteStratRow(id)
         delete saved.current[id]
         markDirty(id, false)
         setStrats((prev) => {
@@ -162,8 +196,8 @@ export function StratsProvider({ children }) {
   )
 
   const value = useMemo(
-    () => ({ strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat, reload: load }),
-    [strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat, load]
+    () => ({ strats, status, dirty, createStrat, createDraft, patchLocal, saveStrat, revertStrat, removeStrat, reload: load }),
+    [strats, status, dirty, createStrat, createDraft, patchLocal, saveStrat, revertStrat, removeStrat, load]
   )
   return <StratsContext.Provider value={value}>{children}</StratsContext.Provider>
 }

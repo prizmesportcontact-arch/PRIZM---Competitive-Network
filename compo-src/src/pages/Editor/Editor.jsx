@@ -6,7 +6,7 @@ import { usePlayers } from '../../context/PlayersContext'
 import { useAuth } from '../../context/AuthContext'
 import { useToast } from '../../context/ToastContext'
 import { getCompsForMap } from '../../utils/compositions'
-import { STATUS_META } from '../../utils/storage'
+import { STATUS, STATUS_META, emptySlots } from '../../utils/storage'
 import AgentSlot from '../../components/AgentSlot/AgentSlot'
 import AgentSelectionModal from '../../components/AgentSelectionModal/AgentSelectionModal'
 import CompositionTabs from '../../components/CompositionTabs/CompositionTabs'
@@ -33,7 +33,6 @@ export default function Editor() {
     compositionsByMap,
     status: compsStatus,
     createComposition,
-    duplicateComposition,
     deleteComposition,
     renameComposition,
     setMain,
@@ -47,40 +46,62 @@ export default function Editor() {
   const [compareOpen, setCompareOpen] = useState(false)
   // Changements pas encore enregistrés de la composition affichée : { compId, slots, status, notes }
   const [draft, setDraft] = useState(null)
+  // Nouvelle composition (ou copie) pas encore enregistrée : elle n'existe qu'ici tant qu'on n'a pas cliqué « Enregistrer »
+  const [pendingNew, setPendingNew] = useState(null)
   const [saving, setSaving] = useState(false)
 
   const map = useMemo(() => maps.find((m) => m.uuid === mapId), [maps, mapId])
   const comps = getCompsForMap(compositionsByMap, mapId)
   const agentByUuid = useMemo(() => new Map(agents.map((a) => [a.uuid, a])), [agents])
-  const saved = comps.find((c) => c.id === activeCompId) || comps[0] || null
+  // Map sans composition : une composition vide s'affiche, elle n'est créée qu'à l'enregistrement
+  const virtualComp = pendingNew || (comps.length === 0 && isAdmin && map
+    ? { id: 'new', name: 'Composition principale', slots: emptySlots(), status: STATUS.TESTING, notes: '', isMain: true }
+    : null)
+  const allComps = pendingNew ? [...comps, pendingNew] : comps.length ? comps : virtualComp ? [virtualComp] : []
+  const saved = allComps.find((c) => c.id === activeCompId) || comps[0] || virtualComp || null
 
   // ---------- Enregistrement manuel ----------
+  const isNew = saved?.id === 'new'
   const liveDraft = draft && saved && draft.compId === saved.id ? draft : null
   const isDirty = Boolean(
-    liveDraft &&
+    (isNew && pendingNew) ||
+    (liveDraft &&
       (JSON.stringify(liveDraft.slots) !== JSON.stringify(saved.slots) ||
         liveDraft.status !== saved.status ||
-        (liveDraft.notes || '') !== (saved.notes || ''))
+        liveDraft.name !== saved.name ||
+        (liveDraft.notes || '') !== (saved.notes || '')))
   )
+  const baseOf = (c) => ({ compId: c.id, name: c.name, slots: c.slots, status: c.status, notes: c.notes || '' })
   const edit = (patch) =>
     setDraft((d) => {
-      const base = d && d.compId === saved.id ? d : { compId: saved.id, slots: saved.slots, status: saved.status, notes: saved.notes || '' }
+      const base = d && d.compId === saved.id ? d : baseOf(saved)
       return { ...base, ...(typeof patch === 'function' ? patch(base) : patch) }
     })
   const editSlots = (mutate) => edit((b) => ({ slots: mutate(b.slots) }))
 
   const doSave = useCallback(async () => {
-    if (!liveDraft || saving) return false
+    if (!saved || saving || (!liveDraft && !isNew)) return false
+    const cur = liveDraft || baseOf(saved)
     setSaving(true)
-    const ok = await saveComposition(liveDraft.compId, { slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes })
+    let id = saved.id
+    if (isNew) {
+      id = await createComposition(mapId, cur.name || saved.name)
+      if (!id) { setSaving(false); return false }
+    }
+    const ok = await saveComposition(id, { name: cur.name, slots: cur.slots, status: cur.status, notes: cur.notes })
     setSaving(false)
     if (ok) {
       setDraft(null)
-      pushToast('Composition enregistrée.', 'success')
+      setPendingNew(null)
+      setActiveCompId(id)
+      pushToast(isNew ? 'Composition créée et enregistrée.' : 'Composition enregistrée.', 'success')
     }
     return ok
-  }, [liveDraft, saving, saveComposition, pushToast])
-  const discard = useCallback(() => setDraft(null), [])
+  }, [liveDraft, saving, saved, isNew, mapId, saveComposition, createComposition, pushToast])
+  const discard = useCallback(() => {
+    setDraft(null)
+    setPendingNew(null)
+  }, [])
 
   const { guard, dialog: leaveDialog } = useUnsavedGuard({
     when: isAdmin && isDirty,
@@ -110,12 +131,8 @@ export default function Editor() {
     if (compsStatus !== 'ready' || !map) return
     const currentComps = getCompsForMap(compositionsByMap, mapId)
 
-    if (currentComps.length === 0) {
-      if (isAdmin) {
-        createComposition(mapId, 'Composition principale').then(setActiveCompId)
-      }
-      return
-    }
+    if (currentComps.length === 0) return
+    if (activeCompId === 'new') return
 
     if (!activeCompId || !currentComps.some((c) => c.id === activeCompId)) {
       const fromLink = currentComps.find((c) => c.id === searchParams.get('comp'))
@@ -145,7 +162,8 @@ export default function Editor() {
     )
   }
 
-  const composition = saved && liveDraft ? { ...saved, slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes } : saved
+  const composition = saved && liveDraft ? { ...saved, name: liveDraft.name, slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes } : saved
+  const tabComps = allComps.map((c) => (composition && c.id === composition.id ? composition : c))
 
   const usedAgentUuids = new Set(composition ? composition.slots.filter((s) => s.agentUuid).map((s) => s.agentUuid) : [])
 
@@ -170,24 +188,27 @@ export default function Editor() {
     edit({ status: newStatus })
   }
 
-  const handleCreateComp = async () => {
-    const name = `Composition ${comps.length + 1}`
-    const newId = await createComposition(mapId, name)
-    if (newId) {
-      setActiveCompId(newId)
-      pushToast('Nouvelle composition créée.', 'success')
-    }
+  // Nouvelle composition / copie : affichée tout de suite, créée seulement à l'enregistrement
+  const handleCreateComp = () => {
+    if (!comps.length) return
+    setPendingNew({ id: 'new', name: `Composition ${comps.length + 1}`, slots: emptySlots(), status: STATUS.TESTING, notes: '', isMain: false })
+    setActiveCompId('new')
   }
 
-  const handleDuplicate = async (compId) => {
-    const newId = await duplicateComposition(mapId, compId)
-    if (newId) {
-      setActiveCompId(newId)
-      pushToast('Composition dupliquée.', 'success')
-    }
+  const handleDuplicate = (compId) => {
+    const src = allComps.find((c) => c.id === compId)
+    if (!src) return
+    setPendingNew({ id: 'new', name: `${src.name} (copie)`.slice(0, 40), slots: src.slots, status: src.status, notes: src.notes || '', isMain: false })
+    setActiveCompId('new')
   }
 
   const handleDeleteComp = async () => {
+    if (confirmDelete === 'new') {
+      discard()
+      setConfirmDelete(null)
+      setActiveCompId(null)
+      return
+    }
     await deleteComposition(mapId, confirmDelete)
     setConfirmDelete(null)
     pushToast('Composition supprimée.', 'success')
@@ -206,9 +227,8 @@ export default function Editor() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
               <path d="M19 12H5M11 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
-            Toutes les maps
+            Toutes les compos
           </button>
-          <span className="eyebrow editor__eyebrow">Composition</span>
           <h1 className="editor__title">{map?.name}</h1>
           <span className="editor__count">
             {filledCount}/5 agents sélectionnés sur cette composition
@@ -247,13 +267,13 @@ export default function Editor() {
               )}
             </div>
             <CompositionTabs
-              comps={comps}
+              comps={tabComps}
               activeCompId={composition.id}
               editable={isAdmin}
               onSelect={(id) => id !== composition.id && guard(() => { setDraft(null); setActiveCompId(id) })}
-              onCreate={() => guard(() => { setDraft(null); handleCreateComp() })}
-              onRename={(id, name) => renameComposition(mapId, id, name)}
-              onSetMain={(id) => setMain(mapId, id)}
+              onCreate={() => guard(() => { setDraft(null); setPendingNew(null); handleCreateComp() })}
+              onRename={(id, name) => (id === composition.id ? edit({ name }) : renameComposition(mapId, id, name))}
+              onSetMain={(id) => id !== 'new' && setMain(mapId, id)}
               onDuplicate={(id) => guard(() => { setDraft(null); handleDuplicate(id) })}
               onDelete={(id) => setConfirmDelete(id)}
             />
@@ -262,7 +282,7 @@ export default function Editor() {
           <section className="editor__section">
             <div className="editor__section-header editor__section-header--with-action">
               <div className="editor__section-header-text">
-                <h2>Composition — {composition.name}</h2>
+                <h2>Agents — {composition.name}</h2>
                 <p>
                   {isAdmin
                     ? 'Clique sur un emplacement pour choisir un agent, glisse-dépose pour réorganiser, et assigne un joueur. Pense à enregistrer.'
@@ -313,19 +333,6 @@ export default function Editor() {
             )}
           </section>
 
-          {map?.minimap && (
-            <section className="editor__section" id="strats">
-              <div className="editor__section-header">
-                <h2>Strats</h2>
-                <p>
-                  {isAdmin
-                    ? 'Dessine tes setups, exécutions et retakes sur la minimap. Une nouvelle strat est liée à la composition affichée.'
-                    : 'Setups, exécutions et retakes de l’équipe sur cette map.'}
-                </p>
-              </div>
-              <StratList mapUuid={mapId} compositionId={composition.id} comps={comps} />
-            </section>
-          )}
 
           <div className="editor__grid-two">
             <section className="editor__section">
@@ -366,6 +373,20 @@ export default function Editor() {
               </div>
             )}
           </section>
+
+          {map?.minimap && (
+            <section className="editor__section" id="strats">
+              <div className="editor__section-header">
+                <h2>Strats</h2>
+                <p>
+                  {isAdmin
+                    ? 'Dessine tes setups, exécutions et retakes sur la minimap. Une nouvelle strat est liée à la composition affichée.'
+                    : 'Setups, exécutions et retakes de l’équipe sur cette map.'}
+                </p>
+              </div>
+              <StratList mapUuid={mapId} compositionId={isNew ? null : composition.id} comps={comps} />
+            </section>
+          )}
         </div>
       )}
 

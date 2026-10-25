@@ -8,7 +8,7 @@
 
 .editor__banner {
   position: relative;
-  height: 320px;
+  height: 210px;
   overflow: hidden;
   border-radius: var(--radius-lg);
 }
@@ -191,7 +191,7 @@
 
 @media (max-width: 560px) {
   .editor__banner {
-    height: 240px;
+    height: 180px;
   }
   .editor__slots {
     grid-template-columns: repeat(2, 1fr);

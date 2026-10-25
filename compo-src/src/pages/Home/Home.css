@@ -68,7 +68,7 @@
 
 .home__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
   gap: var(--space-5);
 }
 
@@ -79,3 +79,5 @@
 }
 
 /* .home__error vit dans global.css (partagé avec MatchCenter). */
+.home__intro { display: grid; gap: 6px; }
+.home__lead { color: var(--text-secondary); max-width: 60ch; }

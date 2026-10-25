@@ -14,7 +14,7 @@ import './StratList.css'
  * compositionId : compo affichée, liée d'office à une nouvelle strat.
  */
 export default function StratList({ mapUuid, compositionId = null, comps = [], showMap = false }) {
-  const { strats, status, createStrat } = useStrats()
+  const { strats, status, createDraft } = useStrats()
   const { maps, agents } = useData()
   const { isAdmin } = useAuth()
   const navigate = useNavigate()
@@ -24,14 +24,15 @@ export default function StratList({ mapUuid, compositionId = null, comps = [], s
   const compName = (id) => comps.find((c) => c.id === id)?.name
 
   const list = Object.values(strats)
-    .filter((s) => !mapUuid || s.mapUuid === mapUuid)
+    .filter((s) => !s.draft && (!mapUuid || s.mapUuid === mapUuid))
     .sort((a, b) => b.updatedAt - a.updatedAt)
 
-  const create = async () => {
+  // La nouvelle strat n'est créée dans la base qu'à son premier « Enregistrer »
+  const create = () => {
     setCreating(true)
-    const id = await createStrat({ mapUuid, compositionId, name: `Strat ${list.length + 1}`, side: 'attaque' })
+    const id = createDraft({ mapUuid, compositionId, name: `Strat ${list.length + 1}`, side: 'attaque' })
     setCreating(false)
-    if (id) navigate(`/strat/${id}`)
+    navigate(`/strat/${id}`)
   }
 
   if (status === 'loading') return <p className="strat-list__muted">Chargement des strats…</p>

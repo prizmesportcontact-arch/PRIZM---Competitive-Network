@@ -66,7 +66,7 @@ export default function Home() {
   return (
     <main className="home">
       <section className="home__hero container">
-        <h1 className="home__title">Compos</h1>
+        <div className="home__intro"><h1 className="home__title">Compos</h1><p className="home__lead">Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer.</p></div>
         {status === 'ready' && realMaps.length > 0 && (
           <div className="home__progress">
             <div className="home__progress-bar">

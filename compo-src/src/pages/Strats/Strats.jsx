@@ -14,7 +14,7 @@ export default function Strats() {
   const realMaps = maps.filter((m) => !m.free && m.minimap)
   const counts = useMemo(() => {
     const c = {}
-    Object.values(strats).forEach((s) => { c[s.mapUuid] = (c[s.mapUuid] || 0) + 1 })
+    Object.values(strats).forEach((s) => { if (!s.draft) c[s.mapUuid] = (c[s.mapUuid] || 0) + 1 })
     return c
   }, [strats])
   const withStrats = realMaps.filter((m) => counts[m.uuid])

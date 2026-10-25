@@ -51,7 +51,7 @@ export default function Strat() {
   const navigate = useNavigate()
   const { maps, agents, status: dataStatus } = useData()
   const { compositionsByMap } = useCompositions()
-  const { strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat } = useStrats()
+  const { strats, status, dirty, createDraft, patchLocal, saveStrat, revertStrat, removeStrat } = useStrats()
   const { isAdmin } = useAuth()
   const { pushToast } = useToast()
 
@@ -98,23 +98,39 @@ export default function Strat() {
 
   const queue = useCallback((patch) => patchLocal(stratId, patch), [patchLocal, stratId])
 
+  // Une nouvelle strat n'existe dans la base qu'après son premier enregistrement : elle change alors d'adresse
+  const leavingRef = useRef(false)
+  const allowRef = useRef(null)
   const doSave = useCallback(async () => {
     if (!strat || saving) return false
     setSaving(true)
-    const ok = await saveStrat(stratId, strat)
+    const id = await saveStrat(stratId, strat)
     setSaving(false)
-    if (ok) pushToast('Strat enregistrée.', 'success')
-    return ok
-  }, [strat, saving, saveStrat, stratId, pushToast])
+    if (!id) return false
+    pushToast(id !== stratId ? 'Strat créée et enregistrée.' : 'Strat enregistrée.', 'success')
+    if (id !== stratId && !leavingRef.current) {
+      allowRef.current?.()
+      navigate(`/strat/${id}`, { replace: true })
+    }
+    return true
+  }, [strat, saving, saveStrat, stratId, pushToast, navigate])
 
   // Rien ne s'enregistre tout seul : quitter la page sans enregistrer demande confirmation,
   // et les changements abandonnés sont oubliés (la strat revient à sa dernière version enregistrée).
   const { allow, dialog: leaveDialog } = useUnsavedGuard({
     when: isDirty,
     label: strat?.name,
-    onSave: doSave,
+    onSave: async () => {
+      leavingRef.current = true
+      const ok = await doSave()
+      leavingRef.current = false
+      return ok
+    },
     onDiscard: () => revertStrat(stratId),
   })
+  useEffect(() => {
+    allowRef.current = allow
+  }, [allow])
   const dirtyNow = useRef(false)
   useEffect(() => {
     dirtyNow.current = isDirty
@@ -300,18 +316,16 @@ export default function Strat() {
     }
   }
 
-  const duplicateStrat = async () => {
-    const id = await createStrat({
+  // La copie n'est créée qu'à son premier « Enregistrer »
+  const duplicateStrat = () => {
+    const id = createDraft({
       mapUuid: strat.mapUuid,
       compositionId: strat.compositionId,
       name: `${strat.name} (copie)`.slice(0, 60),
       side: strat.side,
       steps: strat.steps,
     })
-    if (id) {
-      pushToast('Copie créée.', 'success')
-      navigate(`/strat/${id}`)
-    }
+    navigate(`/strat/${id}`)
   }
 
   const doDelete = async () => {
