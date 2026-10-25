@@ -117,3 +117,7 @@ Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et c
 ## Enregistrement manuel (Comp Builder)
 
 Rien ne s'enregistre tout seul, ni dans l'éditeur de composition (agents, joueurs, statut, notes) ni dans les strats : bouton **Enregistrer** (ou Ctrl+S). Quitter une page non enregistrée (onglet du menu, lien, bouton Retour du navigateur, menu du site, changement de composition, fermeture de l'onglet) affiche « Êtes-vous sûr de partir sans enregistrer ? » — `hooks/useUnsavedGuard.jsx` (routeur `createHashRouter` + `useBlocker`). Partir sans enregistrer remet la dernière version enregistrée.
+
+## Scores par map (migration 025)
+
+Le capitaine envoie le score **de chaque map** (1 à 5 lignes, préremplies depuis le format et les maps du scrim) : `report_scrim_maps`. Stocké dans `scrims.map_scores` (`[{map, h, g}]`, h = hôte) ; `host_score`/`guest_score` restent le total de rounds. Avec le détail, le vainqueur est celui qui gagne le plus de maps (classement, résultats, fiche adversaire). Bilan par map (`team_map_stats`) sur la fiche adversaire et la page publique de l'équipe, colonne « Maps » au classement. « Mon espace » affiche les 5 dernières strats de l'équipe (lien direct vers le tableau tactique).

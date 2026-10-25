@@ -700,6 +700,36 @@
   const tags = s => [s.format, s.maps].filter(Boolean).map(x => `<span class="scx-tag">${esc(x)}</span>`).join("");
   const opponent = x => x ? `<a class="scx-team pl-link" href="${teamHref(x.tag)}">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</a>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
 
+  // ---------- Scores ----------
+  // Résultat d'un scrim vu par une équipe : 1 victoire, 0 nul, -1 défaite.
+  // Avec le score de chaque map, c'est le nombre de maps gagnées qui compte ; sinon le total de rounds.
+  const outcome = r => r.mw != null && r.ml != null ? Math.sign(r.mw - r.ml) : Math.sign(r.us - r.them);
+  const multiMap = r => r.maps && r.maps.length > 1;
+  const scoreText = (r, plain) => r.no_show ? "absence" : multiMap(r) ? `${r.mw} – ${r.ml}${plain ? " maps" : `<small class="t-unit"> maps</small>`}` : `${r.us} – ${r.them}`;
+  const mapsDetail = r => r.maps && r.maps.length ? r.maps.map(m => `${m.map} ${m.us}-${m.them}`).join(" · ") : "";
+  const mapsTitle = r => mapsDetail(r) ? ` title="${esc(mapsDetail(r))}"` : "";
+  // Vue d'un scrim (list_scrims) du côté d'une équipe
+  function sideOf(s, teamId) {
+    const home = s.host.id === teamId;
+    const maps = (s.map_scores || []).map(m => ({ map: m.map, us: home ? m.h : m.g, them: home ? m.g : m.h }));
+    return { us: home ? s.host_score : s.guest_score, them: home ? s.guest_score : s.host_score, maps: maps.length ? maps : null,
+      mw: maps.length ? maps.filter(m => m.us > m.them).length : null, ml: maps.length ? maps.filter(m => m.us < m.them).length : null };
+  }
+  // Bilan par map d'une équipe (scrims avec le score de chaque map)
+  function mapStats(list) {
+    if (!list || !list.length) return `<p class="small-note">Pas encore de résultat map par map.</p>`;
+    const rate = m => m.played ? m.wins / m.played : 0;
+    const ranked = list.filter(m => m.played >= 2);
+    const best = ranked.length > 1 ? [...ranked].sort((a, b) => rate(b) - rate(a) || b.diff - a.diff)[0] : null;
+    const worst = ranked.length > 1 ? [...ranked].sort((a, b) => rate(a) - rate(b) || a.diff - b.diff)[0] : null;
+    return `<div class="map-stats">${list.map(m => `<div class="ms-row${best && m.map === best.map ? " best" : ""}${worst && m.map === worst.map && worst !== best ? " worst" : ""}">
+        <span class="ms-map">${esc(m.map)}</span><span class="ms-rec"><b>${m.wins}</b>V <b>${m.losses}</b>D</span>
+        <span class="ms-bar" title="${Math.round(rate(m) * 100)} % de victoires"><i style="width:${Math.round(rate(m) * 100)}%"></i></span>
+        <span class="ms-diff">${m.diff > 0 ? "+" : ""}${m.diff}</span></div>`).join("")}</div>
+      ${best && worst && best !== worst ? `<p class="small-note">Plus forte : <b>${esc(best.map)}</b> · plus faible : <b>${esc(worst.map)}</b> (sur 2 maps jouées ou plus).</p>` : ""}`;
+  }
+  const mapChips = r => r.maps && r.maps.length ? `<span class="map-scores">${r.maps.map(m => `<span class="${m.us > m.them ? "w" : m.us < m.them ? "l" : "d"}">${esc(m.map)} <b>${m.us}-${m.them}</b></span>`).join("")}</span>` : "";
+
   // ---------- Map pool ----------
   // Liste des maps du jeu (API Valorant, gardée pour la session) ; liste de secours si l'API ne répond pas
   const MAP_FALLBACK = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset"];
@@ -723,17 +753,17 @@
   }
   function allMaps() {
     if (mapListP) return mapListP;
-    try { const c = JSON.parse(sessionStorage.getItem("prizm_maps") || "null"); if (c && c.length) return (mapListP = Promise.resolve(c)); } catch (e) {}
+    try { const c = JSON.parse(sessionStorage.getItem("prizm_maps2") || "null"); if (c && c.length) return (mapListP = Promise.resolve(c)); } catch (e) {}
     mapListP = fetch("https://valorant-api.com/v1/maps").then(r => r.json()).then(j => {
       const seen = new Set(), out = [];
       for (const m of j.data || []) {
         if (!m.displayName || !m.tacticalDescription || /range|tutorial|npe/i.test(m.mapUrl || "")) continue;
         const k = m.displayName.trim().toLowerCase(); if (seen.has(k)) continue; seen.add(k);
-        out.push({ name: m.displayName.trim(), img: m.listViewIcon || null });
+        out.push({ name: m.displayName.trim(), img: m.listViewIcon || null, uuid: m.uuid });
       }
       out.sort((a, b) => a.name.localeCompare(b.name));
       if (!out.length) throw new Error("vide");
-      try { sessionStorage.setItem("prizm_maps", JSON.stringify(out)); } catch (e) {}
+      try { sessionStorage.setItem("prizm_maps2", JSON.stringify(out)); } catch (e) {}
       return out;
     }).catch(() => MAP_FALLBACK.map(name => ({ name, img: null })));
     return mapListP;
@@ -790,9 +820,9 @@
     const myBans = maps.filter(m => (d.my_pool || {})[m.name] === "ban").map(m => m.name);
     const theirBans = maps.filter(m => (d.pool || {})[m.name] === "ban").map(m => m.name);
     const seen = mapsSeen(d.maps_played, maps);
-    const res = r => r.no_show ? "ABS" : r.us > r.them ? "V" : r.us < r.them ? "D" : "N";
-    const cls = r => r.no_show ? "ff" : r.us > r.them ? "w" : r.us < r.them ? "l" : "d";
-    const hw = h2h.filter(r => !r.no_show && r.us > r.them).length, hl = h2h.filter(r => !r.no_show && r.us < r.them).length;
+    const res = r => r.no_show ? "ABS" : outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N";
+    const cls = r => r.no_show ? "ff" : outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d";
+    const hw = h2h.filter(r => !r.no_show && outcome(r) > 0).length, hl = h2h.filter(r => !r.no_show && outcome(r) < 0).length;
     const order = r => (r.is_captain ? 0 : r.role === "titulaire" ? 1 : 2);
     roster.sort((a, b) => order(a) - order(b));
     const avgRank = (() => { const r = roster.filter(x => x.role === "titulaire" && x.rank != null).map(x => x.rank); return r.length ? Math.round(r.reduce((a, b) => a + b, 0) / r.length) : null; })();
@@ -808,15 +838,15 @@
       ${st ? `<div class="brief-stats">
           <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
           <div><b>${st.wins}-${st.draws}-${st.losses}</b><span>V · N · D</span></div>
-          <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>rounds</span></div>
+          <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>rounds${st.mw + st.ml ? ` · maps ${st.mw}-${st.ml}` : ""}</span></div>
           <div class="${st.reliability < 80 ? "warn" : ""}"><b>${st.reliability}<small>%</small></b><span>fiabilité</span></div>
         </div>
         ${st.no_shows || st.late_cancels ? `<p class="callout brief-warn">${[st.no_shows && `${st.no_shows} absence${st.no_shows > 1 ? "s" : ""}`, st.late_cancels && `${st.late_cancels} annulation${st.late_cancels > 1 ? "s" : ""} tardive${st.late_cancels > 1 ? "s" : ""}`].filter(Boolean).join(" et ")} sur le réseau.</p>` : ""}`
         : `<p class="small-note">Pas encore de scrim confirmé sur le réseau.</p>`}
 
       <div class="brief-sec"><h4>Forme</h4>
-        ${recent.length ? `<div class="brief-form">${recent.slice(0, 5).map(r => `<span class="t-res ${cls(r)}" title="${esc(r.opp)} · ${shortDate(r.starts_at)}${r.no_show ? "" : ` · ${r.us} – ${r.them}`}">${res(r)}</span>`).join("")}<span class="small-note">du plus récent au plus ancien</span></div>
-          <div class="t-lines">${recent.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span>${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)}</span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>`
+        ${recent.length ? `<div class="brief-form">${recent.slice(0, 5).map(r => `<span class="t-res ${cls(r)}" title="${esc(r.opp)} · ${shortDate(r.starts_at)}${r.no_show ? "" : ` · ${scoreText(r, true)}${mapsDetail(r) ? ` (${mapsDetail(r)})` : ""}`}">${res(r)}</span>`).join("")}<span class="small-note">du plus récent au plus ancien</span></div>
+          <div class="t-lines">${recent.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span>${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)}</span><span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>${mapChips(r)}`).join("")}</div>`
           : `<p class="small-note">Aucun résultat pour l'instant.</p>`}
       </div>
 
@@ -825,12 +855,13 @@
           : !mineIsMe && state.team && !hasPool(d.my_pool) ? `<p class="small-note">Renseigne le map pool de ton équipe dans <a href="#/espace">Mon espace</a> pour voir les maps conseillées.</p>` : ""}
         ${poolView(d.pool, maps)}
         ${!mineIsMe && (myBans.length || theirBans.length) && hasPool(d.my_pool) ? `<p class="small-note">À éviter : ${esc([...new Set([...myBans, ...theirBans])].join(", "))}.</p>` : ""}
+        <p class="eyebrow brief-sub">Leurs résultats par map</p>${mapStats(d.map_stats)}
         ${seen.length ? `<p class="small-note brief-seen">Vues dans leurs derniers scrims : ${seen.map(([n, c]) => `<b>${esc(n)}</b> ×${c}`).join(", ")}</p>` : ""}
       </div>
 
       ${!mineIsMe && state.team ? `<div class="brief-sec"><h4>Face à vous</h4>
         ${h2h.length ? `<p class="brief-h2h"><b>${hw}</b> victoire${hw > 1 ? "s" : ""} · <b>${hl}</b> défaite${hl > 1 ? "s" : ""} en ${h2h.length} scrim${h2h.length > 1 ? "s" : ""}</p>
-          <div class="t-lines">${h2h.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span><span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span></span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>`
+          <div class="t-lines">${h2h.slice(0, 3).map(r => `<div class="t-line"><span class="t-res ${cls(r)}">${res(r)}</span><span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span></span><span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>${mapChips(r)}`).join("")}</div>`
           : `<p class="small-note">Premier scrim entre vos deux équipes.</p>`}
       </div>` : ""}
 
@@ -943,8 +974,8 @@
       const late15 = Date.now() >= new Date(s.starts_at).getTime() + 15 * 60000;
       if (isCap) act = `<button class="btn sm solid" data-report="${s.id}" type="button">Envoyer le résultat</button>${late15 ? `<button class="link-btn danger-t" data-noshow="${s.id}" type="button">L'adversaire n'est pas venu</button>` : ""}`;
     } else {
-      const ours = home ? s.host_score : s.guest_score, theirs = home ? s.guest_score : s.host_score;
-      msg = `L'adversaire a déclaré <b class="scx-score">${ours} – ${theirs}</b> (${ours > theirs ? "victoire" : ours < theirs ? "défaite" : "nul"} pour vous). C'est bon ?`;
+      const v = sideOf(s, t.id), o = outcome(v);
+      msg = `L'adversaire a déclaré <b class="scx-score">${scoreText(v)}</b> (${o > 0 ? "victoire" : o < 0 ? "défaite" : "nul"} pour vous). C'est bon ?${mapChips(v)}`;
       if (isCap) act = `<button class="btn sm solid" data-confirm="${s.id}" type="button">Confirmer</button><button class="link-btn danger-t" data-refuse="${s.id}" type="button">Pas d'accord</button>`;
     }
     if (!isCap) act = `<span class="small-note">Le capitaine s'en occupe</span>`;
@@ -973,17 +1004,17 @@
     if (s.status === "annule") { badge = `<span class="scx-res x">ANN</span>`; note = s.cancel_late ? "Annulé tard" : "Annulé"; }
     else if (s.no_show) { const us = s.no_show === t.id; badge = `<span class="scx-res ${us ? "l" : "w"}">${us ? "ABS" : "V"}</span>`; note = us ? "Absence notée pour nous" : "Adversaire absent"; }
     else {
-      const ours = home ? s.host_score : s.guest_score, theirs = home ? s.guest_score : s.host_score;
-      const r = ours > theirs ? "w" : ours < theirs ? "l" : "d";
+      const v = sideOf(s, t.id), o = outcome(v);
+      const r = o > 0 ? "w" : o < 0 ? "l" : "d";
       badge = `<span class="scx-res ${r}">${r === "w" ? "V" : r === "l" ? "D" : "N"}</span>`;
-      score = `<b class="scx-score">${ours} – ${theirs}</b>`;
+      score = `<b class="scx-score"${mapsTitle(v)}>${scoreText(v)}</b>`;
       if (!s.confirmed) note = "En attente de confirmation";
     }
     return `<div class="scx-rrow">${badge}<span class="scx-rdate">${dayLabel(s.starts_at)}</span>
       <span class="scx-ropp">${opp ? `${teamLogo(opp, 24)}<b>${esc(opp.name)}</b>` : "—"}</span>${score}<span class="small-note">${note}</span></div>`;
   }
   function staffRow(s) {
-    const res = s.no_show ? `absence de ${esc(s.no_show === s.host.id ? s.host.tag : s.guest && s.guest.tag)}` : s.host_score != null ? `${s.host_score} – ${s.guest_score}${s.confirmed ? "" : " (non confirmé)"}` : s.status === "cale" ? "calé" : s.status;
+    const res = s.no_show ? `absence de ${esc(s.no_show === s.host.id ? s.host.tag : s.guest && s.guest.tag)}` : s.host_score != null ? `${s.host_score} – ${s.guest_score}${s.map_scores ? ` (${esc(s.map_scores.map(m => `${m.map} ${m.h}-${m.g}`).join(", "))})` : ""}${s.confirmed ? "" : " (non confirmé)"}` : s.status === "cale" ? "calé" : s.status;
     return `<div class="sc-row">${dateTile(s.starts_at)}<div class="sc-main"><span class="sc-team">${esc(s.host.tag)} vs ${esc(s.guest ? s.guest.tag : "?")}</span><span class="small-note">${res}</span></div>
       <div class="sc-act"><button class="link-btn" data-sreset="${s.id}" type="button">Remettre à zéro</button><button class="link-btn danger-t" data-sdel="${s.id}" type="button">Supprimer</button></div></div>`;
   }
@@ -1018,22 +1049,52 @@
       try { await rpc("confirm_scrim", { p_id: b.dataset.confirm, p_accept: true }); feed("scrim", b.dataset.confirm); toast("Résultat confirmé."); reload(); } catch (x) { toast(errMsg(x), "err"); } });
     app.querySelectorAll("[data-refuse]").forEach(b => confirmable(b, "Sûr ?", async () => {
       try { await rpc("confirm_scrim", { p_id: b.dataset.refuse, p_accept: false }); toast("Résultat refusé : il faut le renvoyer. En cas de désaccord, ouvre un ticket dans #support."); reload(); } catch (x) { toast(errMsg(x), "err"); } }));
-    app.querySelectorAll("[data-report]").forEach(b => b.onclick = () => {
-      const f = $(`.sc-row[data-s="${b.dataset.report}"] .sc-form`, app);
+    app.querySelectorAll("[data-report]").forEach(b => b.onclick = () => openReport(b.dataset.report));
+    // Résultat map par map : une ligne par map jouée (le nombre de lignes suit le format du scrim)
+    async function openReport(id) {
+      const f = $(`.sc-row[data-s="${id}"] .sc-form`, app);
       if (!f.hidden) { f.hidden = true; return; }
+      const s = data.mine.find(x => x.id === id); if (!s) return;
+      const maps = await mapList();
+      const named = maps.filter(m => new RegExp(`\\b${m.name}\\b`, "i").test(s.maps || "")).map(m => m.name);
+      const bo = /bo\s*(\d)/i.exec(s.format || ""); const count = Math.max(1, Math.min(5, bo ? (+bo[1] === 3 ? 2 : +bo[1]) : 1, 5), named.length);
+      const rows = Array.from({ length: Math.min(count, 5) }, (_, i) => named[i] || "");
+      const opts = sel => `<option value="">Map…</option>${maps.map(m => `<option${m.name === sel ? " selected" : ""}>${esc(m.name)}</option>`).join("")}`;
+      const rowHtml = (m, i) => `<div class="rep-row"><span class="rep-n">${i + 1}</span><select class="rep-map" aria-label="Map ${i + 1}">${opts(m)}</select>
+          <input class="rep-us" type="number" min="0" max="99" inputmode="numeric" aria-label="Nos rounds" placeholder="Nous">
+          <span>–</span><input class="rep-them" type="number" min="0" max="99" inputmode="numeric" aria-label="Leurs rounds" placeholder="Eux">
+          <button class="link-btn danger-t rep-del" type="button" aria-label="Retirer cette map">×</button></div>`;
       f.hidden = false;
-      f.innerHTML = `<form class="sc-report"><span class="hint">Rounds gagnés au total sur tout le scrim (ex : 21 – 18 sur 2 maps).</span>
-        <div class="score-line"><label for="r1">Nous</label><input id="r1" type="number" min="0" max="99" inputmode="numeric">
-          <span>–</span><input id="r2" type="number" min="0" max="99" inputmode="numeric"><label for="r2">Eux</label>
+      f.innerHTML = `<form class="sc-report"><span class="hint">Rounds de chaque map jouée (nous – eux). En BO3, le vainqueur est celui qui gagne le plus de maps.</span>
+        <div class="rep-rows">${rows.map(rowHtml).join("")}</div>
+        <div class="rep-foot"><button class="link-btn rep-add" type="button">+ Ajouter une map</button><span class="rep-sum small-note"></span>
           <button class="btn sm solid" type="submit">Envoyer</button></div><p class="form-err" role="alert"></p></form>`;
-      $("#r1", f).focus();
+      const list = $(".rep-rows", f), er = $(".form-err", f);
+      const read = () => [...list.querySelectorAll(".rep-row")].map(r => ({ map: $(".rep-map", r).value, us: $(".rep-us", r).value, them: $(".rep-them", r).value }));
+      const renum = () => {
+        [...list.children].forEach((r, i) => { $(".rep-n", r).textContent = i + 1; });
+        $(".rep-add", f).hidden = list.children.length >= 5;
+        list.querySelectorAll(".rep-del").forEach(x => { x.hidden = list.children.length <= 1; });
+        const v = read().filter(x => x.us !== "" && x.them !== "");
+        const us = v.reduce((a, x) => a + +x.us, 0), them = v.reduce((a, x) => a + +x.them, 0);
+        const mw = v.filter(x => +x.us > +x.them).length, ml = v.filter(x => +x.us < +x.them).length;
+        $(".rep-sum", f).textContent = v.length ? (read().length > 1 ? `Maps ${mw} – ${ml} · rounds ${us} – ${them}` : `${us} – ${them}`) : "";
+      };
+      list.oninput = renum;
+      list.onclick = e => { const d = e.target.closest(".rep-del"); if (d && list.children.length > 1) { d.closest(".rep-row").remove(); renum(); } };
+      $(".rep-add", f).onclick = () => { if (list.children.length < 5) { list.insertAdjacentHTML("beforeend", rowHtml("", list.children.length)); renum(); $(".rep-map", list.lastElementChild).focus(); } };
+      renum();
+      (rows[0] ? $(".rep-us", list) : $(".rep-map", list)).focus();
       $("form", f).onsubmit = async e => {
-        e.preventDefault(); const a = $("#r1", f).value, c = $("#r2", f).value, er = $(".form-err", f);
-        if (a === "" || c === "") return er.textContent = "Entre les deux scores.";
-        try { await rpc("report_scrim", { p_id: b.dataset.report, p_for: +a, p_against: +c }); feed("scrim", b.dataset.report); toast("Résultat envoyé : l'autre capitaine doit confirmer."); reload(); }
+        e.preventDefault(); er.textContent = "";
+        const v = read();
+        if (v.some(x => !x.map)) return er.textContent = "Choisis la map de chaque ligne.";
+        if (new Set(v.map(x => x.map)).size !== v.length) return er.textContent = "Une map est en double.";
+        if (v.some(x => x.us === "" || x.them === "")) return er.textContent = "Entre les deux scores de chaque map.";
+        try { await rpc("report_scrim_maps", { p_id: id, p_maps: v.map(x => ({ map: x.map, for: +x.us, against: +x.them })) }); feed("scrim", id); toast("Résultat envoyé : l'autre capitaine doit confirmer."); reload(); }
         catch (x) { er.textContent = errMsg(x); }
       };
-    });
+    }
     app.querySelectorAll("[data-sreset]").forEach(b => confirmable(b, "Confirmer ?", async () => {
       try { await rpc("admin_reset_scrim", { p_id: b.dataset.sreset }); toast("Scrim remis à zéro."); reload(); } catch (x) { toast(errMsg(x), "err"); } }));
     app.querySelectorAll("[data-sdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
@@ -1141,13 +1202,13 @@
     const render = () => {
       const list = rows.filter(r => r.division === rankFilter.div);
       app.innerHTML = panel("Classement des scrims", `
-        <p class="lead">Les résultats des scrims, division par division. Victoire 3 points, nul 1 point. La fiabilité baisse avec les absences et les annulations de dernière minute.</p>
+        <p class="lead">Les résultats des scrims, division par division. Victoire 3 points, nul 1 point. Quand le score de chaque map est envoyé, c'est le nombre de maps gagnées qui désigne le vainqueur. La fiabilité baisse avec les absences et les annulations de dernière minute.</p>
         <div class="filters">${chipRow("div", rankFilter.div, [[1, "D1"], [2, "D2"], [3, "D3"], [4, "D4"]], "Division")}</div>
         ${list.length ? `<div class="table-scroll"><table class="standings rank-table">
-          <thead><tr><th>#</th><th>Équipe</th><th title="Scrims joués">J</th><th title="Victoires">V</th><th title="Nuls">N</th><th title="Défaites">D</th><th title="Différence de rounds">+/-</th><th>Pts</th><th title="Scrims honorés">Fiab.</th></tr></thead>
+          <thead><tr><th>#</th><th>Équipe</th><th title="Scrims joués">J</th><th title="Victoires">V</th><th title="Nuls">N</th><th title="Défaites">D</th><th title="Maps gagnées – perdues (scrims avec le score de chaque map)">Maps</th><th title="Différence de rounds">+/-</th><th>Pts</th><th title="Scrims honorés">Fiab.</th></tr></thead>
           <tbody>${list.map((r, i) => `<tr class="${state.team && r.team_id === state.team.id ? "me" : ""}"><td class="pos">${i + 1}</td>
             <td><a class="pl pl-link" href="${teamHref(r.tag)}">${teamLogo(r, 26)}<b>${esc(r.name)}</b></a></td><td>${r.played}</td><td>${r.wins}</td><td>${r.draws}</td><td>${r.losses}</td>
-            <td>${r.rf - r.ra > 0 ? "+" : ""}${r.rf - r.ra}</td><td class="pts">${r.points}</td>
+            <td class="mute">${r.mw + r.ml ? `${r.mw}-${r.ml}` : "–"}</td><td>${r.rf - r.ra > 0 ? "+" : ""}${r.rf - r.ra}</td><td class="pts">${r.points}</td>
             <td><span class="fiab${r.reliability >= 90 ? " ok" : r.reliability >= 70 ? " mid" : " bad"}" title="${r.no_shows} absence(s), ${r.late_cancels} annulation(s) tardive(s)">${r.reliability} %</span></td></tr>`).join("")}</tbody></table></div>
           <p class="small-note legend">Un résultat compte quand l'adversaire le confirme, ou automatiquement 48 h après s'il ne répond pas.</p>`
           : `<p class="small-note">Aucun scrim joué en D${rankFilter.div} pour l'instant.</p>`}
@@ -1160,7 +1221,7 @@
 
 
   // ================= Pages publiques : équipe et joueur =================
-  const resBadge = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`;
+  const resBadge = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`;
   const oppLink = r => `<a class="t-opp pl-link" href="${teamHref(r.opp_tag)}">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></a>`;
   const shortDate = iso => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
   const memberSince = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
@@ -1190,8 +1251,9 @@
           <span class="pub-role">${r.is_captain ? "Capitaine" : r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</span>
         </a>`).join("") || `<p class="small-note">Aucun joueur.</p>`}</div>
       <h3 class="t-h">Map pool</h3>${poolView(await teamPool(t.id), maps)}
+      <h3 class="t-h">Résultats par map</h3>${mapStats(d.map_stats)}
       <div class="t-cols">
-        <div><h3 class="t-h">Derniers résultats</h3>${sc.results.length ? `<div class="t-lines">${sc.results.map(r => `<div class="t-line">${resBadge(r)}${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`).join("")}</div>` : `<p class="small-note">Aucun résultat pour l'instant.</p>`}</div>
+        <div><h3 class="t-h">Derniers résultats</h3>${sc.results.length ? `<div class="t-lines">${sc.results.map(r => `<div class="t-line">${resBadge(r)}${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>${mapChips(r)}`).join("")}</div>` : `<p class="small-note">Aucun résultat pour l'instant.</p>`}</div>
         <div><h3 class="t-h">Prochains scrims</h3>${sc.next.length ? `<div class="t-lines">${sc.next.map(r => `<div class="t-line"><span class="t-res next">${shortDate(r.starts_at)}</span>${oppLink(r)}<span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`).join("")}</div>` : `<p class="small-note">Aucun scrim calé.</p>`}</div>
       </div>
       <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>${briefBtn(t.id, "Fiche adversaire")}` : ""}${mine ? `<a class="btn" href="#/espace">Mon espace équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
@@ -1245,11 +1307,11 @@
       const me = lb.find(r => r.team_id === t.id) || { played: 0, wins: 0, draws: 0, losses: 0, rf: 0, ra: 0, reliability: 100, division: t.division };
       const div = lb.filter(r => r.division === me.division), pos = div.findIndex(r => r.team_id === t.id) + 1;
       const diff = me.rf - me.ra;
-      const res = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`;
+      const res = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`;
       const line = (r, past) => `<div class="t-line">${past ? res(r) : `<span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>`}
           <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 28)}<b>${esc(r.opp)}</b></span>
           <span class="small-note">${past ? new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " : new Date(r.starts_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + " · "}${esc(r.format)}</span>
-          ${past ? `<span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span>` : `<span></span>`}</div>`;
+          ${past ? `<span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span>` : `<span></span>`}</div>`;
       $("#team-bilan").innerHTML = `<div class="t-stats">
           <div><b>${me.played}</b><span>scrims joués</span></div>
           <div><b>${me.wins}<i>-</i>${me.draws}<i>-</i>${me.losses}</b><span>victoires, nuls, défaites</span></div>
@@ -1287,7 +1349,8 @@
       setLive("/espace", [], () => viewDashboard(app));
       return;
     }
-    const [d, roster, myPool, maps] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id }), teamPool(t.id), mapList()]);
+    const [d, roster, myPool, maps, every] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id }), teamPool(t.id), mapList(), allMaps()]);
+    const mapByUuid = new Map(every.filter(m => m.uuid).map(m => [m.uuid, m]));
     const cb = (d && d.cb) || { comps: {}, maps: 0, editor: false };
     const sc = (d && d.scrims) || { results: [], next: [] };
     const st = d && d.standing;
@@ -1304,10 +1367,10 @@
     const nextLine = r => `<div class="t-line"><span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
         <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
         <span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`;
-    const resLine = r => `<div class="t-line">${r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${r.us > r.them ? "w" : r.us < r.them ? "l" : "d"}">${r.us > r.them ? "V" : r.us < r.them ? "D" : "N"}</span>`}
+    const resLine = r => `<div class="t-line">${r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`}
         <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
         <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
-        <span class="t-score">${r.no_show ? "absence" : `${r.us} – ${r.them}`}</span></div>`;
+        <span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>`;
     app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
       <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct. <a class="link-btn" href="${teamHref(t.tag)}">Page publique de l'équipe</a></span></div>
 
@@ -1334,6 +1397,17 @@
           <div class="dash-head"><h3>Compos</h3><a class="link-btn" href="compo/">Ouvrir le Comp Builder</a></div>
           <div class="dash-comps">${CB_STATUS.map(([k, label, tone]) => `<div class="dash-comp ${tone}"><b>${(cb.comps || {})[k] || 0}</b><span>${label}</span></div>`).join("")}</div>
           <p class="small-note">${totalComps ? `${totalComps} compo${totalComps > 1 ? "s" : ""} sur ${cb.maps} map${cb.maps > 1 ? "s" : ""}.` : "Aucune compo pour l'instant."}${cb.editor ? "" : " Lecture seule : le capitaine peut te nommer éditeur."}</p>
+        </div>
+
+        <div class="dash-card">
+          <div class="dash-head"><h3>Strats</h3><a class="link-btn" href="compo/#/strats">Toutes les strats</a></div>
+          ${(cb.strats || []).length ? `<div class="t-lines">${cb.strats.map(x => { const m = mapByUuid.get(x.map_uuid); return `<a class="t-line dash-strat" href="compo/#/strat/${esc(x.id)}">
+              <span class="t-res side-${x.side === "defense" ? "def" : "atk"}">${x.side === "defense" ? "DEF" : "ATK"}</span>
+              <span class="t-opp">${m && m.img ? `<img class="dash-strat-map" src="${esc(m.img)}" alt="">` : ""}<b>${esc(x.name)}</b></span>
+              <span class="small-note">${m ? esc(m.name) + " · " : ""}${x.steps} étape${x.steps > 1 ? "s" : ""}</span>
+              <span class="small-note">${ago(x.updated_at)}</span></a>`; }).join("")}</div>
+            <p class="small-note">${cb.strats_total} strat${cb.strats_total > 1 ? "s" : ""} au total · un clic ouvre le tableau tactique.</p>`
+            : `<p class="small-note">Aucune strat pour l'instant.${cb.editor ? ` <a class="link-btn" href="compo/#/strats">Créer la première</a>` : ""}</p>`}
         </div>
 
         <div class="dash-card">
