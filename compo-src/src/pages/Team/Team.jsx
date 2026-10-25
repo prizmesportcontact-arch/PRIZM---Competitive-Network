@@ -431,7 +431,7 @@ export default function Team() {
             « anon public » et colle-la ici. Les compositions et l'effectif sont copiés, l'ancien projet n'est
             pas modifié.
           </p>
-          <div className="team-page__import-row">
+          <form className="team-page__import-row" onSubmit={(e) => { e.preventDefault(); if (legacyKey.trim() && !importing) handleImport() }}>
             <input
               type="password"
               autoComplete="off"
@@ -440,10 +440,10 @@ export default function Team() {
               value={legacyKey}
               onChange={(e) => setLegacyKey(e.target.value)}
             />
-            <button type="button" className="btn btn-ghost" onClick={handleImport} disabled={!legacyKey.trim() || importing}>
+            <button type="submit" className="btn btn-ghost" disabled={!legacyKey.trim() || importing}>
               {importing ? 'Import…' : 'Importer'}
             </button>
-          </div>
+          </form>
           {importMsg && <p role="status">{importMsg}</p>}
         </details>
       )}
