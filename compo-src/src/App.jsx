@@ -10,7 +10,7 @@ import { PlayersProvider } from './context/PlayersContext'
 import { StratsProvider } from './context/StratsContext'
 import { ToastProvider } from './context/ToastContext'
 import { isSupabaseConfigured } from './services/supabaseClient'
-import Navbar from './components/Navbar/Navbar'
+import Navbar, { TeamSide } from './components/Navbar/Navbar'
 import RouteProgress from './components/RouteProgress/RouteProgress'
 import PageTransition from './components/PageTransition/PageTransition'
 import Loader from './components/Loader/Loader'
@@ -23,7 +23,6 @@ import TeamGate from './components/TeamGate/TeamGate'
 const Home = lazy(() => import('./pages/Home/Home'))
 const Editor = lazy(() => import('./pages/Editor/Editor'))
 const Team = lazy(() => import('./pages/Team/Team'))
-const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'))
 const Strats = lazy(() => import('./pages/Strats/Strats'))
 const Strat = lazy(() => import('./pages/Strat/Strat'))
 
@@ -50,7 +49,7 @@ function AppRoutes() {
         <Route path="/team" element={<PageTransition><Suspense fallback={pageFallback}><Team /></Suspense></PageTransition>} />
         <Route path="/strats" element={<PageTransition><Suspense fallback={pageFallback}><Strats /></Suspense></PageTransition>} />
         <Route path="/strat/:stratId" element={<PageTransition><Suspense fallback={pageFallback}><Strat /></Suspense></PageTransition>} />
-        <Route path="/dashboard" element={<PageTransition><Suspense fallback={pageFallback}><Dashboard /></Suspense></PageTransition>} />
+        <Route path="/dashboard" element={<Navigate to="/" replace />} />
         {/* Toute URL inconnue renvoie vers l'accueil plutôt que sur une page blanche. */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
@@ -60,6 +59,8 @@ function AppRoutes() {
 
 /** Mise en page commune, rendue par le routeur. */
 function ShellLayout() {
+  // Sur le tableau tactique, la carte prend toute la place : pas de menu sur le côté
+  const full = useLocation().pathname.startsWith('/strat/')
   return (
     // reducedMotion="user" : respecte le réglage système "Réduire les animations"
     // pour les animations Framer Motion (pilotées en JS, non couvertes par le CSS).
@@ -67,8 +68,11 @@ function ShellLayout() {
       <RouteProgress />
       <div className="app-layout">
         <Navbar />
-        <div className="app-layout__main">
-          <AppRoutes />
+        <div className={`tm-layout${full ? ' tm-layout--full' : ''}`}>
+          {!full && <TeamSide />}
+          <div className="app-layout__main">
+            <AppRoutes />
+          </div>
         </div>
       </div>
     </MotionConfig>

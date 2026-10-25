@@ -105,9 +105,7 @@
       <div class="me">
         <button class="me-btn" id="me-btn" type="button" aria-expanded="false" aria-haspopup="true">${avatar(p.avatar_url, p.username, 30)}<span class="me-name">${esc(p.username || "Mon compte")}</span></button>
         <div class="me-menu" id="me-menu" hidden>
-          <a href="#/espace">Espace équipe</a>
-          <a href="#/mon-equipe">Mon équipe</a>
-          <a href="compo/">Comp Builder</a>
+          <a href="#/espace">Mon équipe</a>
           <a href="#/profil">Mon profil</a>
           ${state.isAdmin ? '<a href="#/admin">Admin</a>' : state.isStaff ? '<a href="#/scrims">Modération des scrims</a>' : ""}
           <button type="button" id="logout-btn">Déconnexion</button>
@@ -128,14 +126,51 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
+  const views = { "/nos-scrims": app => viewScrims(app, "team"), "/reglages": viewSettings, "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
+  // Changements pas encore enregistrés (map pool) : on prévient avant de quitter la page
+  const unsaved = { pool: false };
+  let lastHash = location.hash, guardBack = false;
+  window.addEventListener("beforeunload", e => { if (unsaved.pool) { e.preventDefault(); e.returnValue = ""; } });
+  function leaveDialog(target) {
+    const ov = document.createElement("div");
+    ov.className = "leave-ov";
+    ov.innerHTML = `<div class="leave-box" role="dialog" aria-modal="true" aria-labelledby="leave-t">
+      <h3 id="leave-t">Êtes-vous sûr de partir sans enregistrer ?</h3>
+      <p class="small-note">Les changements du map pool ne sont pas enregistrés. Si tu pars sans enregistrer, ils seront perdus.</p>
+      <div class="ctas"><button class="btn solid sm" data-a="save" type="button">Enregistrer et partir</button>
+        <button class="btn danger sm" data-a="go" type="button">Partir sans enregistrer</button>
+        <button class="btn sm" data-a="stay" type="button">Rester</button></div></div>`;
+    document.body.appendChild(ov);
+    $("[data-a=stay]", ov).focus();
+    const close = () => ov.remove();
+    const go = () => { unsaved.pool = false; live.editing = null; close(); location.hash = target; };
+    ov.onclick = async e => {
+      const a = e.target.closest("[data-a]"); if (!a && e.target !== ov) return;
+      const act = a ? a.dataset.a : "stay";
+      if (act === "stay") return close();
+      if (act === "go") return go();
+      a.disabled = true;
+      try { await rpc("set_map_pool", { p_pool: unsaved.poolValue() }); toast("Map pool enregistré."); go(); }
+      catch (x) { toast(errMsg(x), "err"); a.disabled = false; }
+    };
+  }
+
   function route() {
     const h = location.hash || "";
+    if (unsaved.pool && h !== lastHash) {
+      // On revient sur la page en cours sans la recharger, puis on demande
+      const target = h; guardBack = true;
+      history.replaceState(null, "", lastHash || "#/");
+      leaveDialog(target);
+      return;
+    }
+    if (guardBack) { guardBack = false; }
+    lastHash = h;
     const path = h.startsWith("#/") ? h.slice(1).split("?")[0] : null;
     // Le Comp Builder vit dans le dossier compo/ (même connexion Discord)
     if (path === "/compo") { location.href = "compo/"; return; }
     const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
-    document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === (h === "#/mon-equipe" ? "#/espace" : h)));
+    document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === (TEAM_ROUTES.includes(h) ? "#/espace" : h)));
     stopLive();
     // Le Competitive Network est l'accueil ; la page de l'équipe PRIZM (qui organise le réseau) est sur #/prizm
     const anchor = h && !h.startsWith("#/") ? document.getElementById(h.slice(1)) : null;
@@ -254,13 +289,6 @@
 
   const panel = (title, inner, eyebrow = "") =>
     `<div class="wrap app-wrap">${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ""}<h2 class="app-title">${title}</h2>${inner}</div>`;
-
-  // Onglets communs aux pages de son équipe : on sait toujours où on est et où aller
-  const teamTabs = active => `<nav class="team-tabs" aria-label="Mon équipe">
-      <a href="#/espace"${active === "espace" ? ` class="on" aria-current="page"` : ""}>Tableau de bord</a>
-      <a href="#/mon-equipe"${active === "gerer" ? ` class="on" aria-current="page"` : ""}>Gérer l'équipe</a>
-      <a href="compo/">Comp Builder <span aria-hidden="true">→</span></a>
-    </nav>`;
 
   function needLogin(app, what) {
     app.innerHTML = panel("Connecte-toi avec Discord",
@@ -512,7 +540,7 @@
     const tit = roster.filter(r => r.role === "titulaire").length;
     const locked = t.locked; // compétition en cours : arrivées et départs bloqués
 
-    app.innerHTML = panel(`${teamLogo(t, 64)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `${teamTabs("gerer")}
+    app.innerHTML = teamShell("roster", t, "Roster", `
       <div class="team-status">
         ${statusPill(t)}
         <span class="small-note">${t.status === "validee" ? "Ton équipe peut proposer et accepter des scrims." :
@@ -521,37 +549,11 @@
       </div>
       ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
       ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
-      <div id="team-scrims"></div>
       ${locked ? `<p class="lock-line">🔒 Roster bloqué pendant <b>${esc(locked)}</b> : personne ne peut rejoindre ni quitter l'équipe. Besoin d'un changement ? Ouvre un ticket dans #support.</p>` : ""}
       ${rosterTable(roster, isCap, me, false, !!locked)}
       <div class="roster-tools"><button class="link-btn" id="refresh-ranks" type="button">Actualiser les rangs de l'équipe</button><span class="small-note">✓ = rang vérifié · ? = rang non vérifié</span></div>
-      <div class="cards3" style="margin-top:32px">
-        <div class="card">
-          <h3>Inviter des joueurs</h3>
-          <p class="small-note">${locked ? "Les invitations reprennent après la compétition." : "7 joueurs max (5 titulaires + 2 remplaçants). Envoie le lien ou le code."}</p>
-          <div class="code-big" id="inv-code">${esc(code)}</div>
-          <div class="copy-row"><input id="inv-link" readonly value="${esc(inviteLink)}" aria-label="Lien d'invitation"><button class="btn sm" id="copy-inv" type="button">Copier le lien</button></div>
-          <p class="copied" id="inv-copied" aria-live="polite"></p>
-          ${isCap ? `<button class="link-btn" id="regen" type="button">Générer un nouveau code</button>` : ""}
-        </div>
-        <div class="card">
-          <h3>Logo de l'équipe</h3>
-          <div class="logo-edit">${teamLogo(t, 96)}
-            ${isCap ? `<div class="logo-actions">
-              <label class="btn sm" for="logo-file">${t.logo_url ? "Changer le logo" : "Ajouter un logo"}</label>
-              <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" hidden>
-              ${t.logo_url ? `<button class="link-btn danger-t" id="logo-remove" type="button">Retirer le logo</button>` : ""}
-              <p class="small-note">PNG, JPG ou WEBP. Format carré conseillé, fond transparent idéal.</p>
-              <p class="form-err" id="logo-err" role="alert"></p>
-            </div>` : `<p class="small-note">Seul le capitaine peut changer le logo.</p>`}
-          </div>
-        </div>
-        <div class="card">
-          <h3>Quitter l'équipe</h3>
-          <p class="small-note">${locked ? "Impossible pendant une compétition." : isCap ? (roster.length > 1 ? "Tu es capitaine : nomme un autre capitaine avant de partir." : "Tu es seul : quitter supprime l'équipe.") : "Tu pourras rejoindre une autre équipe ensuite."}</p>
-          <button class="btn danger" id="leave" type="button" ${locked || (isCap && roster.length > 1) ? "disabled" : ""}>${isCap && roster.length === 1 ? "Supprimer l'équipe" : "Quitter l'équipe"}</button>
-        </div>
-      </div>`, "Mon équipe");
+      <p class="small-note roster-more">Rôles in-game et couleurs des joueurs pour les compos : <a class="link-btn" href="compo/#/team">Rôles des joueurs</a>. Invitation, logo et départ : <a class="link-btn" href="#/reglages">Réglages</a>.</p>`,
+      isCap ? "Titulaires, remplaçants et capitaine. Tu peux changer les rôles et retirer un joueur." : "Les joueurs de l'équipe et leur rang.");
 
     $("#refresh-ranks").onclick = async () => {
       const b = $("#refresh-ranks"); b.disabled = true; b.textContent = "Actualisation…";
@@ -561,20 +563,7 @@
       viewMyTeam(app);
     };
     if ($("#sync-me")) $("#sync-me").onclick = () => discordSync({ user_ids: [me] }, true);
-    if ($("#logo-file")) $("#logo-file").onchange = async e => {
-      const f = e.target.files[0]; if (!f) return; $("#logo-err").textContent = "Envoi en cours…";
-      try { await uploadTeamLogo(teamId, f); toast("Logo enregistré."); viewMyTeam(app); }
-      catch (x) { $("#logo-err").textContent = errMsg(x); }
-    };
-    if ($("#logo-remove")) confirmable($("#logo-remove"), "Confirmer ?", async () => {
-      try { await rpc("set_team_logo", { p_url: null }); await cleanLogos(teamId, null); toast("Logo retiré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
-    $("#copy-inv").onclick = () => copyText(inviteLink, $("#inv-copied"), null);
-    if ($("#regen")) confirmable($("#regen"), "Confirmer : l'ancien code ne marchera plus", async () => {
-      try { await rpc("regenerate_invite"); toast("Nouveau code généré."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
-    confirmable($("#leave"), "Clique encore pour confirmer", async () => {
-      try { await rpc("leave_team"); discordSync({ user_ids: [me] }); toast("Tu as quitté l'équipe."); viewMyTeam(app); } catch (x) { toast(errMsg(x), "err"); } });
     bindRosterActions(app, () => viewMyTeam(app));
-    teamScrimsBox($("#team-scrims"));
 
     // Arrivées, départs, rôles, validation, logo, scrims : la page se met à jour toute seule
     setLive("/mon-equipe", ["team:" + teamId, "scrims"], () => viewMyTeam(app));
@@ -859,7 +848,7 @@
 
       <div class="brief-sec"><h4>Maps</h4>
         ${common.length ? `<div class="brief-reco"><span class="eyebrow">Conseillées pour ce scrim</span><div class="pool-chips">${common.slice(0, 5).map(n => `<span class="pool-chip hi">${esc(n)}</span>`).join("")}</div></div>`
-          : !mineIsMe && state.team && !hasPool(d.my_pool) ? `<p class="small-note">Renseigne le map pool de ton équipe dans <a href="#/espace">Mon espace</a> pour voir les maps conseillées.</p>` : ""}
+          : !mineIsMe && state.team && !hasPool(d.my_pool) ? `<p class="small-note">Renseigne le map pool de ton équipe dans <a href="#/reglages">Réglages</a> pour voir les maps conseillées.</p>` : ""}
         ${poolView(d.pool, maps)}
         ${!mineIsMe && (myBans.length || theirBans.length) && hasPool(d.my_pool) ? `<p class="small-note">À éviter : ${esc([...new Set([...myBans, ...theirBans])].join(", "))}.</p>` : ""}
         <p class="eyebrow brief-sub">Leurs résultats par map</p>${mapStats(d.map_stats)}
@@ -886,10 +875,12 @@
   const briefBtn = (id, label = "Fiche adversaire") => id ? `<button class="link-btn brief-btn" data-brief="${id}" type="button">${label}</button>` : "";
   const scSection = (title, sub, body, cls = "") => `<section class="scx-sec ${cls}"><div class="scx-sec-head"><h3>${title}</h3>${sub ? `<span class="small-note">${sub}</span>` : ""}</div>${body}</section>`;
 
-  async function viewScrims(app) {
+  // Deux pages : « Scrims » (public : trouver et proposer) et « Nos scrims » (mode team : à faire, calés, résultats)
+  async function viewScrims(app, mode = "public") {
     if (!sb) { app.innerHTML = panel("Scrims", `<p class="lead">Bientôt disponible.</p>`); return; }
     const [data, pools, maps] = await Promise.all([rpc("list_scrims"), loadPools(), mapList()]);
     const t = state.team, isCap = !!(t && t.is_captain), canPlay = isCap && t.status === "validee";
+    if (mode === "team" && !t) { location.hash = state.session ? "#/mon-equipe" : "#/scrims"; return; }
     const myPool = t ? pools[t.id] : null;
     // Maps conseillées face à une équipe (si les deux map pools sont remplis)
     const reco = other => other && hasPool(myPool) && hasPool(pools[other.id]) ? poolMatch(myPool, pools[other.id], maps).slice(0, 3) : [];
@@ -933,7 +924,7 @@
             <div class="pool-pick" aria-label="Ajouter une map">${hasPool(myPool)
               ? maps.filter(m => myPool[m.name] && myPool[m.name] !== "ban").sort((a, b) => POOL_SCORE[myPool[b.name]] - POOL_SCORE[myPool[a.name]] || a.name.localeCompare(b.name))
                   .map(m => `<button type="button" class="pool-chip ${myPool[m.name]}" data-addmap="${esc(m.name)}">+ ${esc(m.name)}</button>`).join("")
-              : `<span class="small-note">Astuce : remplis ton <a href="#/espace">map pool</a> pour ajouter tes maps en un clic.</span>`}</div>
+              : `<span class="small-note">Astuce : remplis votre <a href="#/reglages">map pool</a> pour ajouter tes maps en un clic.</span>`}</div>
             <label for="sc-note">Message <span class="hint">(optionnel)</span></label><input id="sc-note" maxlength="200" placeholder="ex : on travaille nos rétakes">
             <div class="ctas"><button class="btn solid" type="submit">Publier</button><button class="link-btn" id="sc-close" type="button">Annuler</button></div>
             <p class="form-err" id="sc-err" role="alert"></p>
@@ -965,11 +956,19 @@
       const staffHtml = state.isStaff && data.staff && data.staff.length ? `<details class="scx-sec staff-sc"><summary><b>Modération</b> · scrims des 14 derniers jours</summary>
           <div class="sc-list">${data.staff.map(staffRow).join("")}</div></details>` : "";
 
-      app.innerHTML = panel("Scrims", head + todoHtml + upHtml + mineOpenHtml + openHtml + pastHtml + staffHtml, "Competitive Network");
-      bindScrims(app, data, () => viewScrims(app), render);
+      if (mode === "team") {
+        const findBtn = canPlay ? `<div class="tm-actions"><a class="btn solid sm" href="#/scrims">+ Proposer ou trouver un scrim</a></div>` : "";
+        const emptyAll = !todoHtml && !upcoming.length && !myOpen.length && !past.length;
+        app.innerHTML = teamShell("scrims", t, "Nos scrims", findBtn + (emptyAll ? `<p class="scx-empty">Pas encore de scrim. ${canPlay ? "Va sur <a href=\"#/scrims\">Scrims</a> pour en proposer un ou accepter celui d'une autre équipe." : "Le capitaine les cale depuis la page Scrims."}</p>` : todoHtml + upHtml + mineOpenHtml + pastHtml),
+          "Les scrims de ton équipe : ce qui attend une action, ce qui est calé, et les derniers résultats.");
+      } else {
+        const todoNote = t && todo.length ? `<a class="callout scx-todo-note" href="#/nos-scrims"><b>${todo.length} scrim${todo.length > 1 ? "s" : ""} de ton équipe attend${todo.length > 1 ? "ent" : ""} une action</b> (score à envoyer ou à confirmer) → Nos scrims</a>` : "";
+        app.innerHTML = panel("Scrims", head + todoNote + mineOpenHtml + openHtml + staffHtml, "Competitive Network");
+      }
+      bindScrims(app, data, () => viewScrims(app, mode), render);
     };
     render();
-    setLive("/scrims", ["scrims", t && "team:" + t.id], () => viewScrims(app));
+    setLive(mode === "team" ? "/nos-scrims" : "/scrims", ["scrims", t && "team:" + t.id], () => viewScrims(app, mode));
   }
 
   // Scrim qui demande une action (résultat à envoyer ou à confirmer)
@@ -1107,19 +1106,7 @@
     app.querySelectorAll("[data-sdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
       try { await rpc("admin_delete_scrim", { p_id: b.dataset.sdel }); toast("Scrim supprimé."); reload(); } catch (x) { toast(errMsg(x), "err"); } }));
   }
-  // Petit résumé sur « Mon équipe »
-  async function teamScrimsBox(box) {
-    if (!box || !state.team) return;
-    let d; try { d = await rpc("list_scrims"); } catch (e) { return; }
-    const t = state.team, next = d.mine.filter(s => s.status === "cale").slice(0, 3);
-    const todo = d.mine.filter(s => (s.status === "cale" && new Date(s.starts_at) <= new Date()) || (s.status === "termine" && !s.confirmed && s.reported_by !== t.id)).length;
-    box.innerHTML = `<section class="team-scrims"><h3 class="t-h">Nos scrims</h3>
-      ${next.length ? `<div class="sc-list">${next.map(s => { const opp = s.host.id === t.id ? s.guest : s.host; return `<a class="sc-row link-row" href="#/scrims">${dateTile(s.starts_at)}<div class="sc-main"><span class="sc-team">vs ${sideName(opp)}</span><span class="small-note">${esc(s.format)}</span></div></a>`; }).join("")}</div>`
-        : `<p class="small-note">Aucun scrim calé.</p>`}
-      ${todo ? `<p class="callout">${todo} scrim${todo > 1 ? "s" : ""} attend${todo > 1 ? "ent" : ""} un résultat ou une confirmation.</p>` : ""}
-      <div class="staff-row"><a class="btn sm${t.is_captain ? " solid" : ""}" href="#/scrims">${t.is_captain ? "Proposer ou trouver un scrim" : "Voir les scrims"}</a>${t.is_captain ? `<a class="link-btn" href="#/recherche">On recrute ?</a>` : ""}</div>
-    </section>`;
-  }
+
 
   // ---------- Recherche d'équipe / de joueurs ----------
   const ROLES = ["Duelliste", "Initiateur", "Contrôleur", "Sentinelle", "Flex"];
@@ -1263,7 +1250,7 @@
         <div><h3 class="t-h">Derniers résultats</h3>${sc.results.length ? `<div class="t-lines">${sc.results.map(r => `<div class="t-line">${resBadge(r)}${oppLink(r)}<span class="small-note">${shortDate(r.starts_at)} · ${esc(r.format)}</span><span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>${mapChips(r)}`).join("")}</div>` : `<p class="small-note">Aucun résultat pour l'instant.</p>`}</div>
         <div><h3 class="t-h">Prochains scrims</h3>${sc.next.length ? `<div class="t-lines">${sc.next.map(r => `<div class="t-line"><span class="t-res next">${shortDate(r.starts_at)}</span>${oppLink(r)}<span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`).join("")}</div>` : `<p class="small-note">Aucun scrim calé.</p>`}</div>
       </div>
-      <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>${briefBtn(t.id, "Fiche adversaire")}` : ""}${mine ? `<a class="btn" href="#/espace">Mon espace équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
+      <div class="ctas" style="margin-top:32px">${canChallenge ? `<a class="btn solid" href="#/scrims">Défier en scrim</a>${briefBtn(t.id, "Fiche adversaire")}` : ""}${mine ? `<a class="btn" href="#/espace">Tableau de bord de l'équipe</a>` : ""}<a class="btn" href="#/equipes">Toutes les équipes</a></div>`, "Équipe");
     setLive(location.hash.slice(1), ["teams", "scrims", "lfg", "team:" + t.id], () => viewTeamPublic(app, tag));
   }
 
@@ -1345,95 +1332,214 @@
   // ================= Espace équipe : le tableau de bord =================
   const CB_STATUS = [["validated", "Prêtes", "ok"], ["testing", "En test", "warn"], ["needs_work", "À revoir", "bad"], ["todo", "Brouillons", "mute"]];
 
+  // ================= Mon équipe : un seul endroit, un menu sur le côté =================
+  const TM_ICONS = {
+    espace: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
+    scrims: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4",
+    compos: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8",
+    strats: "M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14",
+    roster: "M4 6h16v12H4zM8 10h3M8 14h8M15 10h1",
+    reglages: "M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4",
+  };
+  const TEAM_NAV = [
+    ["espace", "#/espace", "Tableau de bord"],
+    ["scrims", "#/nos-scrims", "Nos scrims"],
+    ["compos", "compo/", "Compos"],
+    ["roles", "compo/#/team", "Rôles des joueurs", true],
+    ["strats", "compo/#/strats", "Strats"],
+    ["roster", "#/mon-equipe", "Roster"],
+    ["reglages", "#/reglages", "Réglages"],
+  ];
+  const TEAM_ROUTES = ["#/espace", "#/nos-scrims", "#/mon-equipe", "#/reglages"];
+  const tmIcon = k => TM_ICONS[k] ? `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${TM_ICONS[k]}"/></svg>` : "";
+  function teamSide(active, t) {
+    const sub = t.status === "validee" ? DIV_NAMES[t.division] : t.status === "refusee" ? "Refusée" : "En attente de validation";
+    return `<aside class="tm-side">
+        <a class="tm-id" href="${teamHref(t.tag)}" title="Page publique de l'équipe">${teamLogo(t, 40)}<span><b>${esc(t.name)}</b><small class="${t.status === "validee" ? "ok" : t.status === "refusee" ? "bad" : "wait"}">${esc(sub)}</small></span></a>
+        <nav class="tm-nav" aria-label="Mon équipe">${TEAM_NAV.map(([k, href, label, isSub]) =>
+          `<a class="tm-link${isSub ? " sub" : ""}${k === active ? " on" : ""}" href="${href}"${k === active ? ` aria-current="page"` : ""}>${tmIcon(k)}<span>${label}</span></a>`).join("")}</nav>
+      </aside>`;
+  }
+  // Page de l'équipe : menu à gauche, contenu à droite
+  const teamShell = (active, t, title, inner, lead = "") =>
+    `<div class="wrap app-wrap tm">${teamSide(active, t)}<div class="tm-main">
+      <div class="tm-head"><h2 class="tm-title">${title}</h2>${lead ? `<p class="tm-lead">${lead}</p>` : ""}</div>${inner}</div></div>`;
+
+  const CB_LABEL = { validated: ["Prête", "ok"], testing: ["En test", "warn"], needs_work: ["À revoir", "bad"], todo: ["Brouillon", "mute"] };
+  const POOL_LABEL = { forte: "Forte", jouable: "Jouable", ban: "Ban" };
+  // « dans 2 j », « dans 3 h », « en cours »
+  function countdown(iso) {
+    const ms = new Date(iso) - Date.now();
+    if (ms <= 0) return "c'est l'heure";
+    const h = Math.round(ms / 3600000);
+    return h < 1 ? `dans ${Math.max(1, Math.round(ms / 60000))} min` : h < 36 ? `dans ${h} h` : `dans ${Math.round(h / 24)} j`;
+  }
+  const mapsIn = (text, maps) => maps.filter(m => new RegExp(`\\b${m.name}\\b`, "i").test(text || ""));
+
   async function viewDashboard(app) {
     if (!state.session) return needLogin(app, "Ton espace équipe rassemble tes scrims, ton classement, les compos et le roster de ton équipe.");
     await loadMe();
     const t = state.team;
     if (!t) {
-      app.innerHTML = panel("Espace équipe", `
-        <p class="lead">Ici tu retrouveras tout ce qui concerne ton équipe : scrims à venir, classement, compos et roster. Il te faut d'abord une équipe.</p>
-        <div class="ctas" style="margin-top:24px"><a class="btn solid" href="#/mon-equipe">Créer ou rejoindre une équipe</a><a class="btn" href="#/recherche">Chercher une équipe</a></div>`, "Espace équipe");
+      app.innerHTML = panel("Mon équipe", `
+        <p class="lead">Ici tu retrouveras tout ce qui concerne ton équipe : scrims, classement, compos, strats et roster. Il te faut d'abord une équipe.</p>
+        <div class="ctas" style="margin-top:24px"><a class="btn solid" href="#/mon-equipe">Créer ou rejoindre une équipe</a><a class="btn" href="#/recherche">Chercher une équipe</a></div>`, "Mon équipe");
       setLive("/espace", [], () => viewDashboard(app));
       return;
     }
-    const [d, roster, myPool, maps, every] = await Promise.all([rpc("team_dashboard"), rpc("team_roster", { p_team: t.id }), teamPool(t.id), mapList(), allMaps()]);
-    const mapByUuid = new Map(every.filter(m => m.uuid).map(m => [m.uuid, m]));
-    const cb = (d && d.cb) || { comps: {}, maps: 0, editor: false };
-    const sc = (d && d.scrims) || { results: [], next: [] };
-    const st = d && d.standing;
-    const tit = roster.filter(r => r.role === "titulaire").length;
-    const totalComps = Object.values(cb.comps || {}).reduce((a, b) => a + b, 0);
+    const [d, data, pools, maps] = await Promise.all([rpc("team_dashboard"), rpc("list_scrims"), loadPools(), mapList()]);
+    const isCap = !!t.is_captain, myPool = pools[t.id] || {};
+    scrimCtx = { reco: other => other && hasPool(myPool) && hasPoolOf(pools, other.id) ? poolMatch(myPool, pools[other.id], maps).slice(0, 3) : [], t };
+    const cb = (d && d.cb) || {}, st = d && d.standing, sc = (d && d.scrims) || { results: [] };
+    const cbMaps = (d && d.cb_maps) || {}, mapStats = Object.fromEntries(((d && d.map_stats) || []).map(m => [m.map, m]));
 
-    // À faire : ce qui demande une action, du plus urgent au moins urgent
-    const todo = [];
-    if (d.todo) todo.push(`<a class="dash-todo" href="#/scrims"><b>${d.todo}</b><span>scrim${d.todo > 1 ? "s" : ""} attend${d.todo > 1 ? "ent" : ""} un résultat${t.is_captain ? "" : " (le capitaine s'en occupe)"}</span></a>`);
-    if (t.status === "en_attente") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>${tit}/5</b><span>titulaires : l'équipe attend la validation du staff</span></a>`);
-    if (t.status === "refusee") todo.push(`<a class="dash-todo" href="#/mon-equipe"><b>!</b><span>équipe refusée : contacte le staff dans #support</span></a>`);
-    if (t.status === "validee" && !sc.next.length && !d.open_posts && t.is_captain) todo.push(`<a class="dash-todo" href="#/scrims"><b>+</b><span>aucun scrim calé : propose un créneau</span></a>`);
+    // Scrims de l'équipe : à faire et calés
+    const now = Date.now(), todo = [], upcoming = [];
+    for (const s of data.mine || []) {
+      const started = new Date(s.starts_at).getTime() <= now;
+      if (s.status === "cale" && !started) upcoming.push(s);
+      else if (s.status === "cale") todo.push(s);
+      else if (s.status === "termine" && !s.no_show && !s.confirmed && s.reported_by !== t.id) todo.push(s);
+    }
+    upcoming.sort((a, b) => new Date(a.starts_at) - new Date(b.starts_at));
+    const next = upcoming[0];
 
-    const nextLine = r => `<div class="t-line"><span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
-        <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
-        <span class="small-note">${hourLabel(r.starts_at)} · ${esc(r.format)}</span><span></span></div>`;
-    const resLine = r => `<div class="t-line">${r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`}
-        <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
-        <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
-        <span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>`;
-    app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `${teamTabs("espace")}
-      <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct. <a class="link-btn" href="${teamHref(t.tag)}">Page publique de l'équipe</a></span></div>
+    // À faire : d'abord les scrims, puis ce qui manque à l'équipe
+    const extra = [];
+    if (t.status === "en_attente") extra.push(`<a class="db-todo-line" href="#/mon-equipe"><b>!</b><span>L'équipe attend la validation du staff : il faut 5 titulaires.</span><em>Voir le roster →</em></a>`);
+    if (t.status === "refusee") extra.push(`<a class="db-todo-line" href="#/mon-equipe"><b>!</b><span>Équipe refusée : contacte le staff dans #support.</span></a>`);
+    if (isCap && !hasPool(myPool)) extra.push(`<a class="db-todo-line" href="#/reglages"><b>+</b><span>Renseigne votre map pool : il sert à conseiller les maps face à chaque adversaire.</span><em>Réglages →</em></a>`);
+    if (isCap && t.status === "validee" && !next && !d.open_posts) extra.push(`<a class="db-todo-line" href="#/scrims"><b>+</b><span>Aucun scrim calé : propose un créneau ou accepte une proposition.</span><em>Trouver un scrim →</em></a>`);
+    const todoHtml = todo.length || extra.length ? `<section class="db-todo">
+        <div class="db-head"><h3>À faire</h3><span class="small-note">${todo.length + extra.length} chose${todo.length + extra.length > 1 ? "s" : ""}</span></div>
+        ${todo.length ? `<div class="scx-list">${todo.map(s => todoCard(s, t, isCap)).join("")}</div>` : ""}
+        ${extra.join("")}</section>` : "";
 
-      ${todo.length ? `<div class="dash-sec"><h3 class="t-h">À faire</h3><div class="dash-todos">${todo.join("")}</div></div>` : ""}
+    // Prochain scrim
+    let nextHtml;
+    if (next) {
+      const opp = next.host.id === t.id ? next.guest : next.host;
+      const reco = scrimCtx.reco(opp), named = mapsIn(next.maps, maps);
+      const prepMaps = (named.length ? named : maps.filter(m => reco.includes(m.name)));
+      nextHtml = `<section class="db-card db-next">
+          <div class="db-head"><h3>Prochain scrim</h3><a class="link-btn" href="#/nos-scrims">Tous nos scrims</a></div>
+          <div class="db-next-when"><b>${dayLabel(next.starts_at)}</b><span>${hourLabel(next.starts_at)}</span><em>${countdown(next.starts_at)}</em></div>
+          <a class="db-next-vs pl-link" href="${teamHref(opp.tag)}">${teamLogo(opp, 52)}<span><small>contre</small><b>${esc(opp.name)}</b>${divChip(opp.division)}</span></a>
+          <div class="scx-tags">${tags(next)}${reco.length && !named.length ? `<span class="scx-reco">Maps conseillées : <b>${reco.map(esc).join(", ")}</b></span>` : ""}</div>
+          ${prepMaps.length ? `<div class="db-prep">${prepMaps.map(m => { const c = cbMaps[m.uuid], lab = c && c.status ? CB_LABEL[c.status] : null;
+              return `<a class="db-prep-map" href="compo/#/editor/${esc(m.uuid || "")}"${m.img ? ` style="--img:url('${esc(m.img)}')"` : ""}><b>${esc(m.name)}</b><span class="${lab ? lab[1] : "mute"}">${lab ? "Compo " + lab[0].toLowerCase() : "Pas de compo"}${c && c.strats ? ` · ${c.strats} strat${c.strats > 1 ? "s" : ""}` : ""}</span></a>`; }).join("")}</div>` : ""}
+          <div class="ctas db-next-ctas">${briefBtn(opp.id, "Fiche adversaire")}${opp.discord_id && isCap ? `<a class="btn sm" href="https://discord.com/users/${esc(opp.discord_id)}" target="_blank" rel="noopener">Contacter ${esc(opp.captain || "le capitaine")}</a>` : ""}</div>
+        </section>`;
+    } else {
+      nextHtml = `<section class="db-card db-next empty">
+          <div class="db-head"><h3>Prochain scrim</h3><a class="link-btn" href="#/nos-scrims">Tous nos scrims</a></div>
+          <p class="db-empty">Aucun scrim calé.${d.open_posts ? ` ${d.open_posts} proposition${d.open_posts > 1 ? "s" : ""} en attente d'adversaire.` : ""}</p>
+          ${isCap && t.status === "validee" ? `<a class="btn solid sm" href="#/scrims">Trouver un scrim</a>` : !isCap ? `<p class="small-note">Le capitaine cale les scrims.</p>` : ""}
+        </section>`;
+    }
 
-      <div class="dash-grid">
-        <div class="dash-card">
-          <div class="dash-head"><h3>Scrims</h3><a class="link-btn" href="#/scrims">Voir les scrims</a></div>
-          ${sc.next.length ? `<div class="t-lines">${sc.next.map(nextLine).join("")}</div>` : `<p class="small-note">Aucun scrim calé.${d.open_posts ? ` ${d.open_posts} proposition${d.open_posts > 1 ? "s" : ""} en attente d'adversaire.` : ""}</p>`}
-          ${sc.results.length ? `<p class="eyebrow dash-sub">Derniers résultats</p><div class="t-lines">${sc.results.slice(0, 3).map(resLine).join("")}</div>` : ""}
-        </div>
+    // Bilan : classement + forme
+    const recent = sc.results || [];
+    const bilanHtml = `<section class="db-card db-bilan">
+        <div class="db-head"><h3>Bilan</h3><a class="link-btn" href="#/classement">Classement</a></div>
+        ${st ? `<div class="db-stats">
+            <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
+            <div><b>${st.points}</b><span>points</span></div>
+            <div><b>${st.wins}-${st.draws}-${st.losses}</b><span>V · N · D</span></div>
+            <div><b>${st.reliability}<small>%</small></b><span>fiabilité</span></div>
+          </div>` : `<p class="db-empty">Pas encore au classement : il apparaît après le premier scrim confirmé.</p>`}
+        ${recent.length ? `<div class="db-form"><span class="eyebrow">Forme</span>${recent.slice(0, 5).map(r => `<span class="t-res ${r.no_show ? "ff" : outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}" title="${esc(r.opp)} · ${shortDate(r.starts_at)}${r.no_show ? "" : " · " + scoreText(r, true)}">${r.no_show ? "ABS" : outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`).join("")}</div>
+          <div class="t-lines">${recent.slice(0, 3).map(r => `<div class="t-line">${resBadge(r)}<a class="t-opp pl-link" href="${teamHref(r.opp_tag)}"><b>${esc(r.opp)}</b></a><span class="small-note">${shortDate(r.starts_at)}</span><span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>`).join("")}</div>` : ""}
+      </section>`;
 
-        <div class="dash-card">
-          <div class="dash-head"><h3>Classement</h3><a class="link-btn" href="#/classement">Voir le classement</a></div>
-          ${st ? `<div class="t-stats dash-stats">
-              <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
-              <div><b>${st.points}</b><span>points</span></div>
-              <div><b>${st.wins}<i>-</i>${st.draws}<i>-</i>${st.losses}</b><span>V, N, D</span></div>
-              <div><b>${st.diff > 0 ? "+" : ""}${st.diff}</b><span>rounds · fiabilité ${st.reliability} %</span></div>
-            </div>` : `<p class="small-note">Ton équipe apparaîtra au classement après son premier scrim confirmé.</p>`}
-        </div>
+    // Préparation des maps du pool compétitif
+    const order = m => ({ forte: 0, jouable: 1 }[myPool[m.name]] ?? (myPool[m.name] === "ban" ? 3 : 2));
+    const rows = [...maps].sort((a, b) => order(a) - order(b) || a.name.localeCompare(b.name));
+    const ready = rows.filter(m => (cbMaps[m.uuid] || {}).status === "validated").length;
+    const prepHtml = `<section class="db-card db-maps">
+        <div class="db-head"><h3>Préparation des maps</h3><span class="small-note">${ready}/${rows.length} maps avec une compo prête · <a class="link-btn" href="compo/">Ouvrir les compos</a></span></div>
+        <div class="table-scroll"><table class="db-table">
+          <thead><tr><th>Map</th><th>Pool</th><th>Compo</th><th>Strats</th><th title="Scrims avec le score de chaque map">Bilan</th></tr></thead>
+          <tbody>${rows.map(m => { const c = cbMaps[m.uuid] || {}, lab = c.status ? CB_LABEL[c.status] : null, ms = mapStats[m.name], pl = myPool[m.name];
+            const go = m.uuid ? `compo/#/editor/${esc(m.uuid)}` : "compo/";
+            return `<tr class="${pl === "ban" ? "is-ban" : ""}">
+              <td><a class="db-map" href="${go}"${m.img ? ` style="--img:url('${esc(m.img)}')"` : ""}><b>${esc(m.name)}</b></a></td>
+              <td>${pl ? `<span class="pool-chip ${pl}">${POOL_LABEL[pl]}</span>` : `<span class="mute">—</span>`}</td>
+              <td>${lab ? `<a class="db-status ${lab[1]}" href="${go}">${lab[0]}</a>${c.comps > 1 ? `<small class="mute"> +${c.comps - 1}</small>` : ""}` : `<a class="db-add" href="${go}">Créer</a>`}</td>
+              <td>${c.strats ? `<a class="db-num" href="${go}">${c.strats}</a>` : `<span class="mute">0</span>`}</td>
+              <td>${ms ? `<span class="db-rec"><b>${ms.wins}</b>V <b>${ms.losses}</b>D <i class="${ms.diff > 0 ? "up" : ms.diff < 0 ? "down" : ""}">${ms.diff > 0 ? "+" : ""}${ms.diff}</i></span>` : `<span class="mute">—</span>`}</td></tr>`; }).join("")}</tbody>
+        </table></div>
+        ${!hasPool(myPool) ? `<p class="small-note">Le map pool n'est pas renseigné${isCap ? ` : <a class="link-btn" href="#/reglages">le remplir dans Réglages</a>` : " : le capitaine peut le remplir"}.</p>` : ""}
+      </section>`;
 
-        <div class="dash-card">
-          <div class="dash-head"><h3>Compos</h3><a class="link-btn" href="compo/">Ouvrir le Comp Builder</a></div>
-          <div class="dash-comps">${CB_STATUS.map(([k, label, tone]) => `<div class="dash-comp ${tone}"><b>${(cb.comps || {})[k] || 0}</b><span>${label}</span></div>`).join("")}</div>
-          <p class="small-note">${totalComps ? `${totalComps} compo${totalComps > 1 ? "s" : ""} sur ${cb.maps} map${cb.maps > 1 ? "s" : ""}.` : "Aucune compo pour l'instant."}${cb.editor ? "" : " Lecture seule : le capitaine peut te nommer éditeur."}</p>
-        </div>
+    app.innerHTML = teamShell("espace", t, "Tableau de bord", `${todoHtml}<div class="db-grid">${nextHtml}${bilanHtml}</div>${prepHtml}`,
+      `${t.is_captain ? "Tu es capitaine" : cb.editor ? "Tu es éditeur des compos" : "Joueur de l'équipe"} · tout se met à jour en direct.`);
+    bindScrims(app, data, () => viewDashboard(app), () => viewDashboard(app));
+    setLive("/espace", ["scrims", "team:" + t.id, "cb:" + t.id], () => viewDashboard(app));
+  }
+  const hasPoolOf = (pools, id) => hasPool(pools[id]);
 
-        <div class="dash-card">
-          <div class="dash-head"><h3>Strats</h3><a class="link-btn" href="compo/#/strats">Toutes les strats</a></div>
-          ${(cb.strats || []).length ? `<div class="t-lines">${cb.strats.map(x => { const m = mapByUuid.get(x.map_uuid); return `<a class="t-line dash-strat" href="compo/#/strat/${esc(x.id)}">
-              <span class="t-res side-${x.side === "defense" ? "def" : "atk"}">${x.side === "defense" ? "DEF" : "ATK"}</span>
-              <span class="t-opp">${m && m.img ? `<img class="dash-strat-map" src="${esc(m.img)}" alt="">` : ""}<b>${esc(x.name)}</b></span>
-              <span class="small-note">${m ? esc(m.name) + " · " : ""}${x.steps} étape${x.steps > 1 ? "s" : ""}</span>
-              <span class="small-note">${ago(x.updated_at)}</span></a>`; }).join("")}</div>
-            <p class="small-note">${cb.strats_total} strat${cb.strats_total > 1 ? "s" : ""} au total · un clic ouvre le tableau tactique.</p>`
-            : `<p class="small-note">Aucune strat pour l'instant.${cb.editor ? ` <a class="link-btn" href="compo/#/strats">Créer la première</a>` : ""}</p>`}
-        </div>
-
-        <div class="dash-card">
-          <div class="dash-head"><h3>Roster</h3><a class="link-btn" href="#/mon-equipe">Gérer l'équipe</a></div>
-          <div class="dash-roster">${roster.map(r => `<a class="dash-pl${r.role === "remplacant" ? " sub" : ""}" href="${playerHref(r.user_id)}" title="${esc(r.username)}${r.is_captain ? " · capitaine" : ""}">${avatar(r.avatar_url, r.username, 34)}<small>${esc(r.username)}</small></a>`).join("")}</div>
-          <p class="small-note">${tit}/5 titulaires · ${roster.length}/7 joueurs${d.lfg ? " · annonce de recrutement en ligne" : ""}</p>
-        </div>
-      </div>
-
-      <div class="dash-card dash-pool">
-        <div class="dash-head"><h3>Map pool</h3><span class="small-note" id="pool-state">${t.is_captain ? "Clique pour classer chaque map · enregistré automatiquement" : "Fixé par le capitaine"}</span></div>
-        <p class="small-note">Les ${maps.length} maps du pool compétitif actuel (mis à jour automatiquement à chaque nouvel acte). Sert à trier les maps quand vous proposez un scrim et à conseiller les maps face à chaque adversaire. Visible sur la page publique de l'équipe.</p>
-        ${t.is_captain ? `<div class="pool-edit">${maps.map(m => `<div class="pool-row" data-map="${esc(m.name)}">
+  // ---------- Réglages de l'équipe : map pool, invitation, logo, départ ----------
+  async function viewSettings(app) {
+    if (!state.session) return needLogin(app, "Les réglages de ton équipe : map pool, invitation, logo.");
+    await loadMe();
+    const t = state.team;
+    if (!t) { location.hash = "#/mon-equipe"; return; }
+    const [roster, pool, maps] = await Promise.all([rpc("team_roster", { p_team: t.id }), teamPool(t.id), mapList()]);
+    const isCap = !!t.is_captain, me = state.session.user.id, locked = t.locked, code = t.invite_code;
+    const inviteLink = location.origin + location.pathname + "?join=" + code + "#/mon-equipe";
+    app.innerHTML = teamShell("reglages", t, "Réglages", `
+      <section class="db-card set-pool">
+        <div class="db-head"><h3>Map pool</h3>${isCap ? `<div class="set-pool-save"><span class="small-note" id="pool-state">Tout est enregistré</span><button class="btn sm solid" id="pool-save" type="button" disabled>Enregistrer</button></div>` : `<span class="small-note">Fixé par le capitaine</span>`}</div>
+        <p class="small-note">Les ${maps.length} maps du pool compétitif actuel (mis à jour automatiquement à chaque acte). Sert à conseiller les maps face à chaque adversaire et à trier les maps quand vous proposez un scrim. Visible sur la page publique de l'équipe.</p>
+        ${isCap ? `<div class="pool-edit">${maps.map(m => `<div class="pool-row" data-map="${esc(m.name)}">
             <span class="pool-name"${m.img ? ` style="--img:url('${esc(m.img)}')"` : ""}>${esc(m.name)}</span>
-            <div class="pool-seg" role="group" aria-label="${esc(m.name)}">${POOL_LEVELS.map(([v, l]) => `<button type="button" class="${v}${myPool[m.name] === v ? " on" : ""}" data-lvl="${v}" aria-pressed="${myPool[m.name] === v}">${l}</button>`).join("")}</div>
-          </div>`).join("")}</div>` : poolView(myPool, maps)}
-      </div>`, "Espace équipe");
-    if (t.is_captain) bindPoolEditor(app, myPool);
-    setLive("/espace", ["scrims", "team:" + t.id, "cb:" + t.id, "lfg"], () => viewDashboard(app));
+            <div class="pool-seg" role="group" aria-label="${esc(m.name)}">${POOL_LEVELS.map(([v, l]) => `<button type="button" class="${v}${pool[m.name] === v ? " on" : ""}" data-lvl="${v}" aria-pressed="${pool[m.name] === v}">${l}</button>`).join("")}</div>
+          </div>`).join("")}</div>` : poolView(pool, maps)}
+      </section>
+      <div class="cards3 set-cards">
+        <div class="card">
+          <h3>Inviter des joueurs</h3>
+          <p class="small-note">${locked ? "Les invitations reprennent après la compétition." : "7 joueurs max (5 titulaires + 2 remplaçants). Envoie le lien ou le code."}</p>
+          <div class="code-big" id="inv-code">${esc(code)}</div>
+          <div class="copy-row"><input id="inv-link" readonly value="${esc(inviteLink)}" aria-label="Lien d'invitation"><button class="btn sm" id="copy-inv" type="button">Copier le lien</button></div>
+          <p class="copied" id="inv-copied" aria-live="polite"></p>
+          ${isCap ? `<button class="link-btn" id="regen" type="button">Générer un nouveau code</button>` : ""}
+        </div>
+        <div class="card">
+          <h3>Logo de l'équipe</h3>
+          <div class="logo-edit">${teamLogo(t, 96)}
+            ${isCap ? `<div class="logo-actions">
+              <label class="btn sm" for="logo-file">${t.logo_url ? "Changer le logo" : "Ajouter un logo"}</label>
+              <input type="file" id="logo-file" accept="image/png,image/jpeg,image/webp" hidden>
+              ${t.logo_url ? `<button class="link-btn danger-t" id="logo-remove" type="button">Retirer le logo</button>` : ""}
+              <p class="small-note">PNG, JPG ou WEBP. Format carré conseillé, fond transparent idéal.</p>
+              <p class="form-err" id="logo-err" role="alert"></p>
+            </div>` : `<p class="small-note">Seul le capitaine peut changer le logo.</p>`}
+          </div>
+        </div>
+        <div class="card">
+          <h3>Quitter l'équipe</h3>
+          <p class="small-note">${locked ? "Impossible pendant une compétition." : isCap ? (roster.length > 1 ? "Tu es capitaine : nomme un autre capitaine (page Roster) avant de partir." : "Tu es seul : quitter supprime l'équipe.") : "Tu pourras rejoindre une autre équipe ensuite."}</p>
+          <button class="btn danger" id="leave" type="button" ${locked || (isCap && roster.length > 1) ? "disabled" : ""}>${isCap && roster.length === 1 ? "Supprimer l'équipe" : "Quitter l'équipe"}</button>
+        </div>
+      </div>`, "Ce qui ne change pas souvent. Le map pool ne s'enregistre que quand tu cliques sur « Enregistrer ».");
+
+    const reload = () => viewSettings(app);
+    if (isCap) bindPoolEditor(app, pool);
+    if ($("#logo-file")) $("#logo-file").onchange = async e => {
+      const f = e.target.files[0]; if (!f) return; $("#logo-err").textContent = "Envoi en cours…";
+      try { await uploadTeamLogo(t.id, f); toast("Logo enregistré."); reload(); }
+      catch (x) { $("#logo-err").textContent = errMsg(x); }
+    };
+    if ($("#logo-remove")) confirmable($("#logo-remove"), "Confirmer ?", async () => {
+      try { await rpc("set_team_logo", { p_url: null }); await cleanLogos(t.id, null); toast("Logo retiré."); reload(); } catch (x) { toast(errMsg(x), "err"); } });
+    $("#copy-inv").onclick = () => copyText(inviteLink, $("#inv-copied"), null);
+    if ($("#regen")) confirmable($("#regen"), "Confirmer : l'ancien code ne marchera plus", async () => {
+      try { await rpc("regenerate_invite"); toast("Nouveau code généré."); await loadMe(); reload(); } catch (x) { toast(errMsg(x), "err"); } });
+    confirmable($("#leave"), "Clique encore pour confirmer", async () => {
+      try { await rpc("leave_team"); discordSync({ user_ids: [me] }); toast("Tu as quitté l'équipe."); location.hash = "#/mon-equipe"; } catch (x) { toast(errMsg(x), "err"); } });
+    setLive("/reglages", ["team:" + t.id], reload);
   }
 
   async function teamPool(id) {
@@ -1441,23 +1547,30 @@
     const { data } = await sb.from("team_map_pools").select("pool").eq("team_id", id).maybeSingle();
     return (data && data.pool) || {};
   }
-  // Éditeur du map pool : un clic classe la map, re-cliquer la retire ; on enregistre 600 ms après le dernier clic
+  // Éditeur du map pool : un clic classe la map, re-cliquer la retire ; rien n'est enregistré avant « Enregistrer »
   function bindPoolEditor(app, pool) {
+    const saved = JSON.stringify(pool || {});
     pool = { ...pool };
-    const info = $("#pool-state", app);
-    let timer = null;
+    const info = $("#pool-state", app), btn = $("#pool-save", app);
+    const dirty = () => JSON.stringify(Object.fromEntries(Object.entries(pool).sort())) !== JSON.stringify(Object.fromEntries(Object.entries(JSON.parse(saved)).sort()));
+    const refresh = () => {
+      const d = dirty();
+      btn.disabled = !d; info.textContent = d ? "Modifications non enregistrées" : "Tout est enregistré";
+      info.classList.toggle("warn-t", d); live.editing = d ? app : null; unsaved.pool = d; unsaved.poolValue = () => pool;
+    };
     app.querySelectorAll(".pool-row").forEach(row => row.querySelectorAll("[data-lvl]").forEach(b => b.onclick = () => {
       const m = row.dataset.map, v = b.dataset.lvl;
       if (pool[m] === v) delete pool[m]; else pool[m] = v;
       row.querySelectorAll("[data-lvl]").forEach(x => { const on = pool[m] === x.dataset.lvl; x.classList.toggle("on", on); x.setAttribute("aria-pressed", String(on)); });
-      live.editing = row; info.textContent = "Enregistrement…";
-      clearTimeout(timer);
-      timer = setTimeout(async () => {
-        try { await rpc("set_map_pool", { p_pool: pool }); info.textContent = "Enregistré"; live.editing = null; }
-        catch (x) { info.textContent = errMsg(x); }
-      }, 600);
+      refresh();
     }));
+    btn.onclick = async () => {
+      btn.disabled = true; info.textContent = "Enregistrement…";
+      try { await rpc("set_map_pool", { p_pool: pool }); unsaved.pool = false; live.editing = null; toast("Map pool enregistré."); viewSettings(app); }
+      catch (x) { info.textContent = errMsg(x); btn.disabled = false; }
+    };
   }
+
 
   // ---------- Staff ----------
   async function viewStaff(app) {

@@ -183,12 +183,11 @@ export default function Team() {
     <main className="team-page container">
       <div className="team-page__header">
         <div>
-          <span className="home__eyebrow">Effectif</span>
-          <h1 className="team-page__title">Ton équipe</h1>
+          <h1 className="team-page__title">Rôles des joueurs</h1>
           <p>
             Les membres de {team?.name || "l'équipe"} arrivent ici automatiquement. Règle leurs rôles et leur
             couleur, ou ajoute un coach ou un remplaçant hors réseau.{' '}
-            <a className="team-page__netlink" href={networkUrl('#/mon-equipe')}>Gérer le roster sur le réseau →</a>
+            Titulaires, remplaçants et invitations : <a className="team-page__netlink" href={networkUrl('#/mon-equipe')}>Roster →</a>
           </p>
         </div>
         {isAdmin && (

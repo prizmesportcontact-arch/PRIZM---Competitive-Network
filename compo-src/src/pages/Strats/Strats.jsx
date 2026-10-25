@@ -23,8 +23,7 @@ export default function Strats() {
   return (
     <main className="strats container">
       <div className="strats__head">
-        <span className="eyebrow">Tableau tactique</span>
-        <h1 className="strats__title">Strats de l’équipe</h1>
+        <h1 className="strats__title">Strats</h1>
         <p>Setups, exécutions et retakes dessinés sur la minimap. Choisis une map pour en créer une.</p>
       </div>
       {withStrats.length === 0 && <StratList />}

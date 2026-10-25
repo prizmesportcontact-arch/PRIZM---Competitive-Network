@@ -66,7 +66,7 @@ export default function Home() {
   return (
     <main className="home">
       <section className="home__hero container">
-        <h1 className="home__title">Pool de maps</h1>
+        <h1 className="home__title">Compos</h1>
         {status === 'ready' && realMaps.length > 0 && (
           <div className="home__progress">
             <div className="home__progress-bar">

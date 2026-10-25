@@ -245,3 +245,8 @@ main.container,
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
+
+/* Titres des pages de l'équipe : même taille partout (site et Comp Builder) */
+.home__title, .strats__title, .team-page__title { font-family: var(--font-display); font-weight: 900; text-transform: uppercase; font-size: clamp(2rem, 4vw, 3rem) !important; line-height: 0.95; }
+.tm-layout .home__hero { padding-top: 0; }
+.tm-layout .strats, .tm-layout .team-page { padding-top: 0; }
