@@ -1,0 +1,30 @@
+# Empêche la mise en pause de Supabase (plan gratuit : pause après 7 jours sans requête).
+# Lundi et jeudi, une lecture publique de la base (même clé publique que le site).
+# GitHub désactive les tâches planifiées après 60 jours sans activité sur le dépôt :
+# la dernière étape les réactive à chaque passage.
+name: Supabase keep-alive
+on:
+  schedule:
+    - cron: "41 7 * * 1,4"
+  workflow_dispatch:
+permissions:
+  actions: write
+  contents: read
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Requête à la base
+        run: |
+          code=$(curl -s -o /tmp/r.json -w '%{http_code}' \
+            "https://cbbnrdfvaaikawszaysu.supabase.co/rest/v1/map_rotation?select=maps,checked_at" \
+            -H "apikey: sb_publishable_rfB8KSptjcdTpp8QxvST9A_UlpQ8rW0")
+          echo "HTTP $code"; cat /tmp/r.json; echo
+          test "$code" = 200
+      - name: Garder les tâches planifiées actives
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for wf in keepalive.yml; do
+            gh api -X PUT "repos/${{ github.repository }}/actions/workflows/$wf/enable" || true
+          done
