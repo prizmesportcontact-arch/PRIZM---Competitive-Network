@@ -209,6 +209,21 @@ export function CompositionsProvider({ children }) {
     [mergeComp, handleError]
   )
 
+  /** Enregistre d'un coup les changements faits dans l'éditeur (agents, joueurs, statut, notes). */
+  const saveComposition = useCallback(
+    async (compId, fields) => {
+      try {
+        const updated = await updateCompositionRow(compId, fields)
+        mergeComp(updated)
+        return true
+      } catch (err) {
+        handleError(err, "La composition n'a pas pu être enregistrée.")
+        return false
+      }
+    },
+    [mergeComp, handleError]
+  )
+
   const patchSlots = useCallback(
     async (mapUuid, compId, mutate) => {
       try {
@@ -299,6 +314,7 @@ export function CompositionsProvider({ children }) {
       setMain,
       setStatus: setStatus_,
       setNotes,
+      saveComposition,
       setSlotAgent,
       setSlotPlayer,
       removeSlot,
@@ -317,6 +333,7 @@ export function CompositionsProvider({ children }) {
       setMain,
       setStatus_,
       setNotes,
+      saveComposition,
       setSlotAgent,
       setSlotPlayer,
       removeSlot,

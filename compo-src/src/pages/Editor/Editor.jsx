@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData } from '../../context/DataContext'
 import { useCompositions } from '../../context/CompositionsContext'
@@ -18,6 +18,7 @@ import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import CompositionCompareModal from '../../components/CompositionCompareModal/CompositionCompareModal'
 import Loader from '../../components/Loader/Loader'
 import StratList from '../../components/StratList/StratList'
+import { useUnsavedGuard } from '../../hooks/useUnsavedGuard'
 import './Editor.css'
 
 export default function Editor() {
@@ -36,13 +37,7 @@ export default function Editor() {
     deleteComposition,
     renameComposition,
     setMain,
-    setStatus,
-    setNotes,
-    setSlotAgent,
-    setSlotPlayer,
-    removeSlot,
-    reorderSlots,
-    clearComposition,
+    saveComposition,
   } = useCompositions()
 
   const [activeSlot, setActiveSlot] = useState(null)
@@ -50,10 +45,62 @@ export default function Editor() {
   const [confirmDelete, setConfirmDelete] = useState(null)
   const [activeCompId, setActiveCompId] = useState(null)
   const [compareOpen, setCompareOpen] = useState(false)
+  // Changements pas encore enregistrés de la composition affichée : { compId, slots, status, notes }
+  const [draft, setDraft] = useState(null)
+  const [saving, setSaving] = useState(false)
 
   const map = useMemo(() => maps.find((m) => m.uuid === mapId), [maps, mapId])
   const comps = getCompsForMap(compositionsByMap, mapId)
   const agentByUuid = useMemo(() => new Map(agents.map((a) => [a.uuid, a])), [agents])
+  const saved = comps.find((c) => c.id === activeCompId) || comps[0] || null
+
+  // ---------- Enregistrement manuel ----------
+  const liveDraft = draft && saved && draft.compId === saved.id ? draft : null
+  const isDirty = Boolean(
+    liveDraft &&
+      (JSON.stringify(liveDraft.slots) !== JSON.stringify(saved.slots) ||
+        liveDraft.status !== saved.status ||
+        (liveDraft.notes || '') !== (saved.notes || ''))
+  )
+  const edit = (patch) =>
+    setDraft((d) => {
+      const base = d && d.compId === saved.id ? d : { compId: saved.id, slots: saved.slots, status: saved.status, notes: saved.notes || '' }
+      return { ...base, ...(typeof patch === 'function' ? patch(base) : patch) }
+    })
+  const editSlots = (mutate) => edit((b) => ({ slots: mutate(b.slots) }))
+
+  const doSave = useCallback(async () => {
+    if (!liveDraft || saving) return false
+    setSaving(true)
+    const ok = await saveComposition(liveDraft.compId, { slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes })
+    setSaving(false)
+    if (ok) {
+      setDraft(null)
+      pushToast('Composition enregistrée.', 'success')
+    }
+    return ok
+  }, [liveDraft, saving, saveComposition, pushToast])
+  const discard = useCallback(() => setDraft(null), [])
+
+  const { guard, dialog: leaveDialog } = useUnsavedGuard({
+    when: isAdmin && isDirty,
+    label: saved?.name,
+    onSave: doSave,
+    onDiscard: discard,
+  })
+
+  // Ctrl+S
+  useEffect(() => {
+    if (!isAdmin) return undefined
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        doSave()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [isAdmin, doSave])
 
   // Garde une sélection d'onglet valide (deep-link ?comp=, composition
   // principale, ou première disponible). Seul un admin peut créer la toute
@@ -98,7 +145,7 @@ export default function Editor() {
     )
   }
 
-  const composition = comps.find((c) => c.id === activeCompId) || comps[0] || null
+  const composition = saved && liveDraft ? { ...saved, slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes } : saved
 
   const usedAgentUuids = new Set(composition ? composition.slots.filter((s) => s.agentUuid).map((s) => s.agentUuid) : [])
 
@@ -109,18 +156,18 @@ export default function Editor() {
   const filledCount = agentsInComp.length
 
   const handleSelectAgent = (agentUuid) => {
-    setSlotAgent(mapId, composition.id, activeSlot, agentUuid)
+    editSlots((slots) => slots.map((s, i) => (i === activeSlot ? { ...s, agentUuid } : s)))
     setActiveSlot(null)
   }
 
   const handleClear = () => {
-    clearComposition(mapId, composition.id)
+    editSlots(() => composition.slots.map(() => ({ agentUuid: null, playerId: null })))
     setConfirmClear(false)
-    pushToast('Composition vidée.', 'success')
+    pushToast('Composition vidée — pense à enregistrer.', 'success')
   }
 
   const handleStatusChange = (newStatus) => {
-    setStatus(mapId, composition.id, newStatus)
+    edit({ status: newStatus })
   }
 
   const handleCreateComp = async () => {
@@ -203,11 +250,11 @@ export default function Editor() {
               comps={comps}
               activeCompId={composition.id}
               editable={isAdmin}
-              onSelect={setActiveCompId}
-              onCreate={handleCreateComp}
+              onSelect={(id) => id !== composition.id && guard(() => { setDraft(null); setActiveCompId(id) })}
+              onCreate={() => guard(() => { setDraft(null); handleCreateComp() })}
               onRename={(id, name) => renameComposition(mapId, id, name)}
               onSetMain={(id) => setMain(mapId, id)}
-              onDuplicate={handleDuplicate}
+              onDuplicate={(id) => guard(() => { setDraft(null); handleDuplicate(id) })}
               onDelete={(id) => setConfirmDelete(id)}
             />
           </section>
@@ -240,9 +287,15 @@ export default function Editor() {
                   players={players}
                   editable={isAdmin}
                   onOpenSelection={setActiveSlot}
-                  onRemove={(i) => removeSlot(mapId, composition.id, i)}
-                  onReorder={(from, to) => reorderSlots(mapId, composition.id, from, to)}
-                  onAssignPlayer={(i, playerId) => setSlotPlayer(mapId, composition.id, i, playerId)}
+                  onRemove={(idx) => editSlots((slots) => slots.map((s, i) => (i === idx ? { agentUuid: null, playerId: null } : s)))}
+                  onReorder={(from, to) =>
+                    editSlots((slots) => {
+                      const next = [...slots]
+                      ;[next[from], next[to]] = [next[to], next[from]]
+                      return next
+                    })
+                  }
+                  onAssignPlayer={(idx, playerId) => editSlots((slots) => slots.map((s, i) => (i === idx ? { ...s, playerId } : s)))}
                 />
               ))}
             </div>
@@ -299,14 +352,10 @@ export default function Editor() {
           <section className="editor__section">
             <div className="editor__section-header">
               <h2>Notes</h2>
-              <p>Stratégie, calls, timings, erreurs à éviter — sauvegardé automatiquement.</p>
+              <p>Stratégie, calls, timings, erreurs à éviter.</p>
             </div>
             {isAdmin ? (
-              <NotesEditor
-                key={composition.id}
-                value={composition.notes}
-                onSave={(text) => setNotes(mapId, composition.id, text)}
-              />
+              <NotesEditor value={composition.notes || ''} onChange={(notes) => edit({ notes })} />
             ) : (
               <div className="editor__notes-readonly glass-panel">
                 {composition.notes ? (
@@ -319,6 +368,24 @@ export default function Editor() {
           </section>
         </div>
       )}
+
+      {composition && isAdmin && (
+        <div className={`editor-savebar${isDirty ? ' dirty' : ''}`} role="status">
+          <span className="editor-savebar__state">
+            {isDirty ? 'Modifications non enregistrées' : 'Tout est enregistré'}
+          </span>
+          {isDirty && (
+            <button type="button" className="btn btn-ghost" onClick={discard} disabled={saving}>
+              Annuler les changements
+            </button>
+          )}
+          <button type="button" className="btn btn-primary" onClick={doSave} disabled={!isDirty || saving} title="Ctrl+S">
+            {saving ? 'Enregistrement…' : 'Enregistrer'}
+          </button>
+        </div>
+      )}
+
+      {leaveDialog}
 
       <AgentSelectionModal
         open={activeSlot !== null}

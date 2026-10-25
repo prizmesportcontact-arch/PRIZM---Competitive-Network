@@ -1,5 +1,5 @@
 import { Suspense, lazy } from 'react'
-import { HashRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom'
+import { Navigate, Route, RouterProvider, Routes, createHashRouter, useLocation } from 'react-router-dom'
 import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { ThemeProvider } from './context/ThemeContext'
 import { SoundProvider } from './context/SoundContext'
@@ -27,7 +27,7 @@ const Dashboard = lazy(() => import('./pages/Dashboard/Dashboard'))
 const Strats = lazy(() => import('./pages/Strats/Strats'))
 const Strat = lazy(() => import('./pages/Strat/Strat'))
 
-/** Rendu à l'intérieur du HashRouter : gère la transition animée entre les pages. */
+/** Rendu à l'intérieur du routeur : gère la transition animée entre les pages. */
 function AppRoutes() {
   const location = useLocation()
 
@@ -58,26 +58,31 @@ function AppRoutes() {
   )
 }
 
+/** Mise en page commune, rendue par le routeur. */
+function ShellLayout() {
+  return (
+    // reducedMotion="user" : respecte le réglage système "Réduire les animations"
+    // pour les animations Framer Motion (pilotées en JS, non couvertes par le CSS).
+    <MotionConfig reducedMotion="user">
+      <RouteProgress />
+      <div className="app-layout">
+        <Navbar />
+        <div className="app-layout__main">
+          <AppRoutes />
+        </div>
+      </div>
+    </MotionConfig>
+  )
+}
+
+// Routeur « data » : nécessaire pour bloquer une navigation quand une page n'est pas
+// enregistrée (useBlocker, y compris le bouton Retour du navigateur).
+let router = null
+const getRouter = () => (router ||= createHashRouter([{ path: '*', element: <ShellLayout /> }]))
+
 /** Rendu à l'intérieur de tous les providers, pour pouvoir utiliser leurs hooks. */
 function AppShell() {
-  return (
-    <HashRouter>
-      {/* reducedMotion="user" : respecte automatiquement le réglage système
-          "Réduire les animations" pour TOUTES les animations Framer Motion
-          de l'app (transitions de page, sidebar, recherche...). La media
-          query CSS prefers-reduced-motion ne couvre pas ces animations
-          pilotées en JS, d'où ce réglage complémentaire. */}
-      <MotionConfig reducedMotion="user">
-        <RouteProgress />
-        <div className="app-layout">
-          <Navbar />
-          <div className="app-layout__main">
-            <AppRoutes />
-          </div>
-        </div>
-      </MotionConfig>
-    </HashRouter>
-  )
+  return <RouterProvider router={getRouter()} future={{ v7_startTransition: true }} />
 }
 
 /** Écran affiché si le fichier .env est manquant ou incomplet — voir README. */

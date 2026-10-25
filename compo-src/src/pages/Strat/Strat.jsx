@@ -14,6 +14,7 @@ import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
 import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import Loader from '../../components/Loader/Loader'
+import { useUnsavedGuard } from '../../hooks/useUnsavedGuard'
 import './Strat.css'
 
 const COLORS = [
@@ -73,8 +74,6 @@ export default function Strat() {
   const [roleFilter, setRoleFilter] = useState(null)
   const [agentQuery, setAgentQuery] = useState('')
   const [saving, setSaving] = useState(false)
-  const [leave, setLeave] = useState(null) // adresse visée quand on quitte sans avoir enregistré
-  const leaving = useRef(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showNames, setShowNames] = useState(() => readPref('prizm_strat_names', true))
@@ -108,38 +107,21 @@ export default function Strat() {
     return ok
   }, [strat, saving, saveStrat, stratId, pushToast])
 
-  // Fermer l'onglet ou recharger : le navigateur demande confirmation
+  // Rien ne s'enregistre tout seul : quitter la page sans enregistrer demande confirmation,
+  // et les changements abandonnés sont oubliés (la strat revient à sa dernière version enregistrée).
+  const { allow, dialog: leaveDialog } = useUnsavedGuard({
+    when: isDirty,
+    label: strat?.name,
+    onSave: doSave,
+    onDiscard: () => revertStrat(stratId),
+  })
+  const dirtyNow = useRef(false)
   useEffect(() => {
-    if (!isDirty) return undefined
-    const onBeforeUnload = (e) => {
-      if (leaving.current) return
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', onBeforeUnload)
-    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+    dirtyNow.current = isDirty
   }, [isDirty])
-
-  // Cliquer un lien pour quitter la page : on demande d'abord
-  useEffect(() => {
-    if (!isDirty) return undefined
-    const onClick = (e) => {
-      const a = e.target.closest && e.target.closest('a[href]')
-      if (!a || a.target === '_blank' || a.hasAttribute('download') || e.ctrlKey || e.metaKey || e.button > 0) return
-      if (a.href === window.location.href) return
-      e.preventDefault()
-      e.stopPropagation()
-      setLeave(a.href)
-    }
-    document.addEventListener('click', onClick, true)
-    return () => document.removeEventListener('click', onClick, true)
-  }, [isDirty])
-
-  const leaveTo = (href) => {
-    leaving.current = true
-    setLeave(null)
-    window.location.assign(href)
-  }
+  useEffect(() => () => {
+    if (dirtyNow.current) revertStrat(stratId)
+  }, [stratId, revertStrat])
 
   // ---------- Étapes + historique ----------
   const setSteps = useCallback(
@@ -336,6 +318,7 @@ export default function Strat() {
     setConfirmDelete(false)
     const mapId = strat.mapUuid
     if (await removeStrat(stratId)) {
+      allow()
       pushToast('Strat supprimée.', 'success')
       navigate(`/editor/${mapId}`)
     }
@@ -618,19 +601,7 @@ export default function Strat() {
         )}
       </section>
 
-      {leave && (
-        <div className="sb2-modal" role="dialog" aria-modal="true" aria-labelledby="sb2-leave-title">
-          <div className="sb2-modal__box">
-            <h2 id="sb2-leave-title">Êtes-vous sûr de partir sans enregistrer ?</h2>
-            <p>Les modifications de « {strat.name} » seront perdues.</p>
-            <div className="sb2-modal__actions">
-              <button type="button" className="btn btn-primary" onClick={async () => { const href = leave; if (await doSave()) leaveTo(href) }}>Enregistrer et partir</button>
-              <button type="button" className="btn btn-danger" onClick={() => { const href = leave; revertStrat(stratId); leaveTo(href) }}>Partir sans enregistrer</button>
-              <button type="button" className="btn btn-ghost" onClick={() => setLeave(null)} autoFocus>Rester</button>
-            </div>
-          </div>
-        </div>
-      )}
+      {leaveDialog}
 
       <ConfirmDialog
         open={confirmDelete}

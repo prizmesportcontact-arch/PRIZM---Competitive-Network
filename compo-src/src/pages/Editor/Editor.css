@@ -209,3 +209,17 @@
   inset: 0;
   background: var(--bg-hover) repeating-linear-gradient(-62deg, transparent 0 22px, rgba(255, 160, 67, 0.14) 22px 24px);
 }
+
+/* Barre d'enregistrement (rien ne s'enregistre tout seul) */
+.editor { padding-bottom: 84px; }
+.editor-savebar {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 60;
+  display: flex; align-items: center; gap: 10px; padding: 8px 8px 8px 16px;
+  max-width: calc(100vw - 32px); background: #11161d; border: 1px solid #262d38;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+}
+.editor-savebar.dirty { border-color: #ffa043; }
+.editor-savebar__state { font: 700 0.78rem var(--font-body, inherit); text-transform: uppercase; letter-spacing: 0.05em; color: #9aa3af; white-space: nowrap; }
+.editor-savebar.dirty .editor-savebar__state { color: #ffa043; }
+.editor-savebar.dirty .editor-savebar__state::before { content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 8px; border-radius: 50%; background: #ffa043; vertical-align: 1px; }
+@media (max-width: 560px) { .editor-savebar__state { display: none; } }

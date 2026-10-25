@@ -113,3 +113,7 @@ Scripts SQL de cette version : `017_fin_des_tournois.sql` (tournois, ligues et c
 
 - **Anti-pause Supabase** — `.github/workflows/keepalive.yml` lit la base lundi et jeudi (7 h 41 UTC) avec la clé publique ; le plan gratuit met le projet en pause après 7 jours sans requête. Lancement manuel possible depuis l'onglet *Actions* (« Run workflow »).
 - **Sauvegarde hebdomadaire** — chaque lundi à 4 h 23 UTC, la tâche `weekly-backup` (pg_cron, migration `024_sauvegardes.sql`) appelle la fonction `backup`, qui exporte les tables en JSON dans le bucket **privé** `backups` (`AAAA-MM-JJ.json`, les 12 dernières sont gardées). Exclus : `app_secrets`, `notify_queue`, `live_pulse`. Téléchargement : dashboard Supabase → Storage → backups. Sauvegarde immédiate : `select public.backup_run();` dans le SQL Editor.
+
+## Enregistrement manuel (Comp Builder)
+
+Rien ne s'enregistre tout seul, ni dans l'éditeur de composition (agents, joueurs, statut, notes) ni dans les strats : bouton **Enregistrer** (ou Ctrl+S). Quitter une page non enregistrée (onglet du menu, lien, bouton Retour du navigateur, menu du site, changement de composition, fermeture de l'onglet) affiche « Êtes-vous sûr de partir sans enregistrer ? » — `hooks/useUnsavedGuard.jsx` (routeur `createHashRouter` + `useBlocker`). Partir sans enregistrer remet la dernière version enregistrée.
