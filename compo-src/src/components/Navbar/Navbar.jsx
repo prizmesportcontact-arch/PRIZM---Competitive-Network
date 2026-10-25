@@ -63,7 +63,9 @@ export default function Navbar() {
 
       <section className={`pz-band${compact ? ' pz-band--compact' : ''}`}>
         <div className="pz-wrap pz-band__inner">
-          <span className="pz-eyebrow">Espace équipe{team ? ` · ${team.name}` : ''}</span>
+          <a className="pz-eyebrow pz-eyebrow--link" href={networkUrl('#/espace')} title="Retour à Mon espace, sur le réseau">
+            ← Espace équipe{team ? ` · ${team.name}` : ''}
+          </a>
           <div className="pz-band__title-row">
             <Link to="/" className="pz-band__title">Comp Builder</Link>
             <button type="button" className="pz-search" onClick={() => setSearchOpen(true)}>

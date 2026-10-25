@@ -32,7 +32,7 @@ export class ErrorBoundary extends Component {
           <div className="error-boundary__box">
             <h1>Une erreur inattendue est survenue</h1>
             <p>
-              Désolé, quelque chose s'est mal passé. Vos données ne sont pas
+              Désolé, quelque chose s'est mal passé. Tes données ne sont pas
               perdues — elles sont sauvegardées sur le serveur, pas dans
               cette page.
             </p>

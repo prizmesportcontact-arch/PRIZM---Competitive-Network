@@ -233,7 +233,7 @@ export default function Editor() {
                 <h2>Compositions</h2>
                 <p>
                   {isAdmin
-                    ? 'Créez plusieurs compositions par map (principale, anti-rush, eco…) et marquez celle à afficher sur l\'accueil.'
+                    ? 'Crée plusieurs compositions par map (principale, anti-rush, eco…). L\'étoile marque la principale, celle affichée sur l\'accueil.'
                     : 'Compositions disponibles pour cette map.'}
                 </p>
               </div>
@@ -265,7 +265,7 @@ export default function Editor() {
                 <h2>Composition — {composition.name}</h2>
                 <p>
                   {isAdmin
-                    ? 'Cliquez sur un emplacement pour choisir un agent, glissez-déposez pour réorganiser, et assignez un joueur.'
+                    ? 'Clique sur un emplacement pour choisir un agent, glisse-dépose pour réorganiser, et assigne un joueur. Pense à enregistrer.'
                     : 'Agents et joueurs assignés pour cette composition.'}
                 </p>
               </div>
@@ -369,8 +369,8 @@ export default function Editor() {
         </div>
       )}
 
-      {composition && isAdmin && (
-        <div className={`editor-savebar${isDirty ? ' dirty' : ''}`} role="status">
+      {composition && isAdmin && isDirty && (
+        <div className="editor-savebar dirty" role="status">
           <span className="editor-savebar__state">
             {isDirty ? 'Modifications non enregistrées' : 'Tout est enregistré'}
           </span>

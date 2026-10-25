@@ -135,7 +135,7 @@
     // Le Comp Builder vit dans le dossier compo/ (même connexion Discord)
     if (path === "/compo") { location.href = "compo/"; return; }
     const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
-    document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === h));
+    document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === (h === "#/mon-equipe" ? "#/espace" : h)));
     stopLive();
     // Le Competitive Network est l'accueil ; la page de l'équipe PRIZM (qui organise le réseau) est sur #/prizm
     const anchor = h && !h.startsWith("#/") ? document.getElementById(h.slice(1)) : null;
@@ -254,6 +254,13 @@
 
   const panel = (title, inner, eyebrow = "") =>
     `<div class="wrap app-wrap">${eyebrow ? `<span class="eyebrow">${eyebrow}</span>` : ""}<h2 class="app-title">${title}</h2>${inner}</div>`;
+
+  // Onglets communs aux pages de son équipe : on sait toujours où on est et où aller
+  const teamTabs = active => `<nav class="team-tabs" aria-label="Mon équipe">
+      <a href="#/espace"${active === "espace" ? ` class="on" aria-current="page"` : ""}>Tableau de bord</a>
+      <a href="#/mon-equipe"${active === "gerer" ? ` class="on" aria-current="page"` : ""}>Gérer l'équipe</a>
+      <a href="compo/">Comp Builder <span aria-hidden="true">→</span></a>
+    </nav>`;
 
   function needLogin(app, what) {
     app.innerHTML = panel("Connecte-toi avec Discord",
@@ -505,7 +512,7 @@
     const tit = roster.filter(r => r.role === "titulaire").length;
     const locked = t.locked; // compétition en cours : arrivées et départs bloqués
 
-    app.innerHTML = panel(`${teamLogo(t, 64)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
+    app.innerHTML = panel(`${teamLogo(t, 64)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `${teamTabs("gerer")}
       <div class="team-status">
         ${statusPill(t)}
         <span class="small-note">${t.status === "validee" ? "Ton équipe peut proposer et accepter des scrims." :
@@ -1371,7 +1378,7 @@
         <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></span>
         <span class="small-note">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>
         <span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span></div>`;
-    app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `
+    app.innerHTML = panel(`${teamLogo(t, 56)}<span>${esc(t.name)}</span> <span class="tag-chip">${esc(t.tag)}</span>`, `${teamTabs("espace")}
       <div class="team-status">${statusPill(t)}<span class="small-note">${t.is_captain ? "Tu es capitaine." : cb.editor ? "Tu es éditeur du Comp Builder." : "Joueur de l'équipe."} Tout se met à jour en direct. <a class="link-btn" href="${teamHref(t.tag)}">Page publique de l'équipe</a></span></div>
 
       ${todo.length ? `<div class="dash-sec"><h3 class="t-h">À faire</h3><div class="dash-todos">${todo.join("")}</div></div>` : ""}

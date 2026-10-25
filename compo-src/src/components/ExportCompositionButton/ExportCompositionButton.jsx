@@ -51,7 +51,7 @@ export default function ExportCompositionButton({ map, composition, agentByUuid,
         className="btn btn-ghost export-comp__btn"
         onClick={handleDownload}
         disabled={busy !== null || filledCount === 0}
-        title={filledCount === 0 ? 'Ajoutez au moins un agent pour exporter' : "Télécharger l'image de cette composition"}
+        title={filledCount === 0 ? 'Ajoute au moins un agent pour exporter' : "Télécharger l'image de cette composition"}
       >
         <svg width="15" height="15" viewBox="0 0 24 24" fill="none">
           <path d="M12 3v13m0 0-4.5-4.5M12 16l4.5-4.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

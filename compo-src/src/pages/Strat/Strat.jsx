@@ -406,7 +406,7 @@ export default function Strat() {
         </section>
 
         {editable && (
-          <section className="sb2-sec">
+          <section className="sb2-sec sb2-sec--erase">
             <h2>Effacer</h2>
             <button type="button" className="sb2-del" onClick={() => setItems([])} disabled={!step.items.length}>
               <Ico d="M8 19h12M4 15l9-9 5 5-8 8H8z" />
@@ -428,7 +428,7 @@ export default function Strat() {
         )}
 
         {editable && (
-          <section className="sb2-sec">
+          <section className="sb2-sec sb2-sec--tools">
             <h2>Outils</h2>
             <div className="sb2-tools" role="toolbar" aria-label="Outils">
               {TOOLS.map((t) => (

@@ -184,11 +184,11 @@ export default function Team() {
       <div className="team-page__header">
         <div>
           <span className="home__eyebrow">Effectif</span>
-          <h1 className="team-page__title">Votre équipe</h1>
+          <h1 className="team-page__title">Ton équipe</h1>
           <p>
-            Les membres de {team?.name || "l'équipe"} arrivent ici automatiquement. Réglez leurs rôles et leur
-            couleur, ou ajoutez un coach ou un remplaçant hors réseau.{' '}
-            <a href={networkUrl('#/mon-equipe')}>Gérer le roster sur le réseau</a>
+            Les membres de {team?.name || "l'équipe"} arrivent ici automatiquement. Règle leurs rôles et leur
+            couleur, ou ajoute un coach ou un remplaçant hors réseau.{' '}
+            <a className="team-page__netlink" href={networkUrl('#/mon-equipe')}>Gérer le roster sur le réseau →</a>
           </p>
         </div>
         {isAdmin && (
@@ -234,7 +234,7 @@ export default function Team() {
 
       {playerList.length === 0 ? (
         <div className="team-page__empty glass-panel">
-          <p>Aucun joueur pour le moment. Ajoutez votre effectif pour pouvoir l'assigner aux compositions.</p>
+          <p>Aucun joueur pour le moment. Ajoute ton effectif pour pouvoir l'assigner aux compositions.</p>
         </div>
       ) : visiblePlayers.length === 0 ? (
         <div className="team-page__empty glass-panel">

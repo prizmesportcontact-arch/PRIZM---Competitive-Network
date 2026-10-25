@@ -73,7 +73,7 @@ export default function Dashboard() {
           <div className="dashboard__hero-value">{stats.progressPercent}%</div>
           <ProgressBar percent={stats.progressPercent} />
           <p className="dashboard__hero-caption">
-            {stats.validated} map(s) terminée(s) sur {stats.totalMaps}.
+            {stats.validated} map{stats.validated > 1 ? "s" : ""} prête{stats.validated > 1 ? "s" : ""} sur {stats.totalMaps}.
           </p>
         </motion.section>
 
@@ -86,16 +86,16 @@ export default function Dashboard() {
           <span className="panel-eyebrow">Répartition</span>
           <ul className="dashboard__hero-side-list">
             <li>
-              <span className="dot dot--validated" /> Terminées <b>{stats.validated}</b>
+              <span className="dot dot--validated" /> Prêtes <b>{stats.validated}</b>
             </li>
             <li>
               <span className="dot dot--testing" /> En test <b>{stats.testing}</b>
             </li>
             <li>
-              <span className="dot dot--needs_work" /> À retravailler <b>{stats.needsWork}</b>
+              <span className="dot dot--needs_work" /> À revoir <b>{stats.needsWork}</b>
             </li>
             <li>
-              <span className="dot dot--todo" /> À faire <b>{stats.todo}</b>
+              <span className="dot dot--todo" /> Brouillons <b>{stats.todo}</b>
             </li>
           </ul>
         </motion.aside>
@@ -104,17 +104,17 @@ export default function Dashboard() {
       <div className="dashboard__stat-grid">
         <StatCard index={0} icon="totalMaps" value={stats.totalMaps} label="Maps au total" />
         <StatCard index={1} icon="totalCompositions" value={stats.totalCompositions} label="Compositions créées" />
-        <StatCard index={2} icon="validated" value={stats.validated} label="Maps terminées" tone="validated" />
+        <StatCard index={2} icon="validated" value={stats.validated} label="Maps prêtes" tone="validated" />
         <StatCard index={3} icon="testing" value={stats.testing} label="Maps en test" tone="testing" />
-        <StatCard index={4} icon="needs_work" value={stats.needsWork} label="À retravailler" tone="needs_work" />
-        <StatCard index={5} icon="todo" value={stats.todo} label="À faire" tone="todo" />
+        <StatCard index={4} icon="needs_work" value={stats.needsWork} label="Maps à revoir" tone="needs_work" />
+        <StatCard index={5} icon="todo" value={stats.todo} label="Brouillons" tone="todo" />
         <StatCard index={6} icon="empty" value={stats.empty} label="Maps vides" tone="empty" />
       </div>
 
       <div className="dashboard__lists">
         <MapBucketList
           index={0}
-          title="À retravailler"
+          title="À revoir"
           emoji={STATUS_META[STATUS.NEEDS_WORK].emoji}
           color={STATUS_META[STATUS.NEEDS_WORK].color}
           maps={mapsByBucket[STATUS.NEEDS_WORK]}
@@ -128,7 +128,7 @@ export default function Dashboard() {
         />
         <MapBucketList
           index={2}
-          title="À faire"
+          title="Brouillons"
           emoji={STATUS_META[STATUS.TODO].emoji}
           color={STATUS_META[STATUS.TODO].color}
           maps={mapsByBucket[STATUS.TODO]}

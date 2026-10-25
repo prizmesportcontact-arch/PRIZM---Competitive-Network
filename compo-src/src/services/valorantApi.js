@@ -23,7 +23,7 @@ async function request(path) {
     response = await fetch(`${BASE_URL}${path}`)
   } catch (err) {
     throw new ValorantApiError(
-      "Impossible de contacter l'API Valorant. Vérifiez votre connexion internet.",
+      "Impossible de contacter l'API Valorant. Vérifie ta connexion internet.",
       err
     )
   }

@@ -23,8 +23,8 @@ const FILTER_LABELS = {
 const SORT_LABELS = {
   [SORTS.ALPHA]: 'Ordre alphabétique',
   [SORTS.RECENT]: 'Dernière modification',
-  [SORTS.COMPLETE_FIRST]: 'Terminées en premier',
-  [SORTS.INCOMPLETE_FIRST]: 'Non terminées en premier',
+  [SORTS.COMPLETE_FIRST]: 'Complètes (5/5) en premier',
+  [SORTS.INCOMPLETE_FIRST]: 'Incomplètes en premier',
 }
 
 export default function FilterBar({
