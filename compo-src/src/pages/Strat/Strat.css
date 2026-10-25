@@ -107,7 +107,7 @@
 
 /* ---------- Scène ---------- */
 .sb2-stage { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
-.sb2-stage > .sb2-canvas { flex: 1 1 auto; }
+.sb2-stage > .sb2-canvas { flex: 1 1 0; }
 
 .sb2-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 12px; flex-wrap: wrap; }
 .sb2-bar__left { display: flex; align-items: center; gap: 12px; min-width: 0; flex: 1 1 380px; }
@@ -141,27 +141,10 @@ input.sb2-name:focus { outline: none; border-bottom-color: var(--amber); }
 .sb2-save--error i { background: var(--atk); }
 @keyframes sb2-blink { 50% { opacity: 0.3; } }
 
-.sb2-canvas { position: relative; display: grid; place-items: center; min-height: 0; padding: 0 8px 6px; }
-.sb2-board {
-  --side: var(--atk);
-  position: relative; height: 100%; max-width: 100%; max-height: 100%;
-}
+.sb2-canvas { position: relative; min-height: 0; overflow: hidden; border-top: 1px solid var(--line); }
+.sb2-board { position: absolute; inset: 0; }
 .sb2-board--defense { --side: var(--def); }
 .sb2-board .strat-board { width: 100%; height: 100%; }
-/* Coins de visée aux couleurs du côté */
-.sb2-board::after {
-  content: ""; position: absolute; inset: -1px; pointer-events: none; --k: 26px;
-  background:
-    linear-gradient(var(--side), var(--side)) top left / var(--k) 3px,
-    linear-gradient(var(--side), var(--side)) top left / 3px var(--k),
-    linear-gradient(var(--side), var(--side)) top right / var(--k) 3px,
-    linear-gradient(var(--side), var(--side)) top right / 3px var(--k),
-    linear-gradient(var(--side), var(--side)) bottom left / var(--k) 3px,
-    linear-gradient(var(--side), var(--side)) bottom left / 3px var(--k),
-    linear-gradient(var(--side), var(--side)) bottom right / var(--k) 3px,
-    linear-gradient(var(--side), var(--side)) bottom right / 3px var(--k);
-  background-repeat: no-repeat;
-}
 .sb2-empty { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; padding: 24px; pointer-events: none; }
 .sb2-empty b { font: 800 1.6rem var(--font-display); text-transform: uppercase; text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); }
 .sb2-empty p { color: var(--ink-2); text-shadow: 0 2px 10px rgba(0, 0, 0, 0.9); }
@@ -244,7 +227,8 @@ input.sb2-name:focus { outline: none; border-bottom-color: var(--amber); }
   .sb2-bar__left { flex: 1 1 100%; flex-wrap: wrap; }
   .sb2-comp { flex: 1 1 100%; }
   .sb2-canvas { display: block; padding: 4px 12px 10px; }
-  .sb2-board { aspect-ratio: 1; width: 100%; height: auto; }
+  .sb2-board { position: relative; inset: auto; width: 100%; height: 78vw; }
+  .sb2-stage > .sb2-canvas { flex: 0 0 auto; }
   .sb2-inspect { justify-self: stretch; margin: 10px 0 0; }
 }
 

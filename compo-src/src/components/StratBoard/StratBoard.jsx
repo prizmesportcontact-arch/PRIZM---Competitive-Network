@@ -75,7 +75,30 @@ export default function StratBoard({
   const [turn, setTurn] = useState(null) // { id, d, l } : capacité qu'on oriente avec la poignée
   const [zoomView, setZoomView] = useState(null) // partie affichée quand on a zoomé (null = carte entière)
   const [pan, setPan] = useState(null) // { cx, cy, x, y } : déplacement de la vue en cours
-  const base = view || { x: 0, y: 0, w: 1000, h: 1000 }
+  // Plein écran : la vue s'étend à la forme de la zone disponible (la carte reste centrée)
+  const wrapRef = useRef(null)
+  const [box, setBox] = useState(null)
+  useEffect(() => {
+    const el = wrapRef.current
+    if (!el || mini) return undefined
+    const ro = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      if (width > 0 && height > 0) setBox((b) => (b && Math.abs(b.w - width) < 1 && Math.abs(b.h - height) < 1 ? b : { w: width, h: height }))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [mini])
+  const fitted = view || { x: 0, y: 0, w: 1000, h: 1000 }
+  const base = (() => {
+    if (!box) return fitted
+    const a = box.w / box.h
+    if (fitted.w / fitted.h < a) {
+      const w = fitted.h * a
+      return { x: fitted.x - (w - fitted.w) / 2, y: fitted.y, w, h: fitted.h }
+    }
+    const h = fitted.w / a
+    return { x: fitted.x, y: fitted.y - (h - fitted.h) / 2, w: fitted.w, h }
+  })()
   const baseKey = `${base.x}|${base.y}|${base.w}|${base.h}`
   const [lastKey, setLastKey] = useState(baseKey)
   if (lastKey !== baseKey) {
@@ -301,7 +324,7 @@ export default function StratBoard({
       ref={svgRef}
       className={`strat-board strat-board--${side}${editable ? ` strat-board--edit strat-board--${tool}` : ''}${mini ? ' strat-board--mini' : ''}`}
       viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
-      style={{ aspectRatio: `${base.w} / ${base.h}` }}
+      style={mini ? { aspectRatio: `${base.w} / ${base.h}` } : undefined}
       onContextMenu={(e) => e.preventDefault()}
       role="img"
       aria-label="Tableau tactique"
@@ -431,7 +454,7 @@ export default function StratBoard({
   )
   if (mini) return svg
   return (
-    <div className={`sb-wrap${pan ? ' sb-wrap--pan' : ''}${zoom > 1.01 ? ' sb-wrap--zoomed' : ''}`}>
+    <div ref={wrapRef} className={`sb-wrap${pan ? ' sb-wrap--pan' : ''}${zoom > 1.01 ? ' sb-wrap--zoomed' : ''}`}>
       {svg}
       <div className="sb-zoom" role="group" aria-label="Zoom">
         <button type="button" onClick={() => zoomAt(vb.x + vb.w / 2, vb.y + vb.h / 2, 1.35)} aria-label="Zoomer" title="Zoomer (molette)">+</button>

@@ -458,7 +458,7 @@ export default function Strat() {
         </div>
 
         <div className="sb2-canvas">
-          <div className={`sb2-board sb2-board--${strat.side}`} style={{ aspectRatio: `${view.w} / ${view.h}` }}>
+          <div className={`sb2-board sb2-board--${strat.side}`}>
             <StratBoard
               minimap={map?.minimap}
               rotation={rotation}
