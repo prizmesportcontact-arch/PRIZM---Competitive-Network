@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import GlobalSearch from '../GlobalSearch/GlobalSearch'
 import AuthPanel from '../AuthPanel/AuthPanel'
@@ -28,6 +28,8 @@ const NETWORK_LINKS = [
 export default function Navbar() {
   const { team } = useAuth()
   const [searchOpen, setSearchOpen] = useState(false)
+  // Sur le tableau tactique, l'en-tête se fait discret pour laisser la place à la carte
+  const compact = useLocation().pathname.startsWith('/strat/')
 
   useEffect(() => {
     const onKeyDown = (e) => {
@@ -59,7 +61,7 @@ export default function Navbar() {
         </div>
       </header>
 
-      <section className="pz-band">
+      <section className={`pz-band${compact ? ' pz-band--compact' : ''}`}>
         <div className="pz-wrap pz-band__inner">
           <span className="pz-eyebrow">Espace équipe{team ? ` · ${team.name}` : ''}</span>
           <div className="pz-band__title-row">

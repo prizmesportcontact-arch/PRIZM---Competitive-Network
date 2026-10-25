@@ -330,109 +330,122 @@ export default function Strat() {
     : tool === 'line' ? { text: 'Clique et tire pour tracer un trait droit.' }
     : tool === 'draw' ? { text: 'Dessine à main levée.' }
     : tool === 'zone' ? { text: 'Clique au centre puis tire pour régler la taille.' }
-    : tool === 'text' ? { text: 'Clique sur la carte, puis écris dans le panneau à droite.' }
+    : tool === 'text' ? { text: 'Clique sur la carte, puis écris dans l’encart qui s’ouvre.' }
     : { text: 'Clique un élément pour l’effacer.' }
 
-  const agentTile = (a, small = false) => (
-    <button
-      key={a.uuid}
-      type="button"
-      className={`sx-agent${small ? ' sx-agent--sm' : ''}${pickAgent === a.uuid ? ' on' : ''}${placingAgent?.uuid === a.uuid ? ' placing' : ''}`}
-      style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}
-      onClick={() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) }}
-      title={`Placer ${a.name}`}
-    >
-      <img src={a.icon} alt="" />
-      <span>{a.name}</span>
-    </button>
-  )
+  const stripAgents = allOpen || !compAgents.length ? filteredAgents : compAgents
+  const isZoneSpec = (sp) => sp && sp.k !== 'circle' && sp.k !== 'ring'
+
 
   return (
-    <main className={`sx container${editable ? '' : ' sx--ro'}`}>
-      <header className="sx-head">
-        <Link to={`/editor/${strat.mapUuid}`} className="sx-back">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M15 5l-7 7 7 7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-          {map?.name || 'Map'}
-        </Link>
-        <div className="sx-head__row">
-          <div className="sx-title">
-            {editable ? (
-              <input className="sx-name" value={strat.name} maxLength={60} aria-label="Nom de la strat" onChange={(e) => queue({ name: e.target.value || 'Strat' })} />
-            ) : (
-              <h1 className="sx-name">{strat.name}</h1>
-            )}
-            <p className="sx-sub">
-              <span className={`sx-side sx-side--${strat.side}`}>{strat.side === 'defense' ? 'Défense' : 'Attaque'}</span>
-              <span>{map?.name}</span>
-              <span>{strat.steps.length} étape{strat.steps.length > 1 ? 's' : ''}</span>
-              {comp && <span>avec {comp.name}</span>}
-            </p>
-          </div>
-          <div className="sx-head__actions">
-            {editable && <span className={`sx-save sx-save--${save}`} aria-live="polite"><i aria-hidden="true" />{saveLabel}</span>}
-            {canCopy && <button type="button" className="btn btn-ghost" onClick={copy} disabled={busy}>Copier l’image</button>}
-            <button type="button" className="btn btn-primary" onClick={download} disabled={busy}>{busy ? 'Image en cours…' : 'Exporter l’étape'}</button>
-          </div>
+    <main className={`sb2${editable ? '' : ' sb2--ro'}`}>
+      {/* ---------- Colonne de gauche ---------- */}
+      <aside className="sb2-side">
+        <div className="sb2-mapcard">
+          <Link to={`/editor/${strat.mapUuid}`} className="sb2-map" style={map?.image ? { backgroundImage: `url(${map.image})` } : undefined} title="Retour à la map">
+            <span>{map?.name || 'Map'}</span>
+          </Link>
+          <button type="button" className={`sb2-sidebtn ${strat.side}`} disabled={!editable}
+            onClick={() => queue({ side: strat.side === 'attaque' ? 'defense' : 'attaque' })} title="Changer de côté">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 9h13l-3-3M20 15H7l3 3" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            {strat.side === 'defense' ? 'Défense' : 'Attaque'}
+          </button>
         </div>
-      </header>
 
-      <div className="sx-work">
+        <section className="sb2-sec">
+          <h2>Étapes</h2>
+          <div className="sb2-steps" role="tablist" aria-label="Étapes de la strat">
+            {strat.steps.map((s, i) => (
+              <button key={s.id} type="button" role="tab" aria-selected={s.id === step.id} title={s.name}
+                className={`sb2-step${s.id === step.id ? ' on' : ''}${s.items.length ? ' full' : ''}`}
+                onClick={() => { setStepId(s.id); setSelectedId(null) }}>{i + 1}</button>
+            ))}
+            {editable && strat.steps.length < 12 && (
+              <button type="button" className="sb2-step sb2-step--add" onClick={addStep} title="Étape suivante (reprend la position actuelle)" aria-label="Ajouter une étape">+</button>
+            )}
+          </div>
+          {editable ? (
+            <input className="sb2-input" value={step.name} maxLength={30} aria-label={`Nom de l’étape ${stepIndex + 1}`} onChange={(e) => renameStep(e.target.value)} />
+          ) : (
+            <p className="sb2-stepname">{stepIndex + 1}. {step.name}</p>
+          )}
+        </section>
+
         {editable && (
-          <nav className="sx-tools" aria-label="Outils">
-            <div className="sx-group">
-              <span className="sx-group__title">Choisir</span>
-              {TOOLS.filter((t) => t.id === 'select').map((t) => (
-                <ToolBtn key={t.id} t={t} on={tool === t.id} onClick={() => chooseTool(t.id)} />
-              ))}
+          <section className="sb2-sec">
+            <h2>Supprimer</h2>
+            <button type="button" className="sb2-wide" onClick={() => setItems([])} disabled={!step.items.length}>Vider l’étape {stepIndex + 1}</button>
+            <div className="sb2-row2">
+              <button type="button" className="sb2-wide sb2-wide--ghost" onClick={deleteStep} disabled={strat.steps.length <= 1}>L’étape</button>
+              <button type="button" className="sb2-wide sb2-wide--danger" onClick={() => setConfirmDelete(true)}>La strat</button>
             </div>
-            <div className="sx-group">
-              <span className="sx-group__title">Dessiner</span>
-              {TOOLS.filter((t) => t.group === 'draw').map((t) => (
-                <ToolBtn key={t.id} t={t} on={tool === t.id} onClick={() => chooseTool(t.id)} />
-              ))}
-            </div>
-            <div className="sx-group">
-              <span className="sx-group__title">Placer</span>
-              <button type="button" className={`sx-tool${tool === 'place' && place?.t === 'spike' ? ' on' : ''}`} onClick={() => startPlace({ t: 'spike' })} title="Spike">
-                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 18 12 12 21 6 12z" fill="#ff4655" stroke="#fff" strokeWidth="1.5" /></svg>
-                <span>Spike</span>
-              </button>
-              {TOOLS.filter((t) => t.id === 'erase').map((t) => (
-                <ToolBtn key={t.id} t={t} on={tool === t.id} onClick={() => chooseTool(t.id)} />
-              ))}
-            </div>
-            <div className="sx-group">
-              <span className="sx-group__title">Couleur</span>
-              <div className="sx-colors" role="radiogroup" aria-label="Couleur des traits">
-                {COLORS.map(([c, n]) => (
-                  <button key={c} type="button" role="radio" aria-checked={color === c} className={`sx-color${color === c ? ' on' : ''}`} style={{ '--c': c }} title={n}
-                    onClick={() => { setColor(c); if (selected && 'c' in selected) updateSelected({ c }) }} />
-                ))}
-              </div>
-            </div>
-            <div className="sx-group sx-group--row">
-              <button type="button" className="sx-tool sx-tool--icon" onClick={undo} title="Annuler (Ctrl+Z)" aria-label="Annuler"><Ico d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></button>
-              <button type="button" className="sx-tool sx-tool--icon" onClick={redo} title="Rétablir (Ctrl+Y)" aria-label="Rétablir"><Ico d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" /></button>
-            </div>
-          </nav>
+          </section>
         )}
 
-        <section className="sx-stage" aria-label="Carte">
-          <div className="sx-steps" role="tablist" aria-label="Étapes de la strat">
-            {strat.steps.map((s, i) => (
-              <button key={s.id} type="button" role="tab" aria-selected={s.id === step.id} className={`sx-step${s.id === step.id ? ' on' : ''}${i < stepIndex ? ' done' : ''}`}
-                onClick={() => { setStepId(s.id); setSelectedId(null) }}>
-                <i>{i + 1}</i><span>{s.name}</span>
+        {editable && (
+          <section className="sb2-sec">
+            <h2>Outils</h2>
+            <div className="sb2-tools" role="toolbar" aria-label="Outils">
+              {TOOLS.map((t) => (
+                <button key={t.id} type="button" className={`sb2-tool${tool === t.id ? ' on' : ''}`} onClick={() => chooseTool(t.id)} title={`${t.label} (${t.key.toUpperCase()})`} aria-label={t.label} aria-pressed={tool === t.id}>
+                  <Ico d={t.icon} />
+                  <kbd>{t.key.toUpperCase()}</kbd>
+                </button>
+              ))}
+              <button type="button" className={`sb2-tool${tool === 'place' && place?.t === 'spike' ? ' on' : ''}`} onClick={() => startPlace({ t: 'spike' })} title="Spike" aria-label="Spike">
+                <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 18 12 12 21 6 12z" fill="#ff4655" stroke="#fff" strokeWidth="1.5" /></svg>
               </button>
-            ))}
-            {editable && (
-              <button type="button" className="sx-step sx-step--add" onClick={addStep} title="Ajoute une étape qui reprend la position actuelle">
-                <i>+</i><span>Étape suivante</span>
+              <button type="button" className="sb2-tool" onClick={undo} title="Annuler (Ctrl+Z)" aria-label="Annuler"><Ico d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></button>
+              <button type="button" className="sb2-tool" onClick={redo} title="Rétablir (Ctrl+Y)" aria-label="Rétablir"><Ico d="m15 14 5-5-5-5M20 9H10a6 6 0 0 0 0 12h3" /></button>
+            </div>
+            <div className="sb2-colors" role="radiogroup" aria-label="Couleur des traits">
+              {COLORS.map(([c, n]) => (
+                <button key={c} type="button" role="radio" aria-checked={color === c} className={`sb2-color${color === c ? ' on' : ''}`} style={{ '--c': c }} title={n} aria-label={n}
+                  onClick={() => { setColor(c); if (selected && 'c' in selected) updateSelected({ c }) }} />
+              ))}
+            </div>
+          </section>
+        )}
+      </aside>
+
+      {/* ---------- Carte ---------- */}
+      <section className="sb2-stage" aria-label="Carte">
+        <div className="sb2-bar">
+          <div className="sb2-bar__left">
+            {editable ? (
+              <input className="sb2-name" value={strat.name} maxLength={60} aria-label="Nom de la strat" onChange={(e) => queue({ name: e.target.value || 'Strat' })} />
+            ) : (
+              <h1 className="sb2-name">{strat.name}</h1>
+            )}
+            <label className="sb2-comp" title="Compo liée">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="9" cy="8" r="3.2" stroke="currentColor" strokeWidth="2" /><path d="M3 19c.8-3.2 3.2-5 6-5s5.2 1.8 6 5M16 5.5a3 3 0 0 1 0 5.6M18.5 14.4c1.4.8 2.2 2.4 2.5 4.6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" /></svg>
+              <select value={strat.compositionId || ''} disabled={!editable} onChange={(e) => queue({ compositionId: e.target.value || null })} aria-label="Compo liée">
+                <option value="">Aucune compo</option>
+                {comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="sb2-bar__right">
+            {editable && <span className={`sb2-save sb2-save--${save}`} aria-live="polite" title={saveLabel}><i aria-hidden="true" />{saveLabel}</span>}
+            <button type="button" className={`sb2-icon${showNames ? ' on' : ''}`} onClick={toggleNames} title={showNames ? 'Masquer les noms' : 'Afficher les noms'} aria-pressed={showNames} aria-label="Noms des agents">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
+            </button>
+            <button type="button" className="sb2-icon" onClick={() => (editable ? queue({ flipped: !strat.flipped }) : patchLocal(stratId, { flipped: !strat.flipped }))} title="Retourner la carte" aria-label="Retourner la carte">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
+            {canCopy && (
+              <button type="button" className="sb2-icon" onClick={copy} disabled={busy} title="Copier l’image (pour Discord)" aria-label="Copier l’image">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" stroke="currentColor" strokeWidth="2" /><path d="M5 15V5h10" stroke="currentColor" strokeWidth="2" /></svg>
               </button>
             )}
+            <button type="button" className="sb2-icon sb2-icon--main" onClick={download} disabled={busy} title="Exporter l’étape en image" aria-label="Exporter l’étape">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 20h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
+            </button>
           </div>
+        </div>
 
-          <div className={`sx-board sx-board--${strat.side}`}>
+        <div className="sb2-canvas">
+          <div className={`sb2-board sb2-board--${strat.side}`}>
             <StratBoard
               minimap={map?.minimap}
               flipped={strat.flipped}
@@ -451,133 +464,86 @@ export default function Strat() {
               scale={mapScale(map)}
             />
             {step.items.length === 0 && (
-              <div className="sx-empty">
-                {editable ? (
-                  <>
-                    <b>Étape vide</b>
-                    <p>Commence par placer tes agents : choisis-en un dans le panneau{compAgents.length ? ' de la compo' : ''}, puis clique sur la carte.</p>
-                  </>
-                ) : (
-                  <b>Rien sur cette étape pour l’instant.</b>
-                )}
+              <div className="sb2-empty">
+                {editable ? <><b>Étape vide</b><p>Choisis un agent en bas, puis clique sur la carte.</p></> : <b>Rien sur cette étape.</b>}
               </div>
             )}
-            {editable && (
-              <p className="sx-hint" aria-live="polite">
-                {hint.img && <img src={hint.img} alt="" />}
-                {hint.text}
-              </p>
-            )}
-            <div className="sx-board__corner">
-              <button type="button" className="sx-chip" onClick={toggleNames} aria-pressed={showNames}>{showNames ? 'Masquer les noms' : 'Afficher les noms'}</button>
-              <button type="button" className="sx-chip" onClick={() => (editable ? queue({ flipped: !strat.flipped }) : patchLocal(stratId, { flipped: !strat.flipped }))} title="Tourner la carte d’un demi-tour">
-                Retourner la carte
-              </button>
-            </div>
           </div>
 
-          {legend.length > 0 && (
-            <ul className="sx-legend" aria-label="Agents sur cette étape">
-              {legend.map((a) => (
-                <li key={a.uuid} style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}><img src={a.icon} alt="" />{a.name}</li>
-              ))}
-            </ul>
+          {editable && selected && (
+            <div className="sb2-inspect">
+              <div className="sb2-sel">
+                {selAbility ? <img src={selAbility.icon} alt="" /> : selAgent ? <img src={selAgent.icon} alt="" /> : <i style={{ background: selected.c || '#ff4655' }} />}
+                <span>
+                  <b>{selAbility ? selAbility.name : selAgent ? selAgent.name : ITEM_LABEL[selected.t]}</b>
+                  <small>{selAbility ? (shapeLabel(shapeFor(selAgent?.name, selected.s), selected) || `Capacité de ${selAgent?.name}`) : selAgent ? 'Agent' : ITEM_LABEL[selected.t]}</small>
+                </span>
+              </div>
+              {selected.t === 'text' && (
+                <input ref={textRef} className="sb2-input" value={selected.v} maxLength={40} aria-label="Texte"
+                  onChange={(e) => setSteps(strat.steps.map((s) => (s.id === step.id ? { ...s, items: s.items.map((i) => (i.id === selectedId ? { ...i, v: e.target.value } : i)) } : s)), { record: false })} />
+              )}
+              {selAbility && isZoneSpec(shapeFor(selAgent?.name, selected.s)) && <p className="sb2-note">Tire la poignée ambre pour l’orienter.</p>}
+              <button type="button" className="sb2-wide sb2-wide--danger" onClick={deleteSelected}>Effacer <kbd>Suppr</kbd></button>
+            </div>
           )}
-        </section>
+        </div>
 
         {editable && (
-          <aside className="sx-panel">
-            <section className="sx-box">
-              <h2 className="sx-box__title">Réglages</h2>
-              <div className="sx-field">
-                <span>Côté</span>
-                <div className="sx-seg" role="radiogroup" aria-label="Côté">
-                  {[['attaque', 'Attaque'], ['defense', 'Défense']].map(([v, l]) => (
-                    <button key={v} type="button" role="radio" aria-checked={strat.side === v} className={strat.side === v ? `on ${v}` : ''} onClick={() => queue({ side: v })}>{l}</button>
-                  ))}
-                </div>
-              </div>
-              <label className="sx-field">
-                <span>Compo liée</span>
-                <select value={strat.compositionId || ''} onChange={(e) => queue({ compositionId: e.target.value || null })}>
-                  <option value="">Aucune</option>
-                  {comps.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-                </select>
-              </label>
-              <label className="sx-field">
-                <span>Nom de l’étape {stepIndex + 1}</span>
-                <input value={step.name} maxLength={30} onChange={(e) => renameStep(e.target.value)} />
-              </label>
-            </section>
-
-            <section className="sx-box">
-              <h2 className="sx-box__title">Agents</h2>
-              {compAgents.length > 0 ? (
-                <div className="sx-agents">{compAgents.map((a) => agentTile(a))}</div>
-              ) : (
-                <p className="sx-muted">Lie une compo dans les réglages pour avoir ses 5 agents ici.</p>
-              )}
-              <button type="button" className="sx-link" onClick={() => setAllOpen((v) => !v)} aria-expanded={allOpen}>
-                {allOpen ? 'Masquer les autres agents' : 'Voir tous les agents'}
-              </button>
-              {allOpen && (
-                <>
-                  <input className="sx-search" placeholder="Chercher un agent" value={agentQuery} onChange={(e) => setAgentQuery(e.target.value)} />
-                  <div className="sx-agents sx-agents--all">{filteredAgents.map((a) => agentTile(a, true))}</div>
-                </>
-              )}
-
-              {picked && (
-                <div className="sx-abilities">
-                  <span className="sx-abilities__title">Capacités de {picked.name}</span>
-                  {SLOT_ORDER.map((slot) => picked.abilities?.find((x) => x.slot === slot)).filter(Boolean).map((ab) => (
-                    <button key={ab.slot} type="button"
-                      className={`sx-ability${tool === 'place' && place?.t === 'ability' && place.a === picked.uuid && place.s === ab.slot ? ' on' : ''}`}
-                      onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}>
-                      <img src={ab.icon} alt="" />
-                      <span>{ab.name}<small>{shapeLabel(shapeFor(picked.name, ab.slot)) || 'Icône seule'}</small></span>
-                      <kbd>{SLOT_KEY[ab.slot]}</kbd>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </section>
-
-            <section className={`sx-box sx-box--sel${selected ? ' on' : ''}`}>
-              <h2 className="sx-box__title">Sélection</h2>
-              {selected ? (
-                <>
-                  <div className="sx-sel">
-                    {selAbility ? <img src={selAbility.icon} alt="" /> : selAgent ? <img src={selAgent.icon} alt="" /> : <i style={{ background: selected.c || '#ff4655' }} />}
-                    <span>
-                      <b>{selAbility ? selAbility.name : selAgent ? selAgent.name : ITEM_LABEL[selected.t]}</b>
-                      <small>{selAbility ? `Capacité de ${selAgent?.name}` : selAgent ? 'Agent' : 'c' in selected ? 'Change la couleur à gauche' : 'Fais-le glisser pour le déplacer'}</small>
-                      {selAbility && shapeLabel(shapeFor(selAgent?.name, selected.s), selected) && (
-                        <small className="sx-dims">{shapeLabel(shapeFor(selAgent?.name, selected.s), selected)}{shapeFor(selAgent?.name, selected.s)?.k !== 'circle' && shapeFor(selAgent?.name, selected.s)?.k !== 'ring' ? ' · tire la poignée ambre pour l’orienter' : ''}</small>
-                      )}
-                    </span>
-                  </div>
-                  {selected.t === 'text' && (
-                    <input ref={textRef} className="sx-search" value={selected.v} maxLength={40} aria-label="Texte"
-                      onChange={(e) => setSteps(strat.steps.map((s) => (s.id === step.id ? { ...s, items: s.items.map((i) => (i.id === selectedId ? { ...i, v: e.target.value } : i)) } : s)), { record: false })} />
-                  )}
-                  <button type="button" className="btn btn-danger" onClick={deleteSelected}>Effacer <kbd>Suppr</kbd></button>
-                </>
-              ) : (
-                <p className="sx-muted">Avec l’outil Déplacer, clique un élément de la carte pour le modifier ou l’effacer.</p>
-              )}
-            </section>
-
-            <section className="sx-box sx-box--quiet">
-              <div className="sx-row">
-                <button type="button" className="btn btn-ghost" onClick={() => setItems([])} disabled={!step.items.length}>Vider l’étape</button>
-                <button type="button" className="btn btn-ghost" onClick={deleteStep} disabled={strat.steps.length <= 1}>Supprimer l’étape</button>
-              </div>
-              <button type="button" className="sx-delete" onClick={() => setConfirmDelete(true)}>Supprimer la strat</button>
-            </section>
-          </aside>
+          <p className="sb2-hint" aria-live="polite">
+            {hint.img && <img src={hint.img} alt="" />}
+            {hint.text}
+          </p>
         )}
-      </div>
+
+        {/* ---------- Bandeau des agents ---------- */}
+        {editable ? (
+          <div className="sb2-dock">
+            <div className="sb2-dock__filters">
+              {compAgents.length > 0 && (
+                <button type="button" className={`sb2-tab${!allOpen ? ' on' : ''}`} onClick={() => setAllOpen(false)}>Compo</button>
+              )}
+              <button type="button" className={`sb2-tab${allOpen || !compAgents.length ? ' on' : ''}`} onClick={() => setAllOpen(true)}>Tous</button>
+              {(allOpen || !compAgents.length) && (
+                <input className="sb2-search" placeholder="Chercher" value={agentQuery} onChange={(e) => setAgentQuery(e.target.value)} aria-label="Chercher un agent" />
+              )}
+            </div>
+            <div className="sb2-agents">
+              {stripAgents.map((a) => (
+                <button key={a.uuid} type="button"
+                  className={`sb2-agent${pickAgent === a.uuid ? ' on' : ''}${placingAgent?.uuid === a.uuid ? ' placing' : ''}`}
+                  style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}
+                  onClick={() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) }} title={`Placer ${a.name}`}>
+                  <img src={a.portrait || a.icon} alt="" />
+                  <span>{a.name}</span>
+                </button>
+              ))}
+            </div>
+            {picked && (
+              <div className="sb2-abilities" aria-label={`Capacités de ${picked.name}`}>
+                {SLOT_ORDER.map((slot) => picked.abilities?.find((x) => x.slot === slot)).filter(Boolean).map((ab) => {
+                  const sp = shapeFor(picked.name, ab.slot)
+                  const on = tool === 'place' && place?.t === 'ability' && place.a === picked.uuid && place.s === ab.slot
+                  return (
+                    <button key={ab.slot} type="button" className={`sb2-ability${on ? ' on' : ''}`} onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}
+                      title={`${ab.name}${sp ? ` · ${shapeLabel(sp)}` : ''}`}>
+                      <img src={ab.icon} alt="" />
+                      <kbd>{SLOT_KEY[ab.slot]}</kbd>
+                      <span>{ab.name}</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+          legend.length > 0 && (
+            <ul className="sb2-legend" aria-label="Agents sur cette étape">
+              {legend.map((a) => <li key={a.uuid} style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}><img src={a.icon} alt="" />{a.name}</li>)}
+            </ul>
+          )
+        )}
+      </section>
 
       <ConfirmDialog
         open={confirmDelete}
@@ -588,15 +554,5 @@ export default function Strat() {
         onCancel={() => setConfirmDelete(false)}
       />
     </main>
-  )
-}
-
-function ToolBtn({ t, on, onClick }) {
-  return (
-    <button type="button" className={`sx-tool${on ? ' on' : ''}`} onClick={onClick} title={`${t.label} (${t.key.toUpperCase()})`} aria-pressed={on}>
-      <Ico d={t.icon} />
-      <span>{t.label}</span>
-      <kbd>{t.key.toUpperCase()}</kbd>
-    </button>
   )
 }
