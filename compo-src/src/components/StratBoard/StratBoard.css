@@ -2,16 +2,13 @@
   display: block;
   width: 100%;
   height: auto;
-  aspect-ratio: 1;
-  background: #0a0d12;
+  background: transparent;
   touch-action: none;
   user-select: none;
   -webkit-user-select: none;
 }
 .strat-board--mini { touch-action: auto; }
-.strat-board__bg { fill: #0a0d12; }
-.strat-board__grid { stroke: rgba(255, 255, 255, 0.035); stroke-width: 1.5; }
-.strat-board__map { opacity: 0.96; filter: brightness(1.12) contrast(1.05); }
+.strat-board__map { opacity: 1; }
 .strat-board--edit { cursor: crosshair; }
 .strat-board--select { cursor: default; }
 .strat-board--select .sb-item { cursor: grab; }

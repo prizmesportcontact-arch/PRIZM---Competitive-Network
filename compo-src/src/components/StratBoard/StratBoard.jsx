@@ -1,5 +1,6 @@
 import { useId, useRef, useState } from 'react'
 import { uid } from '../../services/strats'
+import { unrotate } from '../../utils/mapView'
 import { abilityGeometry, colorFor, hasLength, isRotatable, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import './StratBoard.css'
 
@@ -50,7 +51,8 @@ function moveItem(it, dx, dy) {
  */
 export default function StratBoard({
   minimap,
-  flipped = false,
+  rotation = 0,
+  view = null, // { x, y, w, h } : partie de la carte affichée (repère tourné)
   side = 'attaque',
   items = [],
   agentByUuid,
@@ -92,7 +94,8 @@ export default function StratBoard({
     pt.x = e.clientX
     pt.y = e.clientY
     const p = pt.matrixTransform(svg.getScreenCTM().inverse())
-    return flipped ? [clamp(1000 - p.x), clamp(1000 - p.y)] : [clamp(p.x), clamp(p.y)]
+    const [mx, my] = unrotate(p.x, p.y, rotation)
+    return [clamp(mx), clamp(my)]
   }
 
   const commit = (next, extra) => onChange && onChange(next, extra || {})
@@ -215,7 +218,8 @@ export default function StratBoard({
   })
   if (draft) shown.push(draft)
   // Les icônes restent droites quand la carte est retournée
-  const up = (x, y) => (flipped ? `rotate(180 ${x} ${y})` : undefined)
+  const up = (x, y) => (rotation ? `rotate(${-rotation} ${x} ${y})` : undefined)
+  const vb = view || { x: 0, y: 0, w: 1000, h: 1000 }
   const ring = SIDE_RING[side] || SIDE_RING.attaque
   const order = { zone: 0, draw: 1, line: 1, ability: 2, spike: 3, agent: 4, text: 5 }
   shown.sort((a, b) => (order[a.t] ?? 9) - (order[b.t] ?? 9))
@@ -224,7 +228,8 @@ export default function StratBoard({
     <svg
       ref={svgRef}
       className={`strat-board strat-board--${side}${editable ? ` strat-board--edit strat-board--${tool}` : ''}${mini ? ' strat-board--mini' : ''}`}
-      viewBox="0 0 1000 1000"
+      viewBox={`${vb.x} ${vb.y} ${vb.w} ${vb.h}`}
+      style={{ aspectRatio: `${vb.w} / ${vb.h}` }}
       role="img"
       aria-label="Tableau tactique"
       onPointerDown={onPointerDown}
@@ -242,17 +247,8 @@ export default function StratBoard({
         <marker id={`${uidBase}-zarrow`} viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
           <path d="M0 0 10 5 0 10z" fill="#ffffff" fillOpacity="0.85" />
         </marker>
-        <pattern id={`${uidBase}-grid`} width="50" height="50" patternUnits="userSpaceOnUse">
-          <path d="M50 0H0V50" fill="none" className="strat-board__grid" />
-        </pattern>
-        <radialGradient id={`${uidBase}-vig`} cx="50%" cy="50%" r="70%">
-          <stop offset="55%" stopColor="#000" stopOpacity="0" />
-          <stop offset="100%" stopColor="#000" stopOpacity="0.55" />
-        </radialGradient>
       </defs>
-      <rect width="1000" height="1000" className="strat-board__bg" />
-      {!mini && <rect width="1000" height="1000" fill={`url(#${uidBase}-grid)`} />}
-      <g transform={flipped ? 'rotate(180 500 500)' : undefined}>
+      <g transform={rotation ? `rotate(${rotation} 500 500)` : undefined}>
         {minimap && <image href={minimap} x="0" y="0" width="1000" height="1000" className="strat-board__map" />}
         {shown.map((it) => {
           const sel = it.id === selectedId
@@ -289,7 +285,7 @@ export default function StratBoard({
           if (it.t === 'spike') {
             const s = SIZES.spike
             return (
-              <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
+              <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
                 {sel && <circle r={s + 14} className="sb-selring" />}
                 <path d={`M0 ${-s * 1.3} L${s} 0 L0 ${s * 1.3} L${-s} 0Z`} className="sb-spike" />
                 <circle r="4" fill="#fff" />
@@ -329,7 +325,7 @@ export default function StratBoard({
                 {live && geo.tip && (
                   <text x={geo.tip[0]} y={geo.tip[1] - 22} transform={up(geo.tip[0], geo.tip[1] - 22)} className="sb-dim" textAnchor="middle">{shapeLabel(spec, it)}</text>
                 )}
-              <g {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
+              <g {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
                 <title>{agent ? `${agent.name} · ${ab?.name || ''}` : 'Capacité'}</title>
                 {sel && <circle r={r + 9} className="sb-selring" />}
                 <circle r={r} className="sb-ability" stroke={ring} />
@@ -341,7 +337,7 @@ export default function StratBoard({
           if (it.t === 'agent') {
             const r = SIZES.agent
             return (
-              <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${flipped ? ' rotate(180)' : ''}`}>
+              <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
                 <title>{agent?.name || 'Agent'}</title>
                 {sel && <circle r={r + 10} className="sb-selring" />}
                 <circle r={r} className="sb-agent" stroke={ring} />
@@ -358,7 +354,6 @@ export default function StratBoard({
           return null
         })}
       </g>
-      {!mini && <rect width="1000" height="1000" fill={`url(#${uidBase}-vig)`} pointerEvents="none" />}
     </svg>
   )
 }

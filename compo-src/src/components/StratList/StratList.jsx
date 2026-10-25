@@ -6,6 +6,7 @@ import { useAuth } from '../../context/AuthContext'
 import { formatRelativeDate } from '../../utils/compositions'
 import StratBoard from '../StratBoard/StratBoard'
 import { mapScale } from '../../data/abilityShapes'
+import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
 import './StratList.css'
 
 /**
@@ -50,7 +51,7 @@ export default function StratList({ mapUuid, compositionId = null, comps = [], s
           return (
             <Link key={s.id} to={`/strat/${s.id}`} className="strat-card">
               <div className="strat-card__preview">
-                <StratBoard mini scale={mapScale(m)} minimap={m?.minimap} flipped={s.flipped} side={s.side} items={first?.items || []} agentByUuid={agentByUuid} />
+                <StratPreview map={m} strat={s} items={first?.items || []} agentByUuid={agentByUuid} />
               </div>
               <div className="strat-card__body">
                 <span className={`strat-card__side ${s.side}`}>{s.side === 'defense' ? 'Défense' : 'Attaque'}</span>
@@ -73,5 +74,15 @@ export default function StratList({ mapUuid, compositionId = null, comps = [], s
         )}
       </div>
     </div>
+  )
+}
+
+// Aperçu orienté et cadré comme dans l'éditeur
+function StratPreview({ map, strat, items, agentByUuid }) {
+  const crop = useMapCrop(map?.minimap)
+  const rotation = boardRotation(map, strat.side)
+  const view = boardView(rotation, crop, 12)
+  return (
+    <StratBoard mini scale={mapScale(map)} minimap={map?.minimap} rotation={rotation} view={view} side={strat.side} items={items} agentByUuid={agentByUuid} />
   )
 }

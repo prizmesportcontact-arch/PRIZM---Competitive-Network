@@ -2,6 +2,7 @@
 import { loadImage } from './exportComposition'
 import { SIZES } from '../components/StratBoard/StratBoard'
 import { abilityGeometry, colorFor, mapScale, shapeFor } from '../data/abilityShapes'
+import { boardRotation, boardView, loadCrop } from './mapView'
 
 const W = 1080
 const HEAD = 120
@@ -10,11 +11,15 @@ const FONT_MONO = '"JetBrains Mono", monospace'
 const RING = { attaque: '#ff6170', defense: '#4cc9f0' }
 
 export async function renderStratPng({ map, strat, step, agentByUuid, showNames = true }) {
+  // Même orientation et même cadrage que sur le tableau
+  const rot = boardRotation(map, strat.side)
+  const view = boardView(rot, await loadCrop(map?.minimap))
+  const k = W / view.w
+  const H = Math.round(view.h * k)
   const canvas = document.createElement('canvas')
   canvas.width = W
-  canvas.height = W + HEAD
+  canvas.height = H + HEAD
   const ctx = canvas.getContext('2d')
-  const k = W / 1000
   const ring = RING[strat.side] || RING.attaque
 
   // Images nécessaires (minimap, agents, capacités)
@@ -29,7 +34,7 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
   if (document.fonts?.ready) await document.fonts.ready
 
   ctx.fillStyle = '#0d1117'
-  ctx.fillRect(0, 0, W, W + HEAD)
+  ctx.fillRect(0, 0, W, H + HEAD)
   ctx.fillStyle = '#ffa043'
   ctx.fillRect(0, HEAD - 4, W, 4)
   ctx.fillStyle = '#9aa3af'
@@ -47,24 +52,18 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
   ctx.save()
   ctx.translate(0, HEAD)
   ctx.beginPath()
-  ctx.rect(0, 0, W, W)
+  ctx.rect(0, 0, W, H)
   ctx.clip()
-  ctx.fillStyle = '#0b0f15'
-  ctx.fillRect(0, 0, W, W)
-  if (strat.flipped) {
-    ctx.translate(W, W)
-    ctx.rotate(Math.PI)
-  }
+  ctx.translate(-view.x * k, -view.y * k)
+  ctx.translate(500 * k, 500 * k)
+  ctx.rotate((rot * Math.PI) / 180)
+  ctx.translate(-500 * k, -500 * k)
   const mm = imgs.get(map?.minimap)
-  if (mm) {
-    ctx.globalAlpha = 0.92
-    ctx.drawImage(mm, 0, 0, W, W)
-    ctx.globalAlpha = 1
-  }
+  if (mm) ctx.drawImage(mm, 0, 0, 1000 * k, 1000 * k)
   const upright = (x, y, draw) => {
     ctx.save()
     ctx.translate(x * k, y * k)
-    if (strat.flipped) ctx.rotate(Math.PI)
+    if (rot) ctx.rotate((-rot * Math.PI) / 180)
     draw()
     ctx.restore()
   }

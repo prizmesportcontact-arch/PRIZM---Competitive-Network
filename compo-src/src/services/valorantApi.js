@@ -44,13 +44,31 @@ async function request(path) {
 }
 
 /**
+ * Rotation (0, 90, 180 ou 270°) qui place le spawn attaquant en bas de la carte.
+ * Les positions viennent des « callouts » de l'API (coordonnées du jeu → minimap).
+ */
+function baseRotation(map) {
+  const cs = map.callouts || []
+  const uv = (c) => [c.location.y * map.xMultiplier + map.xScalarToAdd, c.location.x * map.yMultiplier + map.yScalarToAdd]
+  const find = (re) => cs.find((c) => re.test(c.superRegionName || '') && /spawn/i.test(c.regionName || ''))
+  const atk = find(/attacker/i)
+  const def = find(/defender/i)
+  if (!atk || !def || !map.xMultiplier) return 0
+  const [ax, ay] = uv(atk)
+  const [dx, dy] = uv(def)
+  const angle = (Math.atan2(ay - dy, ax - dx) * 180) / Math.PI // direction défense → attaque
+  return ((Math.round((90 - angle) / 90) * 90) % 360 + 360) % 360
+}
+
+/**
  * Récupère toutes les maps jouables en compétitif.
  * On filtre les entrées techniques (range d'entraînement, etc.)
  * en s'appuyant sur le champ `coordinates`, absent pour ces
  * pseudo-maps dans l'API — pas de liste codée en dur.
  */
 export async function fetchMaps() {
-  const data = await request(`/maps?language=${LANG}`)
+  // En anglais : les noms des maps sont les mêmes, et les zones (« Attacker Side ») servent à orienter la carte
+  const data = await request('/maps')
   const seen = new Set()
   return data
     // Maps à sites A/B(/C) uniquement : le stand d'entraînement, le tutoriel et
@@ -72,6 +90,7 @@ export async function fetchMaps() {
       minimap: map.displayIcon,
       // Échelle officielle (minimap par unité du jeu, 1 unité = 1 cm) : sert aux vraies tailles des capacités
       mult: map.xMultiplier || 0,
+      rot: baseRotation(map),
     }))
     .sort((a, b) => a.name.localeCompare(b.name))
 }

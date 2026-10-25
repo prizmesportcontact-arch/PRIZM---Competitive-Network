@@ -1,29 +1,49 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useLiveSync } from '../hooks/useLiveSync'
 import { deleteStratRow, fetchStrats, insertStrat, rowToStrat, updateStratRow } from '../services/strats'
-import { useAuth } from './AuthContext'
 import { useToast } from './ToastContext'
 
 const StratsContext = createContext(null)
 
 /**
- * Strats de l'équipe, gardées en mémoire et mises à jour en direct.
- * Pendant qu'on modifie une strat, on ignore l'écho de nos propres
- * sauvegardes (sinon le dessin « sauterait » en arrière).
+ * Strats de l'équipe, mises à jour en direct.
+ * Les modifications restent en mémoire tant qu'on n'a pas cliqué « Enregistrer » :
+ * - strats   : version affichée (avec les changements non enregistrés)
+ * - saved    : dernière version enregistrée en base (pour « Partir sans enregistrer »)
+ * - dirty    : strats modifiées mais pas encore enregistrées
+ * Une strat en cours de modification ne se fait pas écraser par les mises à jour en direct.
  */
 export function StratsProvider({ children }) {
   const { pushToast } = useToast()
-  const { user } = useAuth()
   const [strats, setStrats] = useState({})
   const [status, setStatus] = useState('loading')
-  const editingRef = useRef(null) // id de la strat ouverte en édition ici
+  const [dirty, setDirty] = useState(() => new Set())
+  const saved = useRef({})
+  const dirtyRef = useRef(dirty)
+  useEffect(() => {
+    dirtyRef.current = dirty
+  }, [dirty])
 
-  const merge = useCallback((s) => setStrats((prev) => ({ ...prev, [s.id]: s })), [])
+  const markDirty = useCallback((id, on) => {
+    setDirty((prev) => {
+      if (prev.has(id) === on) return prev
+      const next = new Set(prev)
+      if (on) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }, [])
 
   const load = useCallback(async () => {
     try {
       const list = await fetchStrats()
-      setStrats(Object.fromEntries(list.map((s) => [s.id, s])))
+      list.forEach((s) => { saved.current[s.id] = s })
+      setStrats((prev) => {
+        const next = Object.fromEntries(list.map((s) => [s.id, s]))
+        // On garde les changements non enregistrés
+        dirtyRef.current.forEach((id) => { if (prev[id] && next[id]) next[id] = prev[id] })
+        return next
+      })
       setStatus('ready')
     } catch (err) {
       console.error(err)
@@ -42,8 +62,9 @@ export function StratsProvider({ children }) {
         table: 'cb_strats',
         onUpsert: (payload) => {
           const s = rowToStrat(payload.new)
-          if (editingRef.current === s.id && s.updatedBy === user?.id) return
-          merge(s)
+          saved.current[s.id] = s
+          if (dirtyRef.current.has(s.id)) return
+          setStrats((prev) => ({ ...prev, [s.id]: s }))
         },
         onDelete: (payload) =>
           setStrats((prev) => {
@@ -69,38 +90,63 @@ export function StratsProvider({ children }) {
     async (draft) => {
       try {
         const s = await insertStrat(draft)
-        merge(s)
+        saved.current[s.id] = s
+        setStrats((prev) => ({ ...prev, [s.id]: s }))
         return s.id
       } catch (err) {
         fail(err)
         return null
       }
     },
-    [merge, fail]
+    [fail]
   )
 
-  // Mise à jour locale immédiate ; l'appel réseau est fait par l'éditeur (sauvegarde différée)
-  const patchLocal = useCallback((id, patch) => {
-    setStrats((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev))
-  }, [])
+  /** Modifie la strat à l'écran, sans l'enregistrer. */
+  const patchLocal = useCallback(
+    (id, patch) => {
+      setStrats((prev) => (prev[id] ? { ...prev, [id]: { ...prev[id], ...patch } } : prev))
+      markDirty(id, true)
+    },
+    [markDirty]
+  )
 
+  /** Enregistre la version affichée. */
   const saveStrat = useCallback(
-    async (id, patch) => {
+    async (id, current) => {
       try {
-        await updateStratRow(id, patch)
+        const s = await updateStratRow(id, {
+          name: current.name,
+          side: current.side,
+          steps: current.steps,
+          compositionId: current.compositionId,
+        })
+        saved.current[id] = s
+        markDirty(id, false)
         return true
       } catch (err) {
         fail(err)
         return false
       }
     },
-    [fail]
+    [fail, markDirty]
+  )
+
+  /** Oublie les changements non enregistrés. */
+  const revertStrat = useCallback(
+    (id) => {
+      const s = saved.current[id]
+      if (s) setStrats((prev) => ({ ...prev, [id]: s }))
+      markDirty(id, false)
+    },
+    [markDirty]
   )
 
   const removeStrat = useCallback(
     async (id) => {
       try {
         await deleteStratRow(id)
+        delete saved.current[id]
+        markDirty(id, false)
         setStrats((prev) => {
           const next = { ...prev }
           delete next[id]
@@ -112,16 +158,12 @@ export function StratsProvider({ children }) {
         return false
       }
     },
-    [fail]
+    [fail, markDirty]
   )
 
-  const setEditing = useCallback((id) => {
-    editingRef.current = id
-  }, [])
-
   const value = useMemo(
-    () => ({ strats, status, createStrat, patchLocal, saveStrat, removeStrat, setEditing, reload: load }),
-    [strats, status, createStrat, patchLocal, saveStrat, removeStrat, setEditing, load]
+    () => ({ strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat, reload: load }),
+    [strats, status, dirty, createStrat, patchLocal, saveStrat, revertStrat, removeStrat, load]
   )
   return <StratsContext.Provider value={value}>{children}</StratsContext.Provider>
 }

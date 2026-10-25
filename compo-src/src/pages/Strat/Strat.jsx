@@ -10,6 +10,7 @@ import { getCompsForMap } from '../../utils/compositions'
 import { renderStratPng } from '../../utils/exportStrat'
 import { slugify } from '../../utils/exportComposition'
 import StratBoard from '../../components/StratBoard/StratBoard'
+import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
 import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import Loader from '../../components/Loader/Loader'
@@ -49,7 +50,7 @@ export default function Strat() {
   const navigate = useNavigate()
   const { maps, agents, status: dataStatus } = useData()
   const { compositionsByMap } = useCompositions()
-  const { strats, status, patchLocal, saveStrat, removeStrat, setEditing } = useStrats()
+  const { strats, status, dirty, patchLocal, saveStrat, revertStrat, removeStrat } = useStrats()
   const { isAdmin } = useAuth()
   const { pushToast } = useToast()
 
@@ -69,21 +70,17 @@ export default function Strat() {
   const [pickAgent, setPickAgent] = useState(null)
   const [allOpen, setAllOpen] = useState(false)
   const [agentQuery, setAgentQuery] = useState('')
-  const [save, setSave] = useState('saved') // saved | pending | saving | error
+  const [saving, setSaving] = useState(false)
+  const [leave, setLeave] = useState(null) // adresse visée quand on quitte sans avoir enregistré
+  const leaving = useRef(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [busy, setBusy] = useState(false)
   const [showNames, setShowNames] = useState(() => readPref('prizm_strat_names', true))
   const toggleNames = () => setShowNames((v) => { writePref('prizm_strat_names', !v); return !v })
   const history = useRef({ past: [], future: [] })
-  const pending = useRef({})
-  const timer = useRef(null)
   const textRef = useRef(null)
   const editable = isAdmin
 
-  useEffect(() => {
-    setEditing(stratId)
-    return () => setEditing(null)
-  }, [stratId, setEditing])
 
   const step = strat ? strat.steps.find((s) => s.id === stepId) || strat.steps[0] : null
   const agentsInStrat = useMemo(() => {
@@ -92,46 +89,55 @@ export default function Strat() {
     return ids.map((id) => agentByUuid.get(id)).filter(Boolean)
   }, [step, agentByUuid])
 
-  // ---------- Sauvegarde différée ----------
-  const flush = useCallback(async () => {
-    clearTimeout(timer.current)
-    const patch = pending.current
-    if (!Object.keys(patch).length) return
-    pending.current = {}
-    setSave('saving')
-    const ok = await saveStrat(stratId, patch)
-    if (!ok) {
-      pending.current = { ...patch, ...pending.current }
-      setSave('error')
-      return
-    }
-    setSave(Object.keys(pending.current).length ? 'pending' : 'saved')
-  }, [saveStrat, stratId])
+  // ---------- Enregistrement (manuel) ----------
+  const isDirty = dirty.has(stratId)
+  const crop = useMapCrop(map?.minimap)
+  const rotation = boardRotation(map, strat?.side)
+  const view = boardView(rotation, crop)
 
-  const queue = useCallback(
-    (patch) => {
-      patchLocal(stratId, patch)
-      pending.current = { ...pending.current, ...patch }
-      setSave('pending')
-      clearTimeout(timer.current)
-      timer.current = setTimeout(flush, 900)
-    },
-    [patchLocal, stratId, flush]
-  )
+  const queue = useCallback((patch) => patchLocal(stratId, patch), [patchLocal, stratId])
 
+  const doSave = useCallback(async () => {
+    if (!strat || saving) return false
+    setSaving(true)
+    const ok = await saveStrat(stratId, strat)
+    setSaving(false)
+    if (ok) pushToast('Strat enregistrée.', 'success')
+    return ok
+  }, [strat, saving, saveStrat, stratId, pushToast])
+
+  // Fermer l'onglet ou recharger : le navigateur demande confirmation
   useEffect(() => {
-    const beforeUnload = (e) => {
-      if (Object.keys(pending.current).length) {
-        flush()
-        e.preventDefault()
-      }
+    if (!isDirty) return undefined
+    const onBeforeUnload = (e) => {
+      if (leaving.current) return
+      e.preventDefault()
+      e.returnValue = ''
     }
-    window.addEventListener('beforeunload', beforeUnload)
-    return () => {
-      window.removeEventListener('beforeunload', beforeUnload)
-      flush()
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [isDirty])
+
+  // Cliquer un lien pour quitter la page : on demande d'abord
+  useEffect(() => {
+    if (!isDirty) return undefined
+    const onClick = (e) => {
+      const a = e.target.closest && e.target.closest('a[href]')
+      if (!a || a.target === '_blank' || a.hasAttribute('download') || e.ctrlKey || e.metaKey || e.button > 0) return
+      if (a.href === window.location.href) return
+      e.preventDefault()
+      e.stopPropagation()
+      setLeave(a.href)
     }
-  }, [flush])
+    document.addEventListener('click', onClick, true)
+    return () => document.removeEventListener('click', onClick, true)
+  }, [isDirty])
+
+  const leaveTo = (href) => {
+    leaving.current = true
+    setLeave(null)
+    window.location.assign(href)
+  }
 
   // ---------- Étapes + historique ----------
   const setSteps = useCallback(
@@ -222,6 +228,11 @@ export default function Strat() {
     if (!editable) return undefined
     const onKey = (e) => {
       const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName)
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault()
+        doSave()
+        return
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') {
         if (typing) return
         e.preventDefault()
@@ -283,7 +294,6 @@ export default function Strat() {
 
   const doDelete = async () => {
     setConfirmDelete(false)
-    pending.current = {}
     const mapId = strat.mapUuid
     if (await removeStrat(stratId)) {
       pushToast('Strat supprimée.', 'success')
@@ -313,7 +323,6 @@ export default function Strat() {
   const placingAgent = tool === 'place' && place?.t === 'agent' ? agentByUuid.get(place.a) : null
   const placingAbility = tool === 'place' && place?.t === 'ability' ? agentByUuid.get(place.a)?.abilities?.find((x) => x.slot === place.s) : null
   const placingSpec = placingAbility ? shapeFor(agentByUuid.get(place.a)?.name, place.s) : null
-  const saveLabel = { saved: 'Enregistré', pending: 'Modifié', saving: 'Enregistrement…', error: 'Non enregistré' }[save]
   const stepIndex = strat.steps.findIndex((s) => s.id === step.id)
   const legend = agentsInStrat
   const selAgent = selected && (selected.t === 'agent' || selected.t === 'ability') ? agentByUuid.get(selected.a) : null
@@ -342,7 +351,7 @@ export default function Strat() {
       {/* ---------- Colonne de gauche ---------- */}
       <aside className="sb2-side">
         <div className="sb2-mapcard">
-          <Link to={`/editor/${strat.mapUuid}`} className="sb2-map" style={map?.image ? { backgroundImage: `url(${map.image})` } : undefined} title="Retour à la map">
+          <Link to={`/editor/${strat.mapUuid}`} className="sb2-map" title="Retour à la map">
             <span>{map?.name || 'Map'}</span>
           </Link>
           <button type="button" className={`sb2-sidebtn ${strat.side}`} disabled={!editable}
@@ -373,12 +382,19 @@ export default function Strat() {
 
         {editable && (
           <section className="sb2-sec">
-            <h2>Supprimer</h2>
-            <button type="button" className="sb2-wide" onClick={() => setItems([])} disabled={!step.items.length}>Vider l’étape {stepIndex + 1}</button>
-            <div className="sb2-row2">
-              <button type="button" className="sb2-wide sb2-wide--ghost" onClick={deleteStep} disabled={strat.steps.length <= 1}>L’étape</button>
-              <button type="button" className="sb2-wide sb2-wide--danger" onClick={() => setConfirmDelete(true)}>La strat</button>
-            </div>
+            <h2>Effacer</h2>
+            <button type="button" className="sb2-del" onClick={() => setItems([])} disabled={!step.items.length}>
+              <Ico d="M8 19h12M4 15l9-9 5 5-8 8H8z" />
+              <span><b>Tout effacer sur l’étape {stepIndex + 1}</b><small>Enlève les agents et dessins, garde l’étape</small></span>
+            </button>
+            <button type="button" className="sb2-del" onClick={deleteStep} disabled={strat.steps.length <= 1}>
+              <Ico d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+              <span><b>Supprimer l’étape {stepIndex + 1}</b><small>{strat.steps.length <= 1 ? 'Il faut au moins une étape' : 'Les autres étapes restent'}</small></span>
+            </button>
+            <button type="button" className="sb2-del sb2-del--danger" onClick={() => setConfirmDelete(true)}>
+              <Ico d="M5 7h14M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />
+              <span><b>Supprimer toute la strat</b><small>Pour toute l’équipe, demande confirmation</small></span>
+            </button>
           </section>
         )}
 
@@ -426,29 +442,27 @@ export default function Strat() {
             </label>
           </div>
           <div className="sb2-bar__right">
-            {editable && <span className={`sb2-save sb2-save--${save}`} aria-live="polite" title={saveLabel}><i aria-hidden="true" />{saveLabel}</span>}
-            <button type="button" className={`sb2-icon${showNames ? ' on' : ''}`} onClick={toggleNames} title={showNames ? 'Masquer les noms' : 'Afficher les noms'} aria-pressed={showNames} aria-label="Noms des agents">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 7h16M4 12h10M4 17h7" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" /></svg>
+            <button type="button" className={`sb2-btn${showNames ? ' on' : ''}`} onClick={toggleNames} aria-pressed={showNames}>
+              {showNames ? 'Masquer les noms' : 'Afficher les noms'}
             </button>
-            <button type="button" className="sb2-icon" onClick={() => (editable ? queue({ flipped: !strat.flipped }) : patchLocal(stratId, { flipped: !strat.flipped }))} title="Retourner la carte" aria-label="Retourner la carte">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.3-5.6M20 4v4.5h-4.5" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
-            {canCopy && (
-              <button type="button" className="sb2-icon" onClick={copy} disabled={busy} title="Copier l’image (pour Discord)" aria-label="Copier l’image">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><rect x="9" y="9" width="11" height="11" stroke="currentColor" strokeWidth="2" /><path d="M5 15V5h10" stroke="currentColor" strokeWidth="2" /></svg>
+            {canCopy && <button type="button" className="sb2-btn" onClick={copy} disabled={busy}>Copier l’image</button>}
+            <button type="button" className="sb2-btn" onClick={download} disabled={busy}>Télécharger l’image</button>
+            {editable && (
+              <button type="button" className={`sb2-save${isDirty ? ' dirty' : ''}`} onClick={doSave} disabled={!isDirty || saving} title="Ctrl+S">
+                <i aria-hidden="true" />
+                {saving ? 'Enregistrement…' : isDirty ? 'Enregistrer' : 'Enregistré'}
               </button>
             )}
-            <button type="button" className="sb2-icon sb2-icon--main" onClick={download} disabled={busy} title="Exporter l’étape en image" aria-label="Exporter l’étape">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3v12m0 0-4.5-4.5M12 15l4.5-4.5M4 20h16" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" /></svg>
-            </button>
           </div>
         </div>
+        {editable && isDirty && <p className="sb2-unsaved" role="status">Modifications non enregistrées : clique « Enregistrer » (ou Ctrl+S) pour les garder.</p>}
 
         <div className="sb2-canvas">
-          <div className={`sb2-board sb2-board--${strat.side}`}>
+          <div className={`sb2-board sb2-board--${strat.side}`} style={{ aspectRatio: `${view.w} / ${view.h}` }}>
             <StratBoard
               minimap={map?.minimap}
-              flipped={strat.flipped}
+              rotation={rotation}
+              view={view}
               side={strat.side}
               items={step.items}
               agentByUuid={agentByUuid}
@@ -514,7 +528,7 @@ export default function Strat() {
                   className={`sb2-agent${pickAgent === a.uuid ? ' on' : ''}${placingAgent?.uuid === a.uuid ? ' placing' : ''}`}
                   style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}
                   onClick={() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) }} title={`Placer ${a.name}`}>
-                  <img src={a.portrait || a.icon} alt="" />
+                  <img src={a.icon} alt="" />
                   <span>{a.name}</span>
                 </button>
               ))}
@@ -544,6 +558,20 @@ export default function Strat() {
           )
         )}
       </section>
+
+      {leave && (
+        <div className="sb2-modal" role="dialog" aria-modal="true" aria-labelledby="sb2-leave-title">
+          <div className="sb2-modal__box">
+            <h2 id="sb2-leave-title">Êtes-vous sûr de partir sans enregistrer ?</h2>
+            <p>Les modifications de « {strat.name} » seront perdues.</p>
+            <div className="sb2-modal__actions">
+              <button type="button" className="btn btn-primary" onClick={async () => { const href = leave; if (await doSave()) leaveTo(href) }}>Enregistrer et partir</button>
+              <button type="button" className="btn btn-danger" onClick={() => { const href = leave; revertStrat(stratId); leaveTo(href) }}>Partir sans enregistrer</button>
+              <button type="button" className="btn btn-ghost" onClick={() => setLeave(null)} autoFocus>Rester</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
