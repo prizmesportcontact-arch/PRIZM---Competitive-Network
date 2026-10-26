@@ -14,6 +14,7 @@ import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
 import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import Loader from '../../components/Loader/Loader'
+import StratPresenter from './StratPresenter'
 import { useUnsavedGuard } from '../../hooks/useUnsavedGuard'
 import './Strat.css'
 
@@ -64,6 +65,7 @@ export default function Strat() {
   const compAgents = comp ? comp.slots.map((s) => agentByUuid.get(s.agentUuid)).filter(Boolean) : []
 
   const [stepId, setStepId] = useState(null)
+  const [presenting, setPresenting] = useState(false)
   const [tool, setTool] = useState('select')
   const [place, setPlace] = useState(null)
   const [color, setColor] = useState(COLORS[0])
@@ -286,6 +288,8 @@ export default function Strat() {
     return () => window.removeEventListener('keydown', onKey)
   })
 
+  const closePresenter = useCallback(() => setPresenting(false), [])
+
   // ---------- Export ----------
   const makePng = () => renderStratPng({ map, strat, step, agentByUuid, showNames })
   const download = async () => {
@@ -485,6 +489,10 @@ export default function Strat() {
             </label>
           </div>
           <div className="sb2-bar__right">
+            <button type="button" className="sb2-btn sb2-present" onClick={() => setPresenting(true)} title="Plein écran, étape par étape">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4v16l13-8z" /></svg>
+              Présenter
+            </button>
             <button type="button" className={`sb2-btn${showNames ? ' on' : ''}`} onClick={toggleNames} aria-pressed={showNames}>
               {showNames ? 'Masquer les noms' : 'Afficher les noms'}
             </button>
@@ -616,6 +624,22 @@ export default function Strat() {
       </section>
 
       {leaveDialog}
+
+      {presenting && (
+        <StratPresenter
+          strat={strat}
+          mapName={map?.name}
+          minimap={map?.minimap}
+          rotation={rotation}
+          view={view}
+          agentByUuid={agentByUuid}
+          scale={mapScale(map)}
+          startIndex={Math.max(0, stepIndex)}
+          initialNames={showNames}
+          onStep={setStepId}
+          onClose={closePresenter}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}

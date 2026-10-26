@@ -121,3 +121,11 @@ Rien ne s'enregistre tout seul, ni dans l'éditeur de composition (agents, joueu
 ## Scores par map (migration 025)
 
 Le capitaine envoie le score **de chaque map** (1 à 5 lignes, préremplies depuis le format et les maps du scrim) : `report_scrim_maps`. Stocké dans `scrims.map_scores` (`[{map, h, g}]`, h = hôte) ; `host_score`/`guest_score` restent le total de rounds. Avec le détail, le vainqueur est celui qui gagne le plus de maps (classement, résultats, fiche adversaire). Bilan par map (`team_map_stats`) sur la fiche adversaire et la page publique de l'équipe, colonne « Maps » au classement. « Mon espace » affiche les 5 dernières strats de l'équipe (lien direct vers le tableau tactique).
+
+## Saisons (migration 027)
+
+Tables `seasons` (une seule en cours : `ends_at` vide) et `season_standings` (classement figé de chaque saison terminée). `scrim_leaderboard()` ne compte que les scrims depuis `season_start()`. Staff : page **#/saisons** (renommer la saison, la terminer et en ouvrir une nouvelle : `admin_end_season`). La page Classement propose un onglet par saison ; l'accueil affiche le nom de la saison en cours (`[data-season]`).
+
+## Mode présentation des strats
+
+Bouton « Présenter » sur le tableau tactique (`pages/Strat/StratPresenter.jsx`) : plein écran, une étape à la fois, sans outils. ← → / espace pour changer d'étape, N pour les noms, Échap pour quitter.

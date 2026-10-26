@@ -126,7 +126,7 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/nos-scrims": app => viewScrims(app, "team"), "/reglages": viewSettings, "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
+  const views = { "/saisons": viewSeasons, "/nos-scrims": app => viewScrims(app, "team"), "/reglages": viewSettings, "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
   // Changements pas encore enregistrés (map pool) : on prévient avant de quitter la page
   const unsaved = { pool: false };
   let lastHash = location.hash, guardBack = false;
@@ -1187,16 +1187,48 @@
     </article>`;
   }
 
+  // ---------- Saisons ----------
+  // Le classement repart de zéro à chaque saison ; les saisons terminées gardent leur classement figé.
+  let seasonsCache = null;
+  async function loadSeasons(force) {
+    if (!sb) return [];
+    if (seasonsCache && !force && Date.now() - seasonsCache.at < 60000) return seasonsCache.list;
+    const { data } = await sb.from("seasons").select("id,name,starts_at,ends_at").order("id", { ascending: false });
+    seasonsCache = { at: Date.now(), list: data || [] };
+    return seasonsCache.list;
+  }
+  const currentSeason = list => (list || []).find(x => !x.ends_at) || null;
+  const monthYear = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
+  // Nom de la saison en cours sur l'accueil
+  async function paintSeason() {
+    const cur = currentSeason(await loadSeasons().catch(() => []));
+    if (cur) document.querySelectorAll("[data-season]").forEach(el => { el.textContent = cur.name; });
+  }
+
   // ---------- Classement des scrims ----------
-  const rankFilter = { div: undefined };
+  const rankFilter = { div: undefined, season: undefined };
   async function viewClassement(app) {
     if (!sb) { app.innerHTML = panel("Classement", `<p class="lead">Bientôt disponible.</p>`); return; }
-    const rows = await rpc("scrim_leaderboard");
+    const seasons = await loadSeasons(true);
+    const cur = currentSeason(seasons);
+    if (rankFilter.season === undefined || !seasons.some(x => x.id === rankFilter.season)) rankFilter.season = cur ? cur.id : null;
+    const sel = seasons.find(x => x.id === rankFilter.season) || null;
+    const archived = sel && sel.ends_at;
+    let rows;
+    if (archived) {
+      const { data } = await sb.from("season_standings").select("*").eq("season_id", sel.id).order("division").order("pos");
+      rows = data || [];
+    } else rows = await rpc("scrim_leaderboard");
     if (rankFilter.div === undefined) rankFilter.div = state.team && state.team.status === "validee" ? state.team.division : 1;
+    const seasonChips = seasons.length > 1 || cur ? `<div class="season-tabs" role="group" aria-label="Saison">${seasons.map(x =>
+        `<button type="button" class="season-tab${x.id === rankFilter.season ? " on" : ""}" data-season-id="${x.id}" aria-pressed="${x.id === rankFilter.season}">
+          <b>${esc(x.name)}</b><small>${x.ends_at ? `${monthYear(x.starts_at)} – ${monthYear(x.ends_at)}` : `en cours · depuis ${new Date(x.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`}</small></button>`).join("")}</div>` : "";
     const render = () => {
       const list = rows.filter(r => r.division === rankFilter.div);
       app.innerHTML = panel("Classement des scrims", `
-        <p class="lead">Les résultats des scrims, division par division. Victoire 3 points, nul 1 point. Quand le score de chaque map est envoyé, c'est le nombre de maps gagnées qui désigne le vainqueur. La fiabilité baisse avec les absences et les annulations de dernière minute.</p>
+        ${seasonChips}
+        ${archived ? `<p class="callout season-note"><b>${esc(sel.name)} est terminée.</b> Voici son classement final, figé le ${new Date(sel.ends_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}.</p>` : ""}
+        <p class="lead">Les résultats des scrims, division par division${cur && !archived ? `, pour la <b>${esc(cur.name)}</b>` : ""}. Victoire 3 points, nul 1 point. Quand le score de chaque map est envoyé, c'est le nombre de maps gagnées qui désigne le vainqueur. La fiabilité baisse avec les absences et les annulations de dernière minute.</p>
         <div class="filters">${chipRow("div", rankFilter.div, [[1, "D1"], [2, "D2"], [3, "D3"], [4, "D4"]], "Division")}</div>
         ${list.length ? `<div class="table-scroll"><table class="standings rank-table">
           <thead><tr><th>#</th><th>Équipe</th><th title="Scrims joués">J</th><th title="Victoires">V</th><th title="Nuls">N</th><th title="Défaites">D</th><th title="Maps gagnées – perdues (scrims avec le score de chaque map)">Maps</th><th title="Différence de rounds">+/-</th><th>Pts</th><th title="Scrims honorés">Fiab.</th></tr></thead>
@@ -1205,9 +1237,10 @@
             <td class="mute">${r.mw + r.ml ? `${r.mw}-${r.ml}` : "–"}</td><td>${r.rf - r.ra > 0 ? "+" : ""}${r.rf - r.ra}</td><td class="pts">${r.points}</td>
             <td><span class="fiab${r.reliability >= 90 ? " ok" : r.reliability >= 70 ? " mid" : " bad"}" title="${r.no_shows} absence(s), ${r.late_cancels} annulation(s) tardive(s)">${r.reliability} %</span></td></tr>`).join("")}</tbody></table></div>
           <p class="small-note legend">Un résultat compte quand l'adversaire le confirme, ou automatiquement 48 h après s'il ne répond pas.</p>`
-          : `<p class="small-note">Aucun scrim joué en D${rankFilter.div} pour l'instant.</p>`}
+          : `<p class="small-note">Aucun scrim joué en D${rankFilter.div} ${archived ? "pendant cette saison" : "pour l'instant"}.</p>`}
         <div class="ctas" style="margin-top:24px"><a class="btn" href="#/scrims">Trouver un scrim</a></div>`, "Scrims");
       app.querySelectorAll("[data-f]").forEach(b => b.onclick = () => { rankFilter.div = +b.dataset.v; render(); });
+      app.querySelectorAll("[data-season-id]").forEach(b => b.onclick = () => { rankFilter.season = +b.dataset.seasonId; viewClassement(app); });
     };
     render();
     setLive("/classement", ["scrims", "teams"], () => viewClassement(app));
@@ -1387,7 +1420,8 @@
       setLive("/espace", [], () => viewDashboard(app));
       return;
     }
-    const [d, data, pools, maps] = await Promise.all([rpc("team_dashboard"), rpc("list_scrims"), loadPools(), mapList()]);
+    const [d, data, pools, maps, seasons] = await Promise.all([rpc("team_dashboard"), rpc("list_scrims"), loadPools(), mapList(), loadSeasons().catch(() => [])]);
+    const season = currentSeason(seasons);
     const isCap = !!t.is_captain, myPool = pools[t.id] || {};
     scrimCtx = { reco: other => other && hasPool(myPool) && hasPoolOf(pools, other.id) ? poolMatch(myPool, pools[other.id], maps).slice(0, 3) : [], t };
     const cb = (d && d.cb) || {}, st = d && d.standing, sc = (d && d.scrims) || { results: [] };
@@ -1441,7 +1475,7 @@
     // Bilan : classement + forme
     const recent = sc.results || [];
     const bilanHtml = `<section class="db-card db-bilan">
-        <div class="db-head"><h3>Bilan</h3><a class="link-btn" href="#/classement">Classement</a></div>
+        <div class="db-head"><h3>Bilan${season ? ` <small class="db-season">${esc(season.name)}</small>` : ""}</h3><a class="link-btn" href="#/classement">Classement</a></div>
         ${st ? `<div class="db-stats">
             <div><b>${st.pos}<sup>${st.pos === 1 ? "er" : "e"}</sup></b><span>sur ${st.of} en D${t.division}</span></div>
             <div><b>${st.points}</b><span>points</span></div>
@@ -1612,7 +1646,48 @@
     };
   }
 
-  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/scrims">Scrims</a></nav>`;
+  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/saisons" class="${cur === "saisons" ? "on" : ""}">Saisons</a><a href="#/scrims">Scrims</a></nav>`;
+
+  // ---------- Vue : saisons (admin) ----------
+  async function viewSeasons(app) {
+    if (!state.session) return needLogin(app, "Espace réservé au staff.");
+    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé aux admins du réseau.</p>`); return; }
+    const seasons = await loadSeasons(true), cur = currentSeason(seasons);
+    const n = seasons.length;
+    app.innerHTML = panel("Saisons", `
+      ${adminTabs("saisons")}
+      <p class="lead">Le classement ne compte que les scrims de la saison en cours. Terminer la saison fige son classement (il reste consultable sur la page Classement) et repart de zéro pour toutes les équipes.</p>
+      <div class="two">
+        <form class="card form" id="season-rename" novalidate>
+          <h3>Saison en cours</h3>
+          <p class="small-note">${cur ? `Depuis le ${new Date(cur.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}.` : "Aucune saison en cours."}</p>
+          <label for="season-name">Nom</label><input id="season-name" maxlength="40" value="${esc(cur ? cur.name : "")}">
+          <div class="ctas"><button class="btn sm" type="submit">Renommer</button></div>
+          <p class="form-err" id="season-rename-err" role="alert"></p>
+        </form>
+        <form class="card form" id="season-end" novalidate>
+          <h3>Terminer la saison</h3>
+          <p class="small-note">Le classement actuel devient le classement final de « ${esc(cur ? cur.name : "")} ». Les résultats repartent de zéro. On ne peut pas revenir en arrière.</p>
+          <label for="season-next">Nom de la nouvelle saison</label><input id="season-next" maxlength="40" value="Saison ${n}">
+          <div class="ctas"><button class="btn danger sm" id="season-end-btn" type="submit">Terminer et commencer la nouvelle saison</button></div>
+          <p class="form-err" id="season-end-err" role="alert"></p>
+        </form>
+      </div>
+      <h3 class="t-h">Historique</h3>
+      <div class="t-lines">${seasons.map(x => `<div class="t-line"><span class="t-res ${x.ends_at ? "d" : "w"}">${x.ends_at ? "FIN" : "EN COURS"}</span><span class="t-opp"><b>${esc(x.name)}</b></span>
+        <span class="small-note">${new Date(x.starts_at).toLocaleDateString("fr-FR")} → ${x.ends_at ? new Date(x.ends_at).toLocaleDateString("fr-FR") : "aujourd'hui"}</span><span></span></div>`).join("")}</div>`, "Staff");
+    $("#season-rename").onsubmit = async e => {
+      e.preventDefault();
+      try { await rpc("admin_rename_season", { p_name: $("#season-name").value }); toast("Saison renommée."); seasonsCache = null; paintSeason(); viewSeasons(app); }
+      catch (x) { $("#season-rename-err").textContent = errMsg(x); }
+    };
+    const endForm = $("#season-end");
+    endForm.onsubmit = e => e.preventDefault();
+    confirmable($("#season-end-btn"), "Sûr ? Clique encore pour terminer la saison", async () => {
+      try { await rpc("admin_end_season", { p_new_name: $("#season-next").value }); toast("Nouvelle saison lancée."); seasonsCache = null; paintSeason(); viewSeasons(app); }
+      catch (x) { $("#season-end-err").textContent = errMsg(x); }
+    });
+  }
 
   // ---------- Vue : admin ----------
   async function viewAdmin(app) {
@@ -1676,6 +1751,7 @@
       history.replaceState(null, "", location.pathname + "#/mon-equipe");
     }
     if (!sb) { renderAuth(); route(); return; }
+    paintSeason();
     const { data } = await sb.auth.getSession();
     state.session = data.session; await loadMe(); renderAuth();
     let after = null; try { after = sessionStorage.getItem("prizm_after_login"); sessionStorage.removeItem("prizm_after_login"); } catch (e) {}

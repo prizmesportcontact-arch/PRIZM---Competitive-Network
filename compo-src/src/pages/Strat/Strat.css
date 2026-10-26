@@ -304,3 +304,4 @@ button.sb2-save:disabled { cursor: default; }
   .sb2-side > .sb2-sec--tools { order: 2; }
   .sb2-side > .sb2-sec--erase { order: 3; margin-bottom: 20px; }
 }
+.sb2-present { display: inline-flex; align-items: center; gap: 6px; color: var(--amber) !important; border-color: color-mix(in srgb, var(--amber) 50%, var(--line)) !important; }
