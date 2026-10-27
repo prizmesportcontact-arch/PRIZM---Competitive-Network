@@ -1,11 +1,8 @@
-import { useMemo, useRef, useState } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useRef, useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
-import { usePlayers } from '../../context/PlayersContext'
 import { useToast } from '../../context/ToastContext'
 import { useEscapeToClose } from '../../hooks/useEscapeToClose'
 import { useClickOutside } from '../../hooks/useClickOutside'
-import PlayerAvatar from '../PlayerAvatar/PlayerAvatar'
 import discordMark from '../../assets/discord-mark.png'
 import { networkUrl } from '../../services/team'
 import './AuthPanel.css'
@@ -27,20 +24,16 @@ function DiscordMark({ size = 15 }) {
  * et un anneau doré = administrateur — cliquer ouvre une mini fenêtre de
  * profil (fiche joueur + déconnexion), sans routing/page dédiée.
  */
+// Même bouton de compte que sur le site du réseau (avatar Discord + pseudo, même menu) :
+// on ne doit pas voir de différence en passant du site au Comp Builder.
 export default function AuthPanel() {
-  const { user, isAdmin, isCaptain, team, signInWithDiscord, signOut } = useAuth()
-  const { players } = usePlayers()
+  const { user, profile, signInWithDiscord, signOut } = useAuth()
   const { pushToast } = useToast()
   const [open, setOpen] = useState(false)
   const wrapRef = useRef(null)
 
   useEscapeToClose(open, () => setOpen(false))
   useClickOutside(wrapRef, open, () => setOpen(false))
-
-  const myPlayer = useMemo(() => {
-    if (!user) return null
-    return Object.values(players).find((p) => p.userId === user.id) || null
-  }, [players, user])
 
   if (!user) {
     const handleLogin = async () => {
@@ -50,16 +43,14 @@ export default function AuthPanel() {
     return (
       <button className="btn btn-ghost auth-panel auth-panel__discord" onClick={handleLogin}>
         <DiscordMark size={15} />
-        Connexion Discord
+        Connexion
       </button>
     )
   }
 
-  const displayName =
-    myPlayer?.pseudo ||
-    user.user_metadata?.custom_claims?.global_name ||
-    user.user_metadata?.full_name ||
-    'Connecté'
+  const name = profile?.username || user.user_metadata?.custom_claims?.global_name || user.user_metadata?.full_name || 'Mon compte'
+  const avatarUrl = profile?.avatar_url || user.user_metadata?.avatar_url || null
+  const staff = Boolean(profile?.is_admin || profile?.staff_role)
 
   const handleSignOut = async () => {
     setOpen(false)
@@ -68,61 +59,23 @@ export default function AuthPanel() {
   }
 
   return (
-    <div className="auth-panel auth-panel__wrap" ref={wrapRef}>
-      <button
-        type="button"
-        className="auth-panel__trigger"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-haspopup="true"
-      >
-        <span className={`auth-panel__ring${isAdmin ? ' auth-panel__ring--admin' : ''}`}>
-          <PlayerAvatar player={myPlayer} size="sm" title={displayName} showDiscordBadge />
-        </span>
-        <span className="auth-panel__name">{displayName}</span>
-      </button>
-
-      <AnimatePresence>
-        {open && (
-          <motion.div
-            className="auth-panel__popover glass-panel"
-            initial={{ opacity: 0, y: -8, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1, transition: { type: 'spring', stiffness: 420, damping: 30 } }}
-            exit={{ opacity: 0, y: -6, scale: 0.98, transition: { duration: 0.12 } }}
-          >
-            <div className="auth-panel__popover-head">
-              <span className={`auth-panel__ring auth-panel__ring--lg${isAdmin ? ' auth-panel__ring--admin' : ''}`}>
-                <PlayerAvatar player={myPlayer} size="lg" title={displayName} showDiscordBadge />
-              </span>
-              <div className="auth-panel__popover-info">
-                <strong>{displayName}</strong>
-                <span className={`auth-panel__popover-status${isAdmin ? ' auth-panel__popover-status--admin' : ''}`}>
-                  {isCaptain ? '★ Capitaine' : isAdmin ? '★ Éditeur' : '● Joueur'}
-                </span>
-              </div>
-            </div>
-
-            {myPlayer ? (
-              (myPlayer.primaryRole || myPlayer.secondaryRole) && (
-                <div className="auth-panel__popover-roles">
-                  {myPlayer.primaryRole && <span className="auth-panel__role-tag">{myPlayer.primaryRole}</span>}
-                  {myPlayer.secondaryRole && <span className="auth-panel__role-tag">{myPlayer.secondaryRole}</span>}
-                </div>
-              )
-            ) : (
-              <p className="auth-panel__popover-hint">Ta fiche joueur arrive dans quelques secondes.</p>
-            )}
-
-            {team && <p className="auth-panel__popover-hint">Équipe : <strong>{team.name}</strong></p>}
-            <a href={networkUrl('#/espace')} className="btn btn-ghost auth-panel__popover-link">
-              Espace équipe du réseau
-            </a>
-            <button type="button" className="btn btn-ghost auth-panel__popover-link" onClick={handleSignOut}>
-              Se déconnecter
-            </button>
-          </motion.div>
+    <div className="auth-panel me" ref={wrapRef}>
+      <button type="button" className="me-btn" onClick={() => setOpen((o) => !o)} aria-expanded={open} aria-haspopup="true">
+        {avatarUrl ? (
+          <img className="me-av" src={avatarUrl} alt="" width="30" height="30" referrerPolicy="no-referrer" />
+        ) : (
+          <span className="me-av me-av--txt">{name.slice(0, 1).toUpperCase()}</span>
         )}
-      </AnimatePresence>
+        <span className="me-name">{name}</span>
+      </button>
+      {open && (
+        <div className="me-menu">
+          <a href={networkUrl('#/espace')}>Mon équipe</a>
+          <a href={networkUrl('#/profil')}>Mon profil</a>
+          {profile?.is_admin ? <a href={networkUrl('#/admin')}>Admin</a> : staff ? <a href={networkUrl('#/scrims')}>Modération des scrims</a> : null}
+          <button type="button" onClick={handleSignOut}>Déconnexion</button>
+        </div>
+      )}
     </div>
   )
 }

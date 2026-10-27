@@ -29,6 +29,7 @@ export default function Navbar() {
               {label}
             </a>
           ))}
+          <a href={networkUrl('#/prizm')} className="pz-top__switch">Par PRIZM Esport →</a>
         </nav>
         <AuthPanel />
       </div>

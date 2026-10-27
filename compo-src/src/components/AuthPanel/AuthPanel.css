@@ -134,3 +134,15 @@
     right: -8px;
   }
 }
+
+/* Bouton de compte identique au site du réseau */
+.me { position: relative; }
+.me-btn { display: flex; align-items: center; gap: 10px; background: none; border: 1px solid var(--border-subtle); color: var(--text-primary); padding: 4px 12px 4px 4px; font: 600 0.9rem var(--font-body); cursor: pointer; }
+.me-btn:hover { border-color: var(--border-strong); }
+.me-av { width: 30px; height: 30px; border-radius: 50%; object-fit: cover; flex: none; background: var(--bg-hover); }
+.me-av--txt { display: grid; place-items: center; font: 700 0.8rem var(--font-body); color: var(--text-secondary); }
+.me-name { max-width: 14ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.me-menu { position: absolute; right: 0; top: calc(100% + 6px); min-width: 190px; background: var(--bg-base); border: 1px solid var(--border-subtle); display: grid; z-index: 60; box-shadow: 0 12px 30px rgb(0 0 0 / 0.35); }
+.me-menu a, .me-menu button { padding: 12px 16px; text-decoration: none; text-align: left; background: none; border: 0; color: var(--text-primary); font: 500 0.92rem var(--font-body); cursor: pointer; }
+.me-menu a:hover, .me-menu button:hover { background: var(--bg-hover); }
+.me-menu button { border-top: 1px solid var(--border-subtle); color: var(--text-secondary); }
