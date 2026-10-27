@@ -1,0 +1,23 @@
+à ton niveau	at your level
+en D{}	in D{}
+ Lance la tienne avec « Proposer un scrim ».	 Post yours with "Propose a scrim".
+Lance la tienne avec « Proposer un scrim ».	Post yours with "Propose a scrim".
+Accepte une proposition plus bas ou publie la tienne.	Accept a proposal below or post yours.
+défaite{} en {} scrim{}	loss(es) in {2} scrim{3}
+{} scrim{} de ton équipe attend{} une action	{1} team scrim{2} waiting for an action
+Saison {}	Season {}
+PRIZM Competitive Network est un réseau communautaire et bénévole de scrims Valorant. Cette page explique quelles données le site enregistre, pourquoi, et comment les faire supprimer.	PRIZM Competitive Network is a volunteer-run community network of Valorant scrims. This page explains what data the site stores, why, and how to have it deleted.
+Pas de publicité, pas de revente, pas de traceur. Le site garde seulement ta session de connexion dans le stockage de ton navigateur, pour que tu restes connecté.	No ads, no reselling, no trackers. The site only keeps your login session in your browser's storage, so you stay logged in.
+sur le site : c'est nécessaire pour la compétition. Le code d'invitation d'une équipe n'est visible que par ses membres. Le staff voit toutes les équipes pour les valider.	on the site: it's needed for the competition. A team's invite code is only visible to its members. The staff sees all teams in order to approve them.
+publique	public
+Le staff de PRIZM Competitive Network. Pour toute question ou demande,	The PRIZM Competitive Network staff. For any question or request,
+ouvre un ticket dans	open a ticket in
+Tu peux consulter, corriger ou supprimer tes données, ou t'opposer à leur utilisation. Corrige ton profil toi-même sur le site, ou	You can view, correct or delete your data, or object to its use. Correct your profile yourself on the site, or
+pour toute autre demande. Si tu estimes que tes droits ne sont pas respectés, tu peux saisir la CNIL (cnil.fr).	for any other request. If you think your rights aren't respected, you can contact the CNIL (cnil.fr).
+D{} à D{}	D{} to D{}
+Voir l'adversaire	See the opponent
+à	to
+ton profil	your profile
+Le staff de PRIZM Competitive Network. Pour toute question ou demande, ouvre un ticket dans	The PRIZM Competitive Network staff. For any question or request, open a ticket in
+Tu peux consulter, corriger ou supprimer tes données, ou t'opposer à leur utilisation. Corrige ton profil toi-même sur le site, ou ouvre un ticket dans	You can view, correct or delete your data, or object to its use. Correct your profile yourself on the site, or open a ticket in
+PRIZM Competitive Network, accueil du réseau	PRIZM Competitive Network, network home

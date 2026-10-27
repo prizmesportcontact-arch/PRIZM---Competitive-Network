@@ -1,4 +1,5 @@
 /* PRIZM Competitive Network — connexion Discord, profils, équipes, admin */
+  const LOC = () => window.PRIZM_LOCALE || "fr-FR";
 (() => {
   const CFG = window.PRIZM_CONFIG || {};
   const RANKS = ["Fer 1","Fer 2","Fer 3","Bronze 1","Bronze 2","Bronze 3","Argent 1","Argent 2","Argent 3",
@@ -464,7 +465,7 @@
   function rankBox(p) {
     if (!p) return "";
     const d = rankDiv(p.rank);
-    const when = p.rank_checked_at ? new Date(p.rank_checked_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long" }) : "";
+    const when = p.rank_checked_at ? new Date(p.rank_checked_at).toLocaleDateString(LOC(), { day: "numeric", month: "long" }) : "";
     const src = p.rank_source === "auto" ? `<span class="pill ok">Vérifié</span><span class="small-note">Détecté automatiquement${when ? " le " + when : ""}</span>`
       : p.rank_source === "staff" ? `<span class="pill ok">Fixé par le staff</span>${when ? `<span class="small-note">le ${when}</span>` : ""}`
       : p.rank != null ? `<span class="pill wait">Non vérifié</span><span class="small-note">Clique sur le bouton ci-dessus pour le vérifier.</span>` : "";
@@ -633,7 +634,7 @@
         const r = await rpc("team_roster", { p_team: d.dataset.id });
         $(".roster-slot", d).innerHTML = rosterTable(r, false, null, admin) + `<p class="small-note"><a class="link-btn" href="${teamHref(d.dataset.tag)}">Voir la page de l'équipe →</a></p>` + (admin ? `<p class="small-note open-roster">Roster bloqué pendant une compétition ? <button class="link-btn" data-open-roster type="button">Autoriser les changements pendant 24 h</button></p>` : "");
         if (admin) { const ob = $("[data-open-roster]", d); ob.onclick = async () => {
-          try { const until = await rpc("admin_open_roster", { p_team: d.dataset.id }); toast("Changements autorisés jusqu'à " + new Date(until).toLocaleString("fr-FR", { weekday: "long", hour: "2-digit", minute: "2-digit" }) + "."); }
+          try { const until = await rpc("admin_open_roster", { p_team: d.dataset.id }); toast("Changements autorisés jusqu'à " + new Date(until).toLocaleString(LOC(), { weekday: "long", hour: "2-digit", minute: "2-digit" }) + "."); }
           catch (x) { toast(errMsg(x), "err"); } }; }
         if (admin) d.querySelectorAll("[data-rank-save]").forEach(b => b.onclick = async () => {
           const u = b.dataset.rankSave, v = d.querySelector(`[data-rank-for="${u}"]`).value;
@@ -650,13 +651,13 @@
 
   // ================= Competitive Network : scrims, recherche, classement =================
   const divChip = d => d ? `<span class="div-chip d${d}">D${d}</span>` : "";
-  const fmtDate = iso => iso ? new Date(iso).toLocaleString("fr-FR", { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Date à venir";
-  const fmtShort = iso => new Date(iso).toLocaleString("fr-FR", { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  const fmtDate = iso => iso ? new Date(iso).toLocaleString(LOC(), { weekday: "long", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit" }) : "Date à venir";
+  const fmtShort = iso => new Date(iso).toLocaleString(LOC(), { weekday: "short", day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
   const toLocalInput = iso => { if (!iso) return ""; const d = new Date(iso); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 16); };
   const MONTHS = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juil.", "août", "sept.", "oct.", "nov.", "déc."];
   const dateTile = iso => {
     const d = new Date(iso);
-    return `<div class="date-tile"><b>${d.getDate()}</b><span>${MONTHS[d.getMonth()]}</span><small>${d.toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" })}</small></div>`;
+    return `<div class="date-tile"><b>${d.getDate()}</b><span>${MONTHS[d.getMonth()]}</span><small>${d.toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" })}</small></div>`;
   };
   const discordLink = (id, label) => id ? `<a class="link-btn" href="https://discord.com/users/${esc(id)}" target="_blank" rel="noopener">${label}</a>` : "";
   const chipRow = (key, cur, opts, label) => `<div class="f-group"><span class="eyebrow">${label}</span>${opts.map(([v, l]) =>
@@ -688,10 +689,10 @@
     const b = new Date(d); b.setHours(0, 0, 0, 0);
     const n = Math.round((b - a) / DAY);
     if (n === 0) return "Aujourd'hui"; if (n === 1) return "Demain"; if (n === -1) return "Hier";
-    const s = d.toLocaleDateString("fr-FR", { weekday: "short", day: "numeric", month: "short" });
+    const s = d.toLocaleDateString(LOC(), { weekday: "short", day: "numeric", month: "short" });
     return s.charAt(0).toUpperCase() + s.slice(1);
   };
-  const hourLabel = iso => new Date(iso).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
+  const hourLabel = iso => new Date(iso).toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" }).replace(":", "h");
   const when = iso => `<div class="scx-when"><span>${dayLabel(iso)}</span><b>${hourLabel(iso)}</b></div>`;
   const tags = s => [s.format, s.maps].filter(Boolean).map(x => `<span class="scx-tag">${esc(x)}</span>`).join("");
   const opponent = x => x ? `<a class="scx-team pl-link" href="${teamHref(x.tag)}">${teamLogo(x, 32)}<b>${esc(x.name)}</b>${divChip(x.division)}</a>` : `<span class="scx-team"><b class="mute">Adversaire à trouver</b></span>`;
@@ -1157,7 +1158,7 @@
     const v = post || { roles: [], dispo: "", message: "" };
     const title = kind === "joueur" ? (post ? "Ton annonce" : "Je cherche une équipe") : (post ? "Annonce de ton équipe" : "Mon équipe recrute");
     const missing = kind === "joueur" && (!p || !p.riot_id || p.rank == null);
-    return `<details class="card post-card"${!post && kind === "joueur" ? " open" : ""}><summary><b>${title}</b>${post ? `<span class="small-note"> · publiée ${new Date(post.created_at).toLocaleDateString("fr-FR")}, visible 30 jours</span>` : ""}</summary>
+    return `<details class="card post-card"${!post && kind === "joueur" ? " open" : ""}><summary><b>${title}</b>${post ? `<span class="small-note"> · publiée ${new Date(post.created_at).toLocaleDateString(LOC())}, visible 30 jours</span>` : ""}</summary>
       ${missing ? `<p class="callout">Renseigne d'abord ton Riot ID dans <a href="#/profil">ton profil</a> : ton rang sert à trouver une équipe de ton niveau.</p>` : `
       <form class="form" id="lfg-form" novalidate>
         <fieldset class="role-pick"><legend>${kind === "joueur" ? "Tes rôles" : "Rôles recherchés"}</legend>
@@ -1198,7 +1199,7 @@
     return seasonsCache.list;
   }
   const currentSeason = list => (list || []).find(x => !x.ends_at) || null;
-  const monthYear = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "short", year: "numeric" });
+  const monthYear = iso => new Date(iso).toLocaleDateString(LOC(), { month: "short", year: "numeric" });
   // Nom de la saison en cours sur l'accueil
   async function paintSeason() {
     const cur = currentSeason(await loadSeasons().catch(() => []));
@@ -1222,12 +1223,12 @@
     if (rankFilter.div === undefined) rankFilter.div = state.team && state.team.status === "validee" ? state.team.division : 1;
     const seasonChips = seasons.length > 1 || cur ? `<div class="season-tabs" role="group" aria-label="Saison">${seasons.map(x =>
         `<button type="button" class="season-tab${x.id === rankFilter.season ? " on" : ""}" data-season-id="${x.id}" aria-pressed="${x.id === rankFilter.season}">
-          <b>${esc(x.name)}</b><small>${x.ends_at ? `${monthYear(x.starts_at)} – ${monthYear(x.ends_at)}` : `en cours · depuis ${new Date(x.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}`}</small></button>`).join("")}</div>` : "";
+          <b>${esc(x.name)}</b><small>${x.ends_at ? `${monthYear(x.starts_at)} – ${monthYear(x.ends_at)}` : `en cours · depuis ${new Date(x.starts_at).toLocaleDateString(LOC(), { day: "numeric", month: "short" })}`}</small></button>`).join("")}</div>` : "";
     const render = () => {
       const list = rows.filter(r => r.division === rankFilter.div);
       app.innerHTML = panel("Classement des scrims", `
         ${seasonChips}
-        ${archived ? `<p class="callout season-note"><b>${esc(sel.name)} est terminée.</b> Voici son classement final, figé le ${new Date(sel.ends_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}.</p>` : ""}
+        ${archived ? `<p class="callout season-note"><b>${esc(sel.name)} est terminée.</b> Voici son classement final, figé le ${new Date(sel.ends_at).toLocaleDateString(LOC(), { day: "numeric", month: "long", year: "numeric" })}.</p>` : ""}
         <p class="lead">Les résultats des scrims, division par division${cur && !archived ? `, pour la <b>${esc(cur.name)}</b>` : ""}. Victoire 3 points, nul 1 point. Quand le score de chaque map est envoyé, c'est le nombre de maps gagnées qui désigne le vainqueur. La fiabilité baisse avec les absences et les annulations de dernière minute.</p>
         <div class="filters">${chipRow("div", rankFilter.div, [[1, "D1"], [2, "D2"], [3, "D3"], [4, "D4"]], "Division")}</div>
         ${list.length ? `<div class="table-scroll"><table class="standings rank-table">
@@ -1250,8 +1251,8 @@
   // ================= Pages publiques : équipe et joueur =================
   const resBadge = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`;
   const oppLink = r => `<a class="t-opp pl-link" href="${teamHref(r.opp_tag)}">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 26)}<b>${esc(r.opp)}</b></a>`;
-  const shortDate = iso => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short" });
-  const memberSince = iso => new Date(iso).toLocaleDateString("fr-FR", { month: "long", year: "numeric" });
+  const shortDate = iso => new Date(iso).toLocaleDateString(LOC(), { day: "numeric", month: "short" });
+  const memberSince = iso => new Date(iso).toLocaleDateString(LOC(), { month: "long", year: "numeric" });
 
   async function viewTeamPublic(app, tag) {
     const [d, maps] = await Promise.all([rpc("team_public", { p_tag: tag }), mapList()]);
@@ -1335,9 +1336,9 @@
       const div = lb.filter(r => r.division === me.division), pos = div.findIndex(r => r.team_id === t.id) + 1;
       const diff = me.rf - me.ra;
       const res = r => r.no_show ? `<span class="t-res ff">ABS</span>` : `<span class="t-res ${outcome(r) > 0 ? "w" : outcome(r) < 0 ? "l" : "d"}">${outcome(r) > 0 ? "V" : outcome(r) < 0 ? "D" : "N"}</span>`;
-      const line = (r, past) => `<div class="t-line">${past ? res(r) : `<span class="t-res next">${new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" })}</span>`}
+      const line = (r, past) => `<div class="t-line">${past ? res(r) : `<span class="t-res next">${new Date(r.starts_at).toLocaleDateString(LOC(), { day: "numeric", month: "short" })}</span>`}
           <span class="t-opp">${teamLogo({ logo_url: r.opp_logo, tag: r.opp_tag }, 28)}<b>${esc(r.opp)}</b></span>
-          <span class="small-note">${past ? new Date(r.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "short" }) + " · " : new Date(r.starts_at).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) + " · "}${esc(r.format)}</span>
+          <span class="small-note">${past ? new Date(r.starts_at).toLocaleDateString(LOC(), { day: "numeric", month: "short" }) + " · " : new Date(r.starts_at).toLocaleTimeString(LOC(), { hour: "2-digit", minute: "2-digit" }) + " · "}${esc(r.format)}</span>
           ${past ? `<span class="t-score"${mapsTitle(r)}>${scoreText(r)}</span>` : `<span></span>`}</div>`;
       $("#team-bilan").innerHTML = `<div class="t-stats">
           <div><b>${me.played}</b><span>scrims joués</span></div>
@@ -1637,7 +1638,7 @@
   const bindCopy = root => root.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast("Identifiant Discord copié."); } catch (e) { toast("Copie impossible.", "err"); }
   });
-  const fullDate = iso => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  const fullDate = iso => new Date(iso).toLocaleDateString(LOC(), { day: "numeric", month: "short", year: "numeric" });
   const norm = v => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
   const adFilter = { teams: { q: "", st: "all" }, players: { q: "", f: "all", sort: "new" }, scrims: { f: "todo" } };
   const STAFF_LABEL = { admin: "Admin", arbitre: "Modérateur" };
@@ -1863,7 +1864,7 @@
       <div class="two">
         <form class="card form" id="season-rename" novalidate>
           <h3>Saison en cours</h3>
-          <p class="small-note">${cur ? `Depuis le ${new Date(cur.starts_at).toLocaleDateString("fr-FR", { day: "numeric", month: "long", year: "numeric" })}.` : "Aucune saison en cours."}</p>
+          <p class="small-note">${cur ? `Depuis le ${new Date(cur.starts_at).toLocaleDateString(LOC(), { day: "numeric", month: "long", year: "numeric" })}.` : "Aucune saison en cours."}</p>
           <label for="season-name">Nom</label><input id="season-name" maxlength="40" value="${esc(cur ? cur.name : "")}">
           <div class="ctas"><button class="btn sm" type="submit">Renommer</button></div>
           <p class="form-err" id="season-rename-err" role="alert"></p>
@@ -1878,7 +1879,7 @@
       </div>
       <h3 class="t-h">Historique</h3>
       <div class="t-lines">${seasons.map(x => `<div class="t-line"><span class="t-res ${x.ends_at ? "d" : "w"}">${x.ends_at ? "FIN" : "EN COURS"}</span><span class="t-opp"><b>${esc(x.name)}</b></span>
-        <span class="small-note">${new Date(x.starts_at).toLocaleDateString("fr-FR")} → ${x.ends_at ? new Date(x.ends_at).toLocaleDateString("fr-FR") : "aujourd'hui"}</span><span></span></div>`).join("")}</div>`,
+        <span class="small-note">${new Date(x.starts_at).toLocaleDateString(LOC())} → ${x.ends_at ? new Date(x.ends_at).toLocaleDateString(LOC()) : "aujourd'hui"}</span><span></span></div>`).join("")}</div>`,
       "Le classement ne compte que les scrims de la saison en cours. Terminer la saison fige son classement (il reste consultable sur la page Classement) et repart de zéro pour toutes les équipes.");
     $("#season-rename").onsubmit = async e => {
       e.preventDefault();

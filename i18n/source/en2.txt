@@ -1,0 +1,377 @@
+PRIZM Competitive Network, accueil	PRIZM Competitive Network, home
+PRIZM Competitive Network · Scrims Valorant par PRIZM Esport	PRIZM Competitive Network · Valorant scrims by PRIZM Esport
+Bilan	Record
+Nous suivre	Follow us
+Le réseau →	The network →
+Scrims	Scrims
+Règlement	Rules
+Par PRIZM Esport →	By PRIZM Esport →
+Le site est en cours de configuration : les comptes et les équipes seront bientôt disponibles.	The site is being set up: accounts and teams will be available soon.
+Équipe esport · Valorant	Esports team · Valorant
+On scrime, on progresse, on monte ensemble.	We scrim, we improve, we climb together.
+Suivre sur Twitch	Follow on Twitch
+Rejoindre le Discord	Join the Discord
+L'équipe	The team
+Chargement du roster…	Loading roster…
+En scrims	In scrims
+Nos résultats sur le PRIZM Competitive Network, mis à jour après chaque scrim.	Our results on the PRIZM Competitive Network, updated after every scrim.
+Chargement du bilan…	Loading record…
+Là où on joue	Where we play
+Nos matchs et nos sessions en direct.	Our matches and live sessions.
+Replays et meilleurs moments.	Replays and highlights.
+La communauté, les annonces et les scrims.	The community, announcements and scrims.
+Le réseau qu'on a créé	The network we built
+PRIZM Esport a lancé le PRIZM Competitive Network pour mettre en relation les équipes Valorant de même niveau : scrims calés en deux clics, recherche d'équipe et classement par division.	PRIZM Esport launched the PRIZM Competitive Network to connect Valorant teams of the same level: scrims scheduled in two clicks, team search and standings by division.
+Découvrir le réseau	Discover the network
+Voir les scrims	See scrims
+Valorant · Réseau de scrims ·	Valorant · Scrim network ·
+Un réseau créé et animé par	A network created and run by
+Des scrims sérieux contre des équipes	Serious scrims against teams
+de ton niveau	at your level
+, pour progresser ensemble.	, to improve together.
+divisions par rang	divisions by rank
+équipes uniquement	teams only
+gratuit	free
+Divisions	Divisions
+Quatre divisions, zéro match à sens unique	Four divisions, zero one-sided matches
+Chaque équipe est placée dans une division selon le rang de ses joueurs. Tu scrimes contre ta division et les divisions voisines, avec des équipes qui ont ton niveau.	Each team is placed in a division based on its players' ranks. You scrim against your division and the neighbouring ones, with teams at your level.
+Le haut du réseau. Les matchs les plus suivis.	The top of the network. The most-watched matches.
+Équipes structurées qui visent la D1.	Structured teams aiming for D1.
+Pour progresser en jeu d'équipe et en comms.	To improve teamplay and comms.
+Ta première compétition en équipe.	Your first team competition.
+Comment on te place :	How we place you:
+on prend le rang actuel des 5 titulaires, la division est celle de la moyenne. Si un joueur est deux divisions au-dessus du reste de l'équipe, l'équipe monte d'une division. Le placement est vérifié par le staff au moment de l'inscription.	we take the current rank of the 5 starters, and the division is the average. If one player is two divisions above the rest of the team, the team moves up one division. The staff checks placement at sign-up.
+Un scrim calé en deux clics	A scrim scheduled in two clicks
+Tout se passe sur le site : tu proposes un créneau, une équipe de ton niveau l'accepte, et le Discord prévient tout le monde.	Everything happens on the site: you propose a time slot, a team at your level accepts it, and the Discord notifies everyone.
+Inscris ton équipe	Register your team
+Le capitaine se connecte avec Discord, crée l'équipe et invite ses joueurs. Le staff valide la division.	The captain logs in with Discord, creates the team and invites the players. The staff approves the division.
+Propose un créneau	Propose a time slot
+Date, heure, format (24 rounds, 2 maps, BO1, BO3). La proposition apparaît sur le site et dans	Date, time, format (24 rounds, 2 maps, BO1, BO3). The proposal shows on the site and in
+Une équipe accepte	A team accepts
+En un clic. Les deux capitaines sont prévenus et se contactent sur Discord pour le code de partie.	In one click. Both captains are notified and get in touch on Discord for the lobby code.
+Envoie le résultat	Send the result
+Le score de chaque map jouée. L'autre capitaine confirme, et le classement se met à jour.	The score of each map played. The other captain confirms, and the standings update.
+Propositions ouvertes	Open proposals
+Tout voir	See all
+Règlement · résumé	Rules · summary
+Les règles qui comptent	The rules that matter
+Le règlement complet est épinglé sur le Discord. Voici l'essentiel à connaître avant ton premier match.	The full rules are pinned on the Discord. Here's what you need to know before your first match.
+5 titulaires et jusqu'à 2 remplaçants. Un joueur ne joue que pour une équipe à la fois.	5 starters and up to 2 substitutes. A player plays for only one team at a time.
+Comptes	Accounts
+Chaque joueur déclare son Riot ID. Le smurf et le partage de compte entraînent l'exclusion.	Every player declares their Riot ID. Smurfing and account sharing lead to exclusion.
+Ponctualité	Punctuality
+15 minutes de retard après l'heure prévue : l'adversaire peut déclarer une absence.	15 minutes late after the scheduled time: the opponent can report a no-show.
+Annulation	Cancellation
+Annule au moins 2 h avant. En dessous, c'est une annulation tardive : elle fait baisser ta fiabilité.	Cancel at least 2 h before. Any later is a late cancellation: it lowers your reliability.
+Un capitaine envoie le score de chaque map, l'autre confirme. En BO3, gagne l'équipe qui remporte le plus de maps. Sans réponse sous 48 h, le résultat est validé.	One captain sends each map's score, the other confirms. In a BO3, the team that wins the most maps wins. With no response within 48 h, the result is approved.
+Esprit scrim	Scrim spirit
+On joue pour progresser : pas de troll, pas de rage-quit, on va au bout du format prévu.	We play to improve: no trolling, no rage-quitting, we play the full format.
+Comportement	Behaviour
+Toxicité, insultes ou triche : avertissement, puis exclusion du réseau.	Toxicity, insults or cheating: a warning, then exclusion from the network.
+Litiges	Disputes
+Un ticket dans	A ticket in
+. La décision du staff est définitive.	. The staff's decision is final.
+Communauté	Community
+Plus qu'un salon de scrims	More than a scrim channel
+Tu cherches une équipe ? Ton équipe cherche un smoke ? Publie ton annonce, on se contacte sur Discord.	Looking for a team? Your team needs a smoker? Post your ad, get in touch on Discord.
+Voir les annonces	See the ads
+Victoires, maps gagnées, différence de rounds et fiabilité, division par division. Les équipes sérieuses se repèrent vite.	Wins, maps won, round difference and reliability, division by division. Serious teams stand out fast.
+Voir le classement	See the standings
+Chaque équipe inscrite a son espace : tableau de bord, scrims, roster, et son Comp Builder pour préparer les compos map par map. Privé, en direct.	Every registered team has its own space: dashboard, scrims, roster, and its Comp Builder to prepare comps map by map. Private, live.
+Ouvrir mon espace	Open my space
+Recrutement staff	Staff recruitment
+Le réseau se construit avec vous	The network is built with you
+On cherche des bénévoles motivés. Postule dans	We're looking for motivated volunteers. Apply in
+sur le Discord.	on the Discord.
+Modérateurs	Moderators
+Faire vivre le Discord, gérer les litiges de scrims et garder une bonne ambiance.	Keep the Discord alive, handle scrim disputes and keep a good vibe.
+Créateurs	Creators
+Animer le Twitch et le YouTube du réseau.	Run the network's Twitch and YouTube.
+Qui organise ?	Who runs it?
+Par PRIZM Esport	By PRIZM Esport
+Le réseau est créé et animé par PRIZM Esport, une équipe Valorant qui voulait des scrims sérieux à son niveau, et pour toutes les autres équipes. PRIZM s'inscrit et scrime sur le réseau comme tout le monde, avec les mêmes règles.	The network is created and run by PRIZM Esport, a Valorant team that wanted serious scrims at its level, and for every other team too. PRIZM signs up and scrims on the network like everyone else, with the same rules.
+Voir l'équipe PRIZM	See team PRIZM
+Questions fréquentes	FAQ
+C'est payant ?	Does it cost anything?
+Non, tout est gratuit.	No, everything is free.
+Je n'ai pas d'équipe, je peux participer ?	I don't have a team, can I take part?
+Oui. Publie une annonce dans la	Yes. Post an ad in the
+avec tes rôles et tes dispos, ou réponds à une équipe qui recrute.	with your roles and availability, or answer a team that's recruiting.
+Contre qui je peux scrimer ?	Who can I scrim against?
+Contre les équipes de ta division et des divisions voisines (une D3 peut scrimer avec la D2 et la D4).	Teams in your division and the neighbouring ones (a D3 team can scrim D2 and D4).
+Comment marche le classement ?	How do the standings work?
+Victoire 3 points, nul 1 point, puis la différence de rounds. Le vainqueur d'un scrim est l'équipe qui gagne le plus de maps. La fiabilité indique la part de scrims honorés : les absences et les annulations de dernière minute la font baisser.	Win 3 points, draw 1 point, then round difference. The winner of a scrim is the team that wins the most maps. Reliability shows the share of scrims honoured: no-shows and last-minute cancellations lower it.
+Mon équipe change de rang en cours de saison ?	My team's rank changes mid-season?
+La division est fixée pour toute la saison. Le placement est recalculé à chaque nouvelle saison.	The division is fixed for the whole season. Placement is recalculated each new season.
+Il y a des tournois ?	Are there tournaments?
+Pas pour l'instant : on se concentre sur les scrims, la recherche d'équipe et la communauté.	Not for now: we focus on scrims, team search and the community.
+Quel serveur de jeu ?	Which game server?
+Les scrims se jouent en partie personnalisée sur les serveurs européens.	Scrims are played as custom games on European servers.
+Saison 0	Season 0
+· Inscriptions ouvertes	· Sign-ups open
+Rejoins le réseau	Join the network
+Connecte-toi avec Discord pour inscrire ton équipe ou publier ta recherche, puis rejoins le serveur pour les scrims, les annonces et le support.	Log in with Discord to register your team or post your search, then join the server for scrims, announcements and support.
+© 2026 PRIZM Competitive Network · par PRIZM Esport	© 2026 PRIZM Competitive Network · by PRIZM Esport
+· Réseau communautaire non affilié à Riot Games.	· Community network not affiliated with Riot Games.
+Ajouter	Add
+Vide	Empty
+Retirer {} de la composition	Remove {} from the comp
+Joueur pour {}	Player for {}
+Aucun joueur	No player
+Ajouter un agent à l'emplacement {}	Add an agent to slot {}
+Statut de la composition	Comp status
+Aucun joueur assigné	No player assigned
+Connecté via Discord	Logged in via Discord
+Image téléchargée.	Image downloaded.
+Impossible de générer l'image.	Couldn't generate the image.
+Impossible de copier l'image.	Couldn't copy the image.
+Ajoute au moins un agent pour exporter	Add at least one agent to export
+Télécharger l'image de cette composition	Download this comp's image
+Génération…	Generating…
+Exporter	Export
+Copier l'image (pour la coller directement dans Discord)	Copy the image (to paste it straight into Discord)
+Copier l'image de cette composition	Copy this comp's image
+Aucun résultat pour «	No results for "
+Agents	Agents
+sur	of
+Recherche globale	Global search
+Rechercher une map, un joueur, un agent…	Search a map, a player, an agent…
+Ajuster	Fit
+Texte	Text
+Tableau tactique	Tactical board
+Capacité	Ability
+Zoomer	Zoom in
+Dézoomer	Zoom out
+Dézoomer (molette)	Zoom out (wheel)
+Voir toute la carte	See the whole map
+Comparer deux compositions	Compare two comps
+Assigner un joueur	Assign a player
+Aucun agent sélectionné pour le moment — la répartition des rôles s'affichera ici.	No agent selected yet — the role split will show here.
+Une erreur inattendue est survenue	An unexpected error occurred
+Désolé, quelque chose s'est mal passé. Tes données ne sont pas perdues — elles sont sauvegardées sur le serveur, pas dans cette page.	Sorry, something went wrong. Your data isn't lost — it's saved on the server, not in this page.
+Recharger la page	Reload the page
+Connexion Discord	Discord login
+Ta fiche joueur arrive dans quelques secondes.	Your player card arrives in a few seconds.
+Équipe :	Team:
+Espace équipe du réseau	Network team space
+Se déconnecter	Log out
+Connecté	Logged in
+Déconnecté.	Logged out.
+★ Éditeur	★ Editor
+Les modifications	The changes
+de «	to "
+ne sont pas enregistrées. Si tu continues sans enregistrer, elles seront perdues.	aren't saved. If you continue without saving, they'll be lost.
+Enregistrer et continuer	Save and continue
+Continuer sans enregistrer	Continue without saving
+Stratégie générale, calls importants, timings, erreurs à éviter, objectifs…	General strategy, key calls, timings, mistakes to avoid, goals…
+Choisir un agent	Choose an agent
+Aucun agent ne correspond à cette recherche.	No agent matches this search.
+Déjà utilisé	Already used
+Actuel	Current
+Sélection d'un agent	Agent selection
+Rechercher un agent…	Search an agent…
+Rechercher un agent	Search an agent
+Trier alphabétiquement	Sort alphabetically
+Nouvelle composition	New comp
+Composition principale	Main comp
+Définir comme composition principale	Set as main comp
+Définir comme principale	Set as main
+Dupliquer	Duplicate
+Tous les statuts	All statuses
+Toutes les maps	All maps
+Avec composition	With a comp
+Sans composition	Without a comp
+Ordre alphabétique	Alphabetical order
+Dernière modification	Last modified
+Complètes (5/5) en premier	Complete (5/5) first
+Incomplètes en premier	Incomplete first
+Rechercher une map…	Search a map…
+Rechercher une map	Search a map
+Effacer la recherche	Clear search
+Filtrer les maps	Filter maps
+Filtrer par statut	Filter by status
+Trier les maps	Sort maps
+← Retour au site du réseau	← Back to the network site
+Rechercher	Search
+Chargement des strats…	Loading strats…
+Aucune strat sur cette map pour l’instant.	No strats on this map yet.
+Aucune strat pour l’instant : ouvre une map et crée la première.	No strats yet: open a map and create the first one.
+Dessine un setup, une exécution ou une retake sur la minimap.	Draw a setup, an execute or a retake on the minimap.
+Défense	Defense
+Attaque	Attack
+Création…	Creating…
+Nouvelle strat	New strat
+Exécution	Execute
+Aucune équipe sélectionnée.	No team selected.
+Impossible de contacter l'API Valorant. Vérifie ta connexion internet.	Can't reach the Valorant API. Check your internet connection.
+Composition	Comp
+Jamais modifiée	Never modified
+À l'instant	Just now
+Les membres de	The members of
+Roster →	Roster →
++ Ajouter un joueur	+ Add a player
+Lecture seule : le capitaine et les éditeurs qu'il nomme peuvent modifier. Tu peux quand même régler tes propres rôles et ta couleur.	Read only: the captain and the editors they appoint can edit. You can still set your own roles and colour.
+Filtré sur «	Filtered on "
+Réinitialiser	Reset
+Aucun joueur pour le moment. Ajoute ton effectif pour pouvoir l'assigner aux compositions.	No players yet. Add your roster to assign it to comps.
+Aucun joueur ne correspond à ce rôle.	No player matches this role.
+Aucun rôle défini	No role set
+Éditeur	Editor
+Hors réseau	Off-network
+Pseudo	Username
+Rôle principal	Main role
+Rôle secondaire	Secondary role
+Couleur d'identification	Identification colour
+Reprendre les compos de l'ancien Comp Builder	Import comps from the old Comp Builder
+arrivent ici automatiquement. Règle leurs rôles et leur couleur, ou ajoute un coach ou un remplaçant hors réseau.	appear here automatically. Set their roles and colour, or add a coach or an off-network substitute.
+Titulaires, remplaçants et invitations :	Starters, substitutes and invites:
+{} peut maintenant modifier le Comp Builder.	{} can now edit the Comp Builder.
+{} passe en lecture seule.	{} is now read-only.
+Impossible de modifier ce droit. Seul le capitaine peut nommer les éditeurs.	Can't change this permission. Only the captain can appoint editors.
+{} mis à jour.	{} updated.
+{} ajouté à l'effectif.	{} added to the roster.
+{} retiré de l'effectif.	{} removed from the roster.
+Fiche ajoutée à la main, pas membre de l'équipe sur le réseau	Card added by hand, not a team member on the network
+Éditeur : peut modifier le Comp Builder. Cliquer pour retirer	Editor: can edit the Comp Builder. Click to remove
+Nommer éditeur (peut modifier compos, matchs et effectif)	Make editor (can edit comps, matches and roster)
+Retirer le droit d'édition à {}	Remove editing rights from {}
+Nommer {} éditeur	Make {} an editor
+Modifier le joueur	Edit player
+Ajouter un joueur	Add a player
+Choisir la couleur {}	Choose colour {}
+Importer	Import
+Cette fiche ajoutée à la main sera supprimée et retirée de toutes les compositions où elle apparaissait.	This hand-added card will be deleted and removed from every comp it appeared in.
+Étape	Step
+Quitter	Exit
+Rien sur cette étape.	Nothing on this step.
+← → pour changer d’étape · N pour les noms · Échap pour quitter	← → to change step · N for names · Esc to exit
+Présentation : {}	Presentation: {}
+Masquer les noms	Hide names
+Afficher les noms	Show names
+Échap	Esc
+Étape précédente	Previous step
+Étape suivante	Next step
+Étapes	Steps
+Strat introuvable	Strat not found
+Elle a peut-être été supprimée.	It may have been deleted.
+Toutes les strats	All strats
+← Retour	← Back
+Effacer	Clear
+Tout effacer sur l’étape	Clear everything on step
+Enlève les agents et dessins, garde l’étape	Removes agents and drawings, keeps the step
+Supprimer l’étape	Delete step
+Dupliquer la strat	Duplicate the strat
+Crée une copie pour faire une variante	Creates a copy to make a variant
+Supprimer toute la strat	Delete the whole strat
+Pour toute l’équipe, demande confirmation	For the whole team, asks for confirmation
+Outils	Tools
+Aucune compo	No comp
+Présenter	Present
+Copier l’image	Copy image
+Télécharger l’image	Download image
+Étape vide	Empty step
+Choisis un agent en bas, puis clique sur la carte.	Pick an agent below, then click the map.
+Tire la poignée ambre pour l’orienter.	Drag the amber handle to rotate it.
+Suppr	Del
+Alliés	Allies
+Ennemis	Enemies
+Ambre	Amber
+Blanc	White
+Rouge	Red
+Bleu	Blue
+Vert	Green
+Déplacer	Move
+Flèche	Arrow
+Trait	Line
+Crayon	Pencil
+Gomme	Eraser
+Tracé	Path
+Strat créée et enregistrée.	Strat created and saved.
+Strat enregistrée.	Strat saved.
+12 étapes maximum.	12 steps maximum.
+Étape {}	Step {}
+Image copiée : colle-la dans Discord.	Image copied: paste it into Discord.
+Strat supprimée.	Strat deleted.
+Chargement de la strat…	Loading strat…
+Clique sur la carte pour placer {}.	Click the map to place {}.
+{} : clique où elle part, puis tire dans la direction voulue{}.	{} : click where it starts, then drag in the direction you want{}.
+{} : clique pour la poser, à sa vraie taille.	{} : click to place it, at its real size.
+Clique sur la carte pour poser le spike.	Click the map to place the spike.
+Clique un élément pour le choisir, fais-le glisser pour le déplacer.	Click an item to select it, drag it to move it.
+Clique et tire : la flèche part de là où tu cliques.	Click and drag: the arrow starts where you click.
+Clique et tire pour tracer un trait droit.	Click and drag to draw a straight line.
+Dessine à main levée.	Draw freehand.
+Clique au centre puis tire pour régler la taille.	Click the centre then drag to set the size.
+Clique sur la carte, puis écris dans l’encart qui s’ouvre.	Click the map, then type in the box that opens.
+Clique un élément pour l’effacer.	Click an item to erase it.
+Retour à la map	Back to the map
+Changer de côté	Switch side
+Étapes de la strat	Strat steps
+Étape suivante (reprend la position actuelle)	Next step (keeps the current positions)
+Ajouter une étape	Add a step
+Nom de l’étape {}	Step {} name
+Il faut au moins une étape	At least one step is needed
+Les autres étapes restent	Other steps stay
+Rétablir (Ctrl+Y)	Redo (Ctrl+Y)
+Rétablir	Redo
+Annuler (Ctrl+Z)	Undo (Ctrl+Z)
+Couleur des traits	Line colour
+Carte	Map
+Nom de la strat	Strat name
+Compo liée	Linked comp
+Plein écran, étape par étape	Full screen, step by step
+Enregistré	Saved
+Capacité de {}	{} ability
+Équipe des agents posés	Team of placed agents
+Chercher	Search
+Chercher un agent	Search an agent
+Filtrer par rôle	Filter by role
+Capacités de {}	{} abilities
+Agents sur cette étape	Agents on this step
+« {} » et ses {} étape(s) seront supprimées pour toute l'équipe.	"{}" and its {} step(s) will be deleted for the whole team.
+Supprimer cette strat ?	Delete this strat?
+Map introuvable	Map not found
+Cette map n'existe pas ou plus dans les données de l'API.	This map doesn't exist (anymore) in the API data.
+Retour à l'accueil	Back to home
+Toutes les compos	All comps
+Aucune composition n'a encore été créée pour cette map. Le capitaine ou un éditeur de l'équipe peut en créer une.	No comp has been created for this map yet. The captain or a team editor can create one.
+Compositions	Comps
+Comparer	Compare
+Agents —	Agents —
+Vider la composition	Clear the comp
+Où en est cette composition ?	Where is this comp at?
+Répartition des rôles	Role split
+Un aperçu de l'équilibre de cette composition.	An overview of this comp's balance.
+Notes	Notes
+Stratégie, calls, timings, erreurs à éviter.	Strategy, calls, timings, mistakes to avoid.
+Aucune note pour cette composition.	No notes for this comp.
+Annuler les changements	Discard changes
+/5 agents sélectionnés sur cette composition	/5 agents selected on this comp
+Composition créée et enregistrée.	Comp created and saved.
+Composition enregistrée.	Comp saved.
+Composition vidée — pense à enregistrer.	Comp cleared — remember to save.
+Crée plusieurs compositions par map (principale, anti-rush, eco…). L'étoile marque la principale, celle affichée sur l'accueil.	Create several comps per map (main, anti-rush, eco…). The star marks the main one, shown on the home page.
+Compositions disponibles pour cette map.	Comps available for this map.
+Clique sur un emplacement pour choisir un agent, glisse-dépose pour réorganiser, et assigne un joueur. Pense à enregistrer.	Click a slot to choose an agent, drag and drop to reorder, and assign a player. Remember to save.
+Agents et joueurs assignés pour cette composition.	Agents and players assigned to this comp.
+Strats	Strats
+Dessine tes setups, exécutions et retakes sur la minimap. Une nouvelle strat est liée à la composition affichée.	Draw your setups, executes and retakes on the minimap. A new strat is linked to the comp shown.
+Setups, exécutions et retakes de l’équipe sur cette map.	The team's setups, executes and retakes on this map.
+Vider cette composition ?	Clear this comp?
+Vider	Clear
+Supprimer cette composition ?	Delete this comp?
+Cette composition et ses notes seront définitivement supprimées.	This comp and its notes will be permanently deleted.
+Modifications non enregistrées	Unsaved changes
+Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer.	One comp (or more) per map: agents, players, notes and strats. Click a map to prepare it.
+Compos	Comps
+Sans map	No map
+maps avec une compo complète	maps with a complete comp
+Setups, exécutions et retakes dessinés sur la minimap. Choisis une map pour en créer une.	Setups, executes and retakes drawn on the minimap. Pick a map to create one.
+Ouvrir la map →	Open the map →
+Pas encore de strat	No strat yet
+Pseudo du joueur	Player username
+Supprimer ce joueur ?	Delete this player?
+Rôles	Roles
+Toutes les compos de l'équipe	All the team's comps
+Chargement de la map…	Loading map…
+Ctrl K	Ctrl K

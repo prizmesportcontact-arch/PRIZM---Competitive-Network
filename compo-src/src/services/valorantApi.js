@@ -7,7 +7,7 @@
 // ============================================================
 
 const BASE_URL = 'https://valorant-api.com/v1'
-const LANG = 'fr-FR'
+const LANG = 'fr-FR' // noms de rôles utilisés par le code : on garde le français (la traduction se fait à l'affichage)
 
 class ValorantApiError extends Error {
   constructor(message, cause) {

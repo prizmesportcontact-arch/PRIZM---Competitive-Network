@@ -408,7 +408,7 @@ export async function renderCompositionCard({ map, composition, agentByUuid, pla
   ctx.textAlign = 'right'
   ctx.fillStyle = '#7d8794'
   ctx.font = `500 12px ${FONT_BODY}`
-  const dateStr = new Date().toLocaleDateString('fr-FR')
+  const dateStr = new Date().toLocaleDateString((window.PRIZM_LOCALE || 'fr-FR'))
   const footerVerb = mode === 'vote' ? 'Vote lancé le' : 'Généré le'
   ctx.fillText(`${footerVerb} ${dateStr} · frosefox.github.io/CompoBuilder`, W - 40, H - 26)
   ctx.textAlign = 'left'

@@ -133,3 +133,8 @@ Bouton « Présenter » sur le tableau tactique (`pages/Strat/StratPresenter.jsx
 ## Panneau admin (migration 028)
 
 Réservé aux admins, avec un menu à gauche : **Vue d'ensemble** (#/admin : chiffres clés, équipes à valider, scrims bloqués, derniers inscrits), **Équipes** (#/admin-equipes : recherche, filtres par statut, validation/division, rôles Discord, rangs, roster, suppression), **Joueurs** (#/admin-joueurs : tous les comptes avec Discord, Riot ID, rang, équipe ; fixer un rang, nommer modérateur/admin), **Scrims** (#/admin-scrims : à régler, à venir, terminés… remise à zéro, suppression), **Saisons**. RPC : `admin_overview`, `admin_players`, `admin_teams`, `admin_scrims`, `admin_delete_team`.
+
+## Langues (français / anglais)
+
+Le site et le Comp Builder sont écrits en français. `i18n/i18n.js` (chargé par `index.html` et `compo/index.html`) traduit à la volée chaque texte affiché grâce au dictionnaire `i18n/en.js` ; un sélecteur **FR / EN** est ajouté dans l'en-tête, le choix est gardé dans le navigateur (par défaut : anglais si le navigateur n'est pas en français). Dates au format de la langue (`window.PRIZM_LOCALE`).
+Pour ajouter ou corriger une traduction : une ligne `texte français<TAB>English text` dans `i18n/source/en*.txt` (`{}` = partie variable), puis `python3 i18n/source/build.py i18n/source i18n/en.js`. Pour une nouvelle langue : un autre dictionnaire sur le même modèle.

@@ -109,7 +109,7 @@ export function formatRelativeDate(timestamp) {
   if (diffDay === 1) return 'Hier'
   if (diffDay < 7) return `Il y a ${diffDay} j`
 
-  return new Date(timestamp).toLocaleDateString('fr-FR', {
+  return new Date(timestamp).toLocaleDateString((window.PRIZM_LOCALE || 'fr-FR'), {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
