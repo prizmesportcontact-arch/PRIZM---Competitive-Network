@@ -126,7 +126,7 @@
   }
 
   // ---------- Routeur ----------
-  const views = { "/saisons": viewSeasons, "/nos-scrims": app => viewScrims(app, "team"), "/reglages": viewSettings, "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
+  const views = { "/admin-equipes": viewAdminTeams, "/admin-joueurs": viewAdminPlayers, "/admin-scrims": viewAdminScrims, "/saisons": viewSeasons, "/nos-scrims": app => viewScrims(app, "team"), "/reglages": viewSettings, "/confidentialite": viewPrivacy, "/profil": viewProfile, "/mon-equipe": viewMyTeam, "/equipes": viewTeams, "/admin": viewAdmin, "/staff": viewStaff, "/scrims": viewScrims, "/recherche": viewRecherche, "/classement": viewClassement, "/espace": viewDashboard };
   // Changements pas encore enregistrés (map pool) : on prévient avant de quitter la page
   const unsaved = { pool: false };
   let lastHash = location.hash, guardBack = false;
@@ -1607,56 +1607,259 @@
 
 
   // ---------- Staff ----------
-  async function viewStaff(app) {
-    if (!state.session) return needLogin(app, "Espace réservé aux admins.");
-    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Seuls les admins peuvent gérer le staff.</p>`); return; }
-    const ROLE = { admin: "Admin", arbitre: "Modérateur", joueur: "Joueur" };
-    const rowHtml = p => `<div class="staff-person" data-u="${p.id}">
-        ${avatar(p.avatar_url, p.username, 36)}
-        <div class="sp-main"><b>${esc(p.username)}</b><span class="small-note">${esc(p.riot_id || "Pas de Riot ID")}${p.team_name ? " · " + esc(p.team_name) : ""}</span></div>
-        <label class="sr" for="role-${p.id}">Rôle de ${esc(p.username)}</label>
-        <select id="role-${p.id}">${["joueur", "arbitre", "admin"].map(r => `<option value="${r}" ${(p.staff_role || "joueur") === r ? "selected" : ""}>${ROLE[r]}</option>`).join("")}</select>
-        <button class="btn sm" data-save type="button">Enregistrer</button>
-      </div>`;
-    const staffList = await rpc("admin_list_players", { p_search: "" });
-    app.innerHTML = panel("Staff", `
-      ${adminTabs("staff")}
-      <div class="roles-explain">
-        <div><b>Modérateur</b><p class="small-note">Gère les scrims (résultats contestés, absences), et la recherche d'équipe.</p></div>
-        <div><b>Admin</b><p class="small-note">Tout ce que fait un modérateur, plus la validation des équipes, les rangs fixés à la main et la gestion du staff.</p></div>
+  // ================= Panneau admin : tout voir, tout gérer =================
+  const AD_ICONS = {
+    overview: "M3 3h8v8H3zM13 3h8v5h-8zM13 10h8v11h-8zM3 13h8v8H3z",
+    teams: "M12 3 4 6v6c0 4.5 3.4 8.4 8 9 4.6-.6 8-4.5 8-9V6z",
+    players: "M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8",
+    scrims: "M4 5h16v16H4zM4 10h16M9 3v4M15 3v4",
+    seasons: "M8 21h8M12 17v4M7 4h10v5a5 5 0 0 1-10 0zM17 5h3a3 3 0 0 1-3 4M7 5H4a3 3 0 0 0 3 4",
+  };
+  const ADMIN_NAV = [["overview", "#/admin", "Vue d'ensemble"], ["teams", "#/admin-equipes", "Équipes"], ["players", "#/admin-joueurs", "Joueurs"], ["scrims", "#/admin-scrims", "Scrims"], ["seasons", "#/saisons", "Saisons"]];
+  const ADMIN_ROUTES = ["#/admin", "#/admin-equipes", "#/admin-joueurs", "#/admin-scrims", "#/saisons", "#/staff"];
+  const adIcon = k => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${AD_ICONS[k]}"/></svg>`;
+  const adminShell = (active, title, inner, lead = "", badges = {}) =>
+    `<div class="wrap app-wrap tm ad">
+      <aside class="tm-side">
+        <div class="tm-id ad-id"><span class="ad-badge">ADMIN</span><span><b>Panneau admin</b><small class="ok">Competitive Network</small></span></div>
+        <nav class="tm-nav" aria-label="Administration">${ADMIN_NAV.map(([k, href, label]) =>
+          `<a class="tm-link${k === active ? " on" : ""}" href="${href}"${k === active ? ` aria-current="page"` : ""}>${adIcon(k)}<span>${label}</span>${badges[k] ? `<em class="ad-count">${badges[k]}</em>` : ""}</a>`).join("")}</nav>
+      </aside>
+      <div class="tm-main"><div class="tm-head"><h2 class="tm-title">${title}</h2>${lead ? `<p class="tm-lead">${lead}</p>` : ""}</div>${inner}</div></div>`;
+  const adminGate = app => {
+    if (!state.session) { needLogin(app, "Espace réservé au staff."); return false; }
+    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé aux admins du réseau.</p>`); return false; }
+    return true;
+  };
+  const discordCell = id => id
+    ? `<span class="ad-discord"><a class="link-btn" href="https://discord.com/users/${esc(id)}" target="_blank" rel="noopener">Profil Discord</a><button class="ad-copy" type="button" data-copy="${esc(id)}" title="Copier l'identifiant Discord">${esc(id)}</button></span>`
+    : `<span class="mute">—</span>`;
+  const bindCopy = root => root.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
+    try { await navigator.clipboard.writeText(b.dataset.copy); toast("Identifiant Discord copié."); } catch (e) { toast("Copie impossible.", "err"); }
+  });
+  const fullDate = iso => new Date(iso).toLocaleDateString("fr-FR", { day: "numeric", month: "short", year: "numeric" });
+  const norm = v => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+  const adFilter = { teams: { q: "", st: "all" }, players: { q: "", f: "all", sort: "new" }, scrims: { f: "todo" } };
+  const STAFF_LABEL = { admin: "Admin", arbitre: "Modérateur" };
+
+  // ---------- Vue d'ensemble ----------
+  async function viewAdmin(app) {
+    if (!adminGate(app)) return;
+    const o = await rpc("admin_overview");
+    const tm = o.teams || {}, pend = o.pending_teams || [], stuck = o.stuck_scrims || [];
+    const tile = (n, label, sub, href, tone = "") => `<a class="ad-tile ${tone}" href="${href}"><b>${n}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</a>`;
+    app.innerHTML = adminShell("overview", "Vue d'ensemble", `
+      <div class="ad-tiles">
+        ${tile(o.players, "joueurs inscrits", o.players_week ? `+${o.players_week} cette semaine` : "", "#/admin-joueurs")}
+        ${tile(tm.validee || 0, "équipes validées", "", "#/admin-equipes")}
+        ${tile(tm.en_attente || 0, "équipes en attente", tm.en_attente ? "à valider" : "", "#/admin-equipes", tm.en_attente ? "warn" : "")}
+        ${tile(o.players_free, "joueurs sans équipe", "", "#/admin-joueurs")}
+        ${tile(o.scrims_week, "scrims cette semaine", "7 jours avant et après", "#/admin-scrims")}
+        ${tile(o.scrims_open, "propositions ouvertes", "", "#/admin-scrims")}
       </div>
-      <h3 class="t-h">Membres du staff</h3>
-      <div class="staff-list" id="staff-list">${staffList.map(rowHtml).join("")}</div>
-      <h3 class="t-h">Ajouter quelqu'un</h3>
-      <form class="search-row" id="staff-search" role="search"><label class="sr" for="staff-q">Pseudo Discord ou Riot ID</label>
-        <input id="staff-q" placeholder="Pseudo Discord ou Riot ID" autocomplete="off"><button class="btn sm solid" type="submit">Chercher</button></form>
-      <p class="small-note">Le joueur doit s'être connecté au moins une fois sur le site.</p>
-      <div class="staff-list" id="staff-results"></div>`, "Admin");
-    const bind = root => root.querySelectorAll("[data-save]").forEach(b => b.onclick = async () => {
-      const row = b.closest(".staff-person");
-      try { await rpc("admin_set_staff", { p_user: row.dataset.u, p_role: $("select", row).value }); toast("Rôle mis à jour."); if (row.dataset.u === state.session.user.id) { await loadMe(); renderAuth(); } viewStaff(app); }
-      catch (x) { toast(errMsg(x), "err"); }
-    });
-    bind(app);
-    $("#staff-search").onsubmit = async e => {
-      e.preventDefault(); const q = $("#staff-q").value.trim(); if (q.length < 2) return;
-      const res = await rpc("admin_list_players", { p_search: q });
-      $("#staff-results").innerHTML = res.length ? res.map(rowHtml).join("") : `<p class="small-note">Aucun joueur trouvé.</p>`;
-      bind($("#staff-results"));
-    };
+      <div class="db-grid">
+        <section class="db-card">
+          <div class="db-head"><h3>À traiter</h3><span class="small-note">${pend.length + stuck.length || "Rien"} ${pend.length + stuck.length ? "point" + (pend.length + stuck.length > 1 ? "s" : "") : "à faire"}</span></div>
+          ${pend.length ? `<p class="eyebrow">Équipes à valider</p><div class="t-lines">${pend.map(t => `<a class="t-line ad-line" href="#/admin-equipes" data-goteam="${esc(t.id)}">${teamLogo(t, 28)}<span class="t-opp"><b>${esc(t.name)}</b><small class="mute"> ${esc(t.tag)}</small></span>
+              <span class="small-note">${t.titulaires}/5 titulaires · estimée ${t.suggested ? "D" + t.suggested : "—"}</span><span class="small-note">${ago(t.created_at)}</span></a>`).join("")}</div>` : ""}
+          ${stuck.length ? `<p class="eyebrow">Scrims bloqués</p><div class="t-lines">${stuck.map(s => `<a class="t-line ad-line" href="#/admin-scrims"><span class="t-res ${s.status === "cale" ? "ff" : "d"}">${s.status === "cale" ? "SANS SCORE" : "48 H"}</span><span class="t-opp"><b>${esc(s.host)} vs ${esc(s.guest || "?")}</b></span>
+              <span class="small-note">${shortDate(s.starts_at)}</span><span class="small-note">${s.status === "cale" ? "aucun résultat envoyé" : "validation auto bientôt"}</span></a>`).join("")}</div>` : ""}
+          ${!pend.length && !stuck.length ? `<p class="db-empty">Tout est à jour ✓</p>` : ""}
+        </section>
+        <section class="db-card">
+          <div class="db-head"><h3>Derniers inscrits</h3><a class="link-btn" href="#/admin-joueurs">Tous les joueurs</a></div>
+          <div class="t-lines">${(o.recent_players || []).map(p => `<a class="t-line ad-line" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 28)}<span class="t-opp"><b>${esc(p.username)}</b></span>
+            <span class="small-note">${p.team_tag ? esc(p.team_tag) : "sans équipe"}</span><span class="small-note">${ago(p.created_at)}</span></a>`).join("") || `<p class="db-empty">Personne pour l'instant.</p>`}</div>
+        </section>
+      </div>`, "Ce qui se passe sur le réseau, et ce qui attend une action du staff.", { teams: tm.en_attente || 0 });
+    app.querySelectorAll("[data-goteam]").forEach(a => a.addEventListener("click", () => { adFilter.teams.st = "en_attente"; }));
+    setLive("/admin", ["teams", "scrims"], () => viewAdmin(app));
   }
 
-  const adminTabs = cur => `<nav class="admin-tabs" aria-label="Administration"><a href="#/admin" class="${cur === "teams" ? "on" : ""}">Équipes</a><a href="#/staff" class="${cur === "staff" ? "on" : ""}">Staff</a><a href="#/saisons" class="${cur === "saisons" ? "on" : ""}">Saisons</a><a href="#/scrims">Scrims</a></nav>`;
+  // ---------- Équipes ----------
+  async function viewAdminTeams(app) {
+    if (!adminGate(app)) return;
+    const teams = await rpc("admin_teams");
+    const counts = { all: teams.filter(t => !t.is_test).length, en_attente: 0, validee: 0, refusee: 0, test: teams.filter(t => t.is_test).length };
+    teams.forEach(t => { if (!t.is_test) counts[t.status] = (counts[t.status] || 0) + 1; });
+    const F = adFilter.teams;
+    const render = () => {
+      const q = norm(F.q);
+      const list = teams.filter(t => (F.st === "all" ? !t.is_test : F.st === "test" ? t.is_test : t.status === F.st && !t.is_test)
+        && (!q || norm(`${t.name} ${t.tag} ${t.captain} ${t.captain_discord}`).includes(q)));
+      const chips = [["all", "Toutes"], ["en_attente", "En attente"], ["validee", "Validées"], ["refusee", "Refusées"], ["test", "Test"]]
+        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.st === v ? " on" : ""}" data-st="${v}">${l}<i>${counts[v] || 0}</i></button>`).join("");
+      $("#ad-body", app).innerHTML = `
+        <div class="ad-bar"><input class="ad-search" id="ad-q" type="search" placeholder="Chercher une équipe, un tag, un capitaine…" value="${esc(F.q)}" aria-label="Chercher une équipe"><div class="scx-filter">${chips}</div></div>
+        <p class="small-note">${list.length} équipe${list.length > 1 ? "s" : ""}</p>
+        <div class="table-scroll"><table class="ad-table">
+          <thead><tr><th>Équipe</th><th>Statut</th><th>Division</th><th>Joueurs</th><th>Capitaine</th><th>Scrims</th><th>Créée</th><th></th></tr></thead>
+          <tbody>${list.map(t => `<tr data-id="${t.id}">
+            <td><a class="ad-team pl-link" href="${teamHref(t.tag)}">${teamLogo(t, 32)}<span><b>${esc(t.name)}</b><small>${esc(t.tag)}</small></span></a></td>
+            <td>${statusPill(t)}</td>
+            <td>${t.division ? `<b>D${t.division}</b>` : "—"}<small class="mute">estimée ${t.suggested ? "D" + t.suggested : "—"}</small></td>
+            <td><b>${t.titulaires}</b>/5<small class="mute">${t.members} au total</small></td>
+            <td><span class="ad-cap"><b>${esc(t.captain || "—")}</b>${t.captain_discord ? `<a class="link-btn" href="https://discord.com/users/${esc(t.captain_discord)}" target="_blank" rel="noopener">Discord</a>` : ""}</span></td>
+            <td>${t.scrims}${t.last_scrim ? `<small class="mute">dernier le ${shortDate(t.last_scrim)}</small>` : ""}</td>
+            <td><small class="mute">${fullDate(t.created_at)}</small></td>
+            <td><button class="btn sm" type="button" data-manage="${t.id}" aria-expanded="false">Gérer</button></td></tr>
+            <tr class="ad-detail" data-detail="${t.id}" hidden><td colspan="8"><div class="ad-manage">
+              <div class="ad-actions">
+                <label class="sr" for="div-${t.id}">Division</label>
+                <select id="div-${t.id}">${[1, 2, 3, 4].map(d => `<option value="${d}" ${(t.division || t.suggested) === d ? "selected" : ""}>D${d} · ${esc(DIV_NAMES[d].split(" · ")[1] || "")}</option>`).join("")}</select>
+                <button class="btn sm solid" data-review="validee" type="button">${t.status === "validee" ? "Changer la division" : "Valider l'équipe"}</button>
+                ${t.status !== "refusee" ? `<button class="btn sm" data-review="refusee" type="button">Refuser</button>` : ""}
+                <button class="link-btn" data-sync type="button">Synchro des rôles Discord</button>
+                <button class="link-btn" data-ranks type="button">Actualiser les rangs</button>
+                <button class="link-btn danger-t" data-del type="button">Supprimer l'équipe</button>
+              </div>
+              <details class="team-row" data-id="${t.id}" data-tag="${esc(t.tag)}" open><summary>Roster</summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>
+            </div></td></tr>`).join("") || `<tr><td colspan="8"><p class="db-empty">Aucune équipe ici.</p></td></tr>`}</tbody>
+        </table></div>`;
+      const qi = $("#ad-q", app); qi.oninput = () => { F.q = qi.value; const pos = qi.selectionStart; render(); const n = $("#ad-q", app); n.focus(); n.setSelectionRange(pos, pos); };
+      app.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { F.st = b.dataset.st; render(); });
+      app.querySelectorAll("[data-manage]").forEach(b => b.onclick = () => {
+        const d = $(`[data-detail="${b.dataset.manage}"]`, app), open = d.hidden;
+        d.hidden = !open; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "Fermer" : "Gérer";
+        if (open && !d.dataset.bound) { d.dataset.bound = "1"; bindTeamRows(d, true); const det = $("details.team-row", d); det.open = false; det.open = true; }
+      });
+      app.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
+        const id = b.closest(".ad-detail").dataset.detail;
+        try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$(`#div-${id}`, app).value });
+          toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); await discordSync({ team_id: id }, true); viewAdminTeams(app); }
+        catch (x) { toast(errMsg(x), "err"); }
+      });
+      app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => { b.disabled = true; await discordSync({ team_id: b.closest(".ad-detail").dataset.detail }, true); b.disabled = false; });
+      app.querySelectorAll("[data-ranks]").forEach(b => b.onclick = async () => {
+        b.disabled = true; b.textContent = "Actualisation…";
+        const r = await rankSync({ team_id: b.closest(".ad-detail").dataset.detail });
+        if (r.error) toast(r.error, "err");
+        else toast(Object.values(r.results).map(x => (x.username || "?") + " : " + (x.ok ? (x.label || "Non classé") : x.message)).join(" · "));
+        viewAdminTeams(app);
+      });
+      app.querySelectorAll("[data-del]").forEach(b => confirmable(b, "Sûr ? Tout est supprimé (roster, compos, strats, scrims proposés). Clique encore", async () => {
+        const id = b.closest(".ad-detail").dataset.detail;
+        try { await rpc("admin_delete_team", { p_team: id }); await cleanLogos(id, null).catch(() => {}); toast("Équipe supprimée."); viewAdminTeams(app); }
+        catch (x) { toast(errMsg(x), "err"); }
+      }));
+    };
+    app.innerHTML = adminShell("teams", "Équipes", `<div id="ad-body"></div>`, "Toutes les équipes inscrites. « Gérer » ouvre la validation, la division, les rôles Discord et le roster.", { teams: counts.en_attente });
+    render();
+    setLive("/admin-equipes", ["teams"], () => viewAdminTeams(app));
+  }
+
+  // ---------- Joueurs ----------
+  async function viewAdminPlayers(app) {
+    if (!adminGate(app)) return;
+    const players = await rpc("admin_players");
+    const F = adFilter.players;
+    const tests = {
+      all: () => true,
+      free: p => !p.team_id,
+      cap: p => p.is_captain,
+      staff: p => !!p.staff_role,
+      unv: p => p.rank == null || !["auto", "staff"].includes(p.rank_source),
+      noriot: p => !p.riot_id,
+    };
+    const counts = Object.fromEntries(Object.keys(tests).map(k => [k, players.filter(tests[k]).length]));
+    const render = () => {
+      const q = norm(F.q);
+      let list = players.filter(tests[F.f] || tests.all).filter(p => !q || norm(`${p.username} ${p.riot_id} ${p.discord_id} ${p.team_name} ${p.team_tag}`).includes(q));
+      if (F.sort === "name") list = [...list].sort((a, b) => norm(a.username).localeCompare(norm(b.username)));
+      if (F.sort === "rank") list = [...list].sort((a, b) => (b.rank ?? -1) - (a.rank ?? -1));
+      const chips = [["all", "Tous"], ["free", "Sans équipe"], ["cap", "Capitaines"], ["staff", "Staff"], ["unv", "Rang non vérifié"], ["noriot", "Sans Riot ID"]]
+        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.f === v ? " on" : ""}" data-pf="${v}">${l}<i>${counts[v]}</i></button>`).join("");
+      $("#ad-body", app).innerHTML = `
+        <div class="ad-bar"><input class="ad-search" id="ad-q" type="search" placeholder="Pseudo, Riot ID, identifiant Discord, équipe…" value="${esc(F.q)}" aria-label="Chercher un joueur">
+          <label class="ad-sort">Trier <select id="ad-sort"><option value="new"${F.sort === "new" ? " selected" : ""}>Inscription récente</option><option value="name"${F.sort === "name" ? " selected" : ""}>Pseudo (A→Z)</option><option value="rank"${F.sort === "rank" ? " selected" : ""}>Rang</option></select></label>
+          <div class="scx-filter">${chips}</div></div>
+        <p class="small-note">${list.length} joueur${list.length > 1 ? "s" : ""}</p>
+        <div class="table-scroll"><table class="ad-table">
+          <thead><tr><th>Joueur</th><th>Discord</th><th>Riot ID</th><th>Rang</th><th>Équipe</th><th>Inscrit</th><th></th></tr></thead>
+          <tbody>${list.map(p => `<tr data-u="${p.id}">
+            <td><a class="ad-player pl-link" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 32)}<span><b>${esc(p.username || "?")}</b>${p.staff_role ? `<small class="ad-staff ${p.staff_role}">${STAFF_LABEL[p.staff_role] || p.staff_role}</small>` : ""}</span></a></td>
+            <td>${discordCell(p.discord_id)}</td>
+            <td>${p.riot_id ? `<span class="mono">${esc(p.riot_id)}</span>` : `<span class="mute">—</span>`}</td>
+            <td>${p.rank != null ? rankLabel(p.rank, 18) + rankMark(p) : `<span class="mute">Non classé</span>`}</td>
+            <td>${p.team_id ? `<a class="pl-link" href="${teamHref(p.team_tag)}"><b>${esc(p.team_tag)}</b></a><small class="mute"> ${p.is_captain ? "capitaine" : p.team_role === "remplacant" ? "remplaçant" : "titulaire"}</small>` : `<span class="mute">Sans équipe</span>`}</td>
+            <td><small class="mute">${fullDate(p.created_at)}</small></td>
+            <td><button class="btn sm" type="button" data-pmanage="${p.id}" aria-expanded="false">Gérer</button></td></tr>
+            <tr class="ad-detail" data-pdetail="${p.id}" hidden><td colspan="7"><div class="ad-actions">
+              <label>Rang fixé par le staff <select data-rank-for="${p.id}"><option value="">Automatique / non classé</option>${RANKS.map((r, i) => `<option value="${i}"${p.rank === i ? " selected" : ""}>${r}</option>`).join("")}</select></label>
+              <button class="btn sm" type="button" data-prank="${p.id}">Enregistrer le rang</button>
+              <label>Rôle <select data-role-for="${p.id}">${["joueur", "arbitre", "admin"].map(r => `<option value="${r}"${(p.staff_role || "joueur") === r ? " selected" : ""}>${r === "joueur" ? "Joueur" : STAFF_LABEL[r]}</option>`).join("")}</select></label>
+              <button class="btn sm" type="button" data-prole="${p.id}">Enregistrer le rôle</button>
+              <button class="link-btn" type="button" data-psync="${p.id}">Synchro Discord</button>
+            </div><p class="small-note">Modérateur : gère les scrims et la recherche d'équipe. Admin : tout, y compris la validation des équipes et ce panneau.</p></td></tr>`).join("") || `<tr><td colspan="7"><p class="db-empty">Aucun joueur ici.</p></td></tr>`}</tbody>
+        </table></div>`;
+      bindCopy(app);
+      const qi = $("#ad-q", app); qi.oninput = () => { F.q = qi.value; const pos = qi.selectionStart; render(); const n = $("#ad-q", app); n.focus(); n.setSelectionRange(pos, pos); };
+      $("#ad-sort", app).onchange = e => { F.sort = e.target.value; render(); };
+      app.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { F.f = b.dataset.pf; render(); });
+      app.querySelectorAll("[data-pmanage]").forEach(b => b.onclick = () => {
+        const d = $(`[data-pdetail="${b.dataset.pmanage}"]`, app), open = d.hidden;
+        d.hidden = !open; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "Fermer" : "Gérer";
+      });
+      app.querySelectorAll("[data-prank]").forEach(b => b.onclick = async () => {
+        const u = b.dataset.prank, v = $(`[data-rank-for="${u}"]`, app).value;
+        try { await rpc("admin_set_rank", { p_user: u, p_rank: v === "" ? null : +v }); toast("Rang enregistré."); viewAdminPlayers(app); } catch (x) { toast(errMsg(x), "err"); }
+      });
+      app.querySelectorAll("[data-prole]").forEach(b => b.onclick = async () => {
+        const u = b.dataset.prole;
+        try { await rpc("admin_set_staff", { p_user: u, p_role: $(`[data-role-for="${u}"]`, app).value }); toast("Rôle enregistré."); if (u === state.session.user.id) { await loadMe(); renderAuth(); } viewAdminPlayers(app); }
+        catch (x) { toast(errMsg(x), "err"); }
+      });
+      app.querySelectorAll("[data-psync]").forEach(b => b.onclick = async () => { b.disabled = true; await discordSync({ user_ids: [b.dataset.psync] }, true); b.disabled = false; });
+    };
+    app.innerHTML = adminShell("players", "Joueurs", `<div id="ad-body"></div>`, "Tous les comptes inscrits, avec leur Discord, leur Riot ID, leur rang et leur équipe. « Gérer » pour fixer un rang ou nommer quelqu'un au staff.");
+    render();
+    setLive("/admin-joueurs", ["teams"], () => viewAdminPlayers(app));
+  }
+
+  // ---------- Scrims ----------
+  async function viewAdminScrims(app) {
+    if (!adminGate(app)) return;
+    const scrims = await rpc("admin_scrims");
+    const now = Date.now(), F = adFilter.scrims;
+    const kind = s => s.status === "ouvert" ? "open" : s.status === "annule" ? "cancel" : s.status === "cale" ? (new Date(s.starts_at) < now ? "todo" : "next")
+      : s.status === "termine" && !s.confirmed && !s.no_show ? "todo" : "done";
+    const counts = { all: scrims.length }; scrims.forEach(s => { const k = kind(s); counts[k] = (counts[k] || 0) + 1; });
+    const LBL = { open: ["Ouvert", "next"], next: ["Calé", "next"], todo: ["À régler", "ff"], done: ["Terminé", "w"], cancel: ["Annulé", "d"] };
+    const render = () => {
+      const list = scrims.filter(s => F.f === "all" || kind(s) === F.f);
+      const chips = [["todo", "À régler"], ["next", "À venir"], ["open", "Propositions"], ["done", "Terminés"], ["cancel", "Annulés"], ["all", "Tous"]]
+        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.f === v ? " on" : ""}" data-sf="${v}">${l}<i>${counts[v] || 0}</i></button>`).join("");
+      $("#ad-body", app).innerHTML = `<div class="ad-bar"><div class="scx-filter">${chips}</div></div>
+        <div class="table-scroll"><table class="ad-table">
+          <thead><tr><th>Date</th><th>Équipes</th><th>Format</th><th>Statut</th><th>Score</th><th></th></tr></thead>
+          <tbody>${list.map(s => { const k = kind(s), l = LBL[k]; return `<tr data-s="${s.id}">
+            <td><b>${shortDate(s.starts_at)}</b><small class="mute"> ${hourLabel(s.starts_at)}</small></td>
+            <td><b>${esc(s.host_tag)}</b> <span class="mute">vs</span> <b>${esc(s.guest_tag || "?")}</b><small class="mute"> · D${s.division}</small></td>
+            <td>${esc(s.format)}${s.maps ? `<small class="mute"> · ${esc(s.maps)}</small>` : ""}</td>
+            <td><span class="t-res ${l[1]}">${l[0]}</span>${s.cancel_late ? `<small class="mute"> tardif</small>` : ""}${s.no_show ? `<small class="mute"> absence ${esc(s.no_show === s.host_id ? s.host_tag : s.guest_tag)}</small>` : ""}</td>
+            <td>${s.host_score != null ? `<b class="mono">${s.host_score} – ${s.guest_score}</b>${s.map_scores ? `<small class="mute"> ${esc(s.map_scores.map(m => `${m.map} ${m.h}-${m.g}`).join(" · "))}</small>` : ""}${s.status === "termine" && !s.confirmed ? `<small class="mute"> non confirmé</small>` : ""}` : `<span class="mute">—</span>`}</td>
+            <td class="ad-row-act">${s.status === "cale" || s.status === "termine" ? `<button class="link-btn" data-sreset="${s.id}" type="button">Remettre à zéro</button>` : ""}<button class="link-btn danger-t" data-sdel="${s.id}" type="button">Supprimer</button></td></tr>`; }).join("")
+            || `<tr><td colspan="6"><p class="db-empty">Aucun scrim ici.</p></td></tr>`}</tbody>
+        </table></div>`;
+      app.querySelectorAll("[data-sf]").forEach(b => b.onclick = () => { F.f = b.dataset.sf; render(); });
+      app.querySelectorAll("[data-sreset]").forEach(b => confirmable(b, "Confirmer ?", async () => {
+        try { await rpc("admin_reset_scrim", { p_id: b.dataset.sreset }); toast("Scrim remis à zéro."); viewAdminScrims(app); } catch (x) { toast(errMsg(x), "err"); } }));
+      app.querySelectorAll("[data-sdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
+        try { await rpc("admin_delete_scrim", { p_id: b.dataset.sdel }); toast("Scrim supprimé."); viewAdminScrims(app); } catch (x) { toast(errMsg(x), "err"); } }));
+    };
+    app.innerHTML = adminShell("scrims", "Scrims", `<div id="ad-body"></div>`, "Les 500 derniers scrims. « À régler » : scrims passés sans score, ou score pas encore confirmé.");
+    render();
+    setLive("/admin-scrims", ["scrims"], () => viewAdminScrims(app));
+  }
+  // L'ancienne page Staff est maintenant dans Joueurs (filtre Staff)
+  async function viewStaff() { adFilter.players.f = "staff"; location.hash = "#/admin-joueurs"; }
 
   // ---------- Vue : saisons (admin) ----------
   async function viewSeasons(app) {
-    if (!state.session) return needLogin(app, "Espace réservé au staff.");
-    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé aux admins du réseau.</p>`); return; }
+    if (!adminGate(app)) return;
     const seasons = await loadSeasons(true), cur = currentSeason(seasons);
     const n = seasons.length;
-    app.innerHTML = panel("Saisons", `
-      ${adminTabs("saisons")}
-      <p class="lead">Le classement ne compte que les scrims de la saison en cours. Terminer la saison fige son classement (il reste consultable sur la page Classement) et repart de zéro pour toutes les équipes.</p>
+    app.innerHTML = adminShell("seasons", "Saisons", `
       <div class="two">
         <form class="card form" id="season-rename" novalidate>
           <h3>Saison en cours</h3>
@@ -1675,7 +1878,8 @@
       </div>
       <h3 class="t-h">Historique</h3>
       <div class="t-lines">${seasons.map(x => `<div class="t-line"><span class="t-res ${x.ends_at ? "d" : "w"}">${x.ends_at ? "FIN" : "EN COURS"}</span><span class="t-opp"><b>${esc(x.name)}</b></span>
-        <span class="small-note">${new Date(x.starts_at).toLocaleDateString("fr-FR")} → ${x.ends_at ? new Date(x.ends_at).toLocaleDateString("fr-FR") : "aujourd'hui"}</span><span></span></div>`).join("")}</div>`, "Staff");
+        <span class="small-note">${new Date(x.starts_at).toLocaleDateString("fr-FR")} → ${x.ends_at ? new Date(x.ends_at).toLocaleDateString("fr-FR") : "aujourd'hui"}</span><span></span></div>`).join("")}</div>`,
+      "Le classement ne compte que les scrims de la saison en cours. Terminer la saison fige son classement (il reste consultable sur la page Classement) et repart de zéro pour toutes les équipes.");
     $("#season-rename").onsubmit = async e => {
       e.preventDefault();
       try { await rpc("admin_rename_season", { p_name: $("#season-name").value }); toast("Saison renommée."); seasonsCache = null; paintSeason(); viewSeasons(app); }
@@ -1687,49 +1891,6 @@
       try { await rpc("admin_end_season", { p_new_name: $("#season-next").value }); toast("Nouvelle saison lancée."); seasonsCache = null; paintSeason(); viewSeasons(app); }
       catch (x) { $("#season-end-err").textContent = errMsg(x); }
     });
-  }
-
-  // ---------- Vue : admin ----------
-  async function viewAdmin(app) {
-    if (!state.session) return needLogin(app, "Espace réservé au staff.");
-    if (!state.isAdmin) { app.innerHTML = panel("Accès refusé", `<p class="lead">Cet espace est réservé au staff du réseau.</p>`); return; }
-    const teams = (await rpc("list_teams")).filter(t => !t.is_test);
-    const order = { en_attente: 0, validee: 1, refusee: 2 };
-    teams.sort((a, b) => order[a.status] - order[b.status]);
-    app.innerHTML = panel("Validation des équipes", `
-      ${adminTabs("teams")}
-      <p class="lead">${teams.filter(t => t.status === "en_attente").length} équipe(s) en attente. La division estimée est calculée sur la moyenne des titulaires.</p>
-      <div class="admin-list">${teams.map(t => `
-        <div class="admin-row" data-id="${t.id}">
-          <div class="ar-main">${teamLogo(t, 40)}<b>${esc(t.name)}</b><span class="tag-chip">${esc(t.tag)}</span>${statusPill(t)}
-            <span class="small-note">Capitaine : ${esc(t.captain)} · ${t.members} joueur(s) · estimée : ${t.suggested ? "D" + t.suggested : "—"}</span></div>
-          <div class="ar-actions">
-            <label class="sr" for="div-${t.id}">Division</label>
-            <select id="div-${t.id}">${[1,2,3,4].map(d => `<option value="${d}" ${(t.division || t.suggested) === d ? "selected" : ""}>D${d}</option>`).join("")}</select>
-            <button class="btn sm solid" data-review="validee" type="button">Valider</button>
-            <button class="btn sm" data-review="refusee" type="button">Refuser</button>
-            <button class="link-btn" data-sync type="button" title="Remet les rôles Discord de cette équipe à jour">Synchro Discord</button>
-            <button class="link-btn" data-ranks type="button" title="Redétecte le rang de chaque joueur">Actualiser les rangs</button>
-          </div>
-          <details class="team-row" data-id="${t.id}"><summary>Voir le roster</summary><div class="roster-slot"></div></details>
-        </div>`).join("") || `<p class="small-note">Aucune équipe inscrite pour l'instant.</p>`}</div>`, "Staff");
-    app.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
-      const row = b.closest(".admin-row"), id = row.dataset.id;
-      try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$("select", row).value });
-        toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); await discordSync({ team_id: id }, true); viewAdmin(app); }
-      catch (x) { toast(errMsg(x), "err"); }
-    });
-    app.querySelectorAll("[data-ranks]").forEach(b => b.onclick = async () => {
-      b.disabled = true; b.textContent = "Actualisation…";
-      const r = await rankSync({ team_id: b.closest(".admin-row").dataset.id });
-      if (r.error) toast(r.error, "err");
-      else toast(Object.values(r.results).map(x => (x.username || "?") + " : " + (x.ok ? (x.label || "Non classé") : x.message)).join(" · "));
-      viewAdmin(app);
-    });
-    app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => {
-      b.disabled = true; await discordSync({ team_id: b.closest(".admin-row").dataset.id }, true); b.disabled = false; });
-    bindTeamRows(app, true);
-    setLive("/admin", ["teams"], () => viewAdmin(app));
   }
 
   // ---------- Démarrage ----------

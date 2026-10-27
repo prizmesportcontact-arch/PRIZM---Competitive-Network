@@ -1088,3 +1088,48 @@ body.no-scroll{overflow:hidden}
 .season-tab.on small{color:var(--accent)}
 .season-note{margin:0}
 .db-season{font:600 .72rem var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--accent);margin-left:8px;vertical-align:middle}
+
+/* ================= Panneau admin ================= */
+.ad-id{align-items:center}
+.ad-badge{display:grid;place-items:center;width:40px;height:40px;flex:none;background:var(--accent);color:var(--accent-ink);font:800 .62rem var(--mono);letter-spacing:.06em}
+.ad-count{margin-left:auto;font-style:normal;font:700 .72rem var(--mono);background:var(--warn);color:#1a1006;padding:1px 7px}
+.ad-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:1px;background:var(--line);border:1px solid var(--line)}
+.ad-tile{display:grid;gap:2px;padding:16px 18px;background:var(--paper);text-decoration:none}
+.ad-tile b{font:900 2.2rem/1 var(--display)}
+.ad-tile span{font-size:.85rem;color:var(--mute)}
+.ad-tile small{font:600 .7rem var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.ad-tile.warn b{color:var(--warn)}
+.ad-tile:hover{background:var(--panel)}
+.ad-line{text-decoration:none}
+.ad-line:hover{background:var(--panel)}
+.ad-bar{display:grid;gap:12px}
+.ad-search{width:100%;max-width:520px;font:500 1rem var(--body);padding:11px 14px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.ad-search:focus{border-color:var(--accent);outline:none}
+.ad-sort{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--mute)}
+.ad-sort select,.ad-actions select{font:500 .9rem var(--body);padding:7px 10px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+.ad-table{width:100%;border-collapse:collapse;font-size:.92rem}
+.ad-table th{text-align:left;font:600 .7rem var(--mono);text-transform:uppercase;letter-spacing:.08em;color:var(--mute);padding:10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ad-table td{padding:10px;border-bottom:1px solid var(--line);vertical-align:middle}
+.ad-table tbody tr:not(.ad-detail):hover td{background:color-mix(in srgb,var(--panel) 60%,transparent)}
+.ad-table small{font-size:.78rem}
+.ad-detail td{background:var(--panel);padding:14px 16px}
+.ad-manage{display:grid;gap:14px}
+.ad-actions{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.ad-actions label{display:flex;align-items:center;gap:8px;font-size:.85rem;color:var(--mute)}
+.ad-team,.ad-player{display:flex;align-items:center;gap:10px;text-decoration:none;min-width:0}
+.ad-team span,.ad-player span{display:grid;line-height:1.2}
+.ad-team small{font:600 .72rem var(--mono);color:var(--mute)}
+.ad-cap{display:grid;gap:2px;justify-items:start}
+.ad-discord{display:grid;gap:2px;justify-items:start}
+.ad-copy{font:500 .72rem var(--mono);color:var(--mute);background:none;border:0;padding:0;cursor:copy}
+.ad-copy:hover{color:var(--ink);text-decoration:underline}
+.ad-staff{font:700 .62rem var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--accent)}
+.ad-staff.admin{color:var(--bad)}
+.ad-row-act{white-space:nowrap;text-align:right}
+.ad-row-act .link-btn+.link-btn{margin-left:12px}
+.ad .team-row summary{cursor:pointer;font-weight:700}
+.ad-table .pill{white-space:nowrap;font-size:.66rem;padding:3px 7px}
+.ad-table td>small{display:block;margin-top:2px}
+.ad-team b,.ad-player b{white-space:nowrap}
+.ad-line .t-opp b{white-space:normal}
+@media (max-width:620px){.ad-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}

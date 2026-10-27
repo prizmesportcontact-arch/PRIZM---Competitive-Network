@@ -129,3 +129,7 @@ Tables `seasons` (une seule en cours : `ends_at` vide) et `season_standings` (cl
 ## Mode présentation des strats
 
 Bouton « Présenter » sur le tableau tactique (`pages/Strat/StratPresenter.jsx`) : plein écran, une étape à la fois, sans outils. ← → / espace pour changer d'étape, N pour les noms, Échap pour quitter.
+
+## Panneau admin (migration 028)
+
+Réservé aux admins, avec un menu à gauche : **Vue d'ensemble** (#/admin : chiffres clés, équipes à valider, scrims bloqués, derniers inscrits), **Équipes** (#/admin-equipes : recherche, filtres par statut, validation/division, rôles Discord, rangs, roster, suppression), **Joueurs** (#/admin-joueurs : tous les comptes avec Discord, Riot ID, rang, équipe ; fixer un rang, nommer modérateur/admin), **Scrims** (#/admin-scrims : à régler, à venir, terminés… remise à zéro, suppression), **Saisons**. RPC : `admin_overview`, `admin_players`, `admin_teams`, `admin_scrims`, `admin_delete_team`.
