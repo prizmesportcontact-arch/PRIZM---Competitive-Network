@@ -73,6 +73,7 @@ export async function updateStratRow(id, patch) {
   if ('flipped' in patch) dbPatch.flipped = patch.flipped
   if ('steps' in patch) dbPatch.steps = patch.steps
   if ('compositionId' in patch) dbPatch.composition_id = patch.compositionId
+  if ('mapUuid' in patch) dbPatch.map_uuid = patch.mapUuid
   const { data, error } = await supabase.from('cb_strats').update(dbPatch).eq('id', id).select().single()
   if (error) throw error
   return rowToStrat(data)

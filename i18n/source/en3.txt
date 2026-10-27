@@ -21,3 +21,13 @@ ton profil	your profile
 Le staff de PRIZM Competitive Network. Pour toute question ou demande, ouvre un ticket dans	The PRIZM Competitive Network staff. For any question or request, open a ticket in
 Tu peux consulter, corriger ou supprimer tes données, ou t'opposer à leur utilisation. Corrige ton profil toi-même sur le site, ou ouvre un ticket dans	You can view, correct or delete your data, or object to its use. Correct your profile yourself on the site, or open a ticket in
 PRIZM Competitive Network, accueil du réseau	PRIZM Competitive Network, network home
++ Nouvelle strat	+ New strat
+Setups, exécutions et retakes dessinés sur la minimap.	Setups, executes and retakes drawn on the minimap.
+Sur quelle map ?	Which map?
+{} strat{}	{} strat{}
+Aucune strat	No strats
+Nouvelle strat sur {}	New strat on {}
++ {}	+ {}
+Changer la map de la strat	Change the strat's map
+Map changée pour {} : pense à enregistrer.	Map changed to {}: remember to save.
+Choisis la map de la nouvelle strat	Choose the new strat's map

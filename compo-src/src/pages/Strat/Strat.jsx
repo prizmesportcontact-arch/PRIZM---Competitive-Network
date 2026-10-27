@@ -290,6 +290,15 @@ export default function Strat() {
 
   const closePresenter = useCallback(() => setPresenting(false), [])
 
+  // Mauvaise map ? On la change ici : les éléments gardent leur place, la compo liée est retirée
+  const stratMaps = useMemo(() => maps.filter((m) => !m.free && m.minimap).sort((a, b) => a.name.localeCompare(b.name)), [maps])
+  const changeMap = (uuid) => {
+    if (!strat || uuid === strat.mapUuid) return
+    const m = maps.find((x) => x.uuid === uuid)
+    queue({ mapUuid: uuid, compositionId: null })
+    pushToast(`Map changée pour ${m?.name || 'la nouvelle map'} : pense à enregistrer.`, 'success')
+  }
+
   // ---------- Export ----------
   const makePng = () => renderStratPng({ map, strat, step, agentByUuid, showNames })
   const download = async () => {
@@ -403,6 +412,14 @@ export default function Strat() {
             {strat.side === 'defense' ? 'Défense' : 'Attaque'}
           </button>
         </div>
+        {editable && (
+          <label className="sb2-mapsel">
+            <span>Map</span>
+            <select value={strat.mapUuid} onChange={(e) => changeMap(e.target.value)} aria-label="Changer la map de la strat">
+              {stratMaps.map((m) => <option key={m.uuid} value={m.uuid}>{m.name}</option>)}
+            </select>
+          </label>
+        )}
 
         <section className="sb2-sec">
           <h2>Étapes</h2>

@@ -305,3 +305,6 @@ button.sb2-save:disabled { cursor: default; }
   .sb2-side > .sb2-sec--erase { order: 3; margin-bottom: 20px; }
 }
 .sb2-present { display: inline-flex; align-items: center; gap: 6px; color: var(--amber) !important; border-color: color-mix(in srgb, var(--amber) 50%, var(--line)) !important; }
+.sb2-mapsel { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 600 0.72rem var(--font-mono, monospace); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
+.sb2-mapsel select { flex: 1; min-width: 0; padding: 7px 10px; background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); font: 600 0.88rem var(--font-body); text-transform: none; letter-spacing: 0; }
+@media (max-width: 860px) { .sb2-side > .sb2-mapsel { order: 0; margin: 8px 16px 0; } }

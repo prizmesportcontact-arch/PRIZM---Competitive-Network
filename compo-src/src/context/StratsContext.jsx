@@ -147,6 +147,7 @@ export function StratsProvider({ children }) {
           side: current.side,
           steps: current.steps,
           compositionId: current.compositionId,
+          mapUuid: current.mapUuid,
         })
         saved.current[id] = s
         markDirty(id, false)
