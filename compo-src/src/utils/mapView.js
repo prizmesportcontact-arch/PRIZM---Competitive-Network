@@ -4,6 +4,7 @@
 // - On la tourne pour que ton spawn soit en bas : attaquants en bas en attaque,
 //   défenseurs en bas en défense (rotation de base fournie par l'API + 180° en défense).
 import { useEffect, useState } from 'react'
+import { loadImage } from './exportComposition'
 
 const cache = new Map()
 
@@ -11,10 +12,9 @@ const cache = new Map()
 export function loadCrop(url) {
   if (!url) return Promise.resolve(null)
   if (cache.has(url)) return cache.get(url)
-  const p = new Promise((resolve) => {
-    const img = new Image()
-    img.crossOrigin = 'anonymous'
-    img.onload = () => {
+  const p = loadImage(url).then((img) => new Promise((resolve) => {
+    if (!img) return resolve(null)
+    {
       try {
         const N = 200
         const c = document.createElement('canvas')
@@ -41,9 +41,7 @@ export function loadCrop(url) {
         resolve(null)
       }
     }
-    img.onerror = () => resolve(null)
-    img.src = url
-  })
+  }))
   cache.set(url, p)
   return p
 }

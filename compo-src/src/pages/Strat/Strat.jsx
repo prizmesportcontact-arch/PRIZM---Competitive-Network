@@ -9,7 +9,7 @@ import { STEP_NAMES, newStep, uid } from '../../services/strats'
 import { getCompsForMap } from '../../utils/compositions'
 import { renderStratPng } from '../../utils/exportStrat'
 import { slugify } from '../../utils/exportComposition'
-import StratBoard from '../../components/StratBoard/StratBoard'
+import StratBoard, { SIDE_COLORS } from '../../components/StratBoard/StratBoard'
 import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
 import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
@@ -375,6 +375,8 @@ export default function Strat() {
   const placingSpec = placingAbility ? shapeFor(agentByUuid.get(place.a)?.name, place.s) : null
   const stepIndex = strat.steps.findIndex((s) => s.id === step.id)
   const legend = agentsInStrat
+  // Même couleur dans la barre d'agents que sur la carte : celle de l'équipe où l'agent sera posé
+  const teamColor = SIDE_COLORS[enemy ? (strat.side === 'defense' ? 'attaque' : 'defense') : strat.side] || SIDE_COLORS.attaque
   const selAgent = selected && (selected.t === 'agent' || selected.t === 'ability') ? agentByUuid.get(selected.a) : null
   const selAbility = selected?.t === 'ability' ? selAgent?.abilities?.find((x) => x.slot === selected.s) : null
 
@@ -532,6 +534,7 @@ export default function Strat() {
               view={view}
               side={strat.side}
               items={step.items}
+              stepKey={step.id}
               agentByUuid={agentByUuid}
               editable={editable}
               tool={tool}
@@ -607,7 +610,7 @@ export default function Strat() {
               {stripAgents.map((a) => (
                 <button key={a.uuid} type="button"
                   className={`sb2-agent${pickAgent === a.uuid ? ' on' : ''}${placingAgent?.uuid === a.uuid ? ' placing' : ''}`}
-                  style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}
+                  style={{ '--side': teamColor }}
                   onClick={() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) }} title={`Placer ${a.name}`}>
                   <img src={a.icon} alt="" />
                   <span>{a.name}</span>
@@ -620,7 +623,7 @@ export default function Strat() {
                   const sp = shapeFor(picked.name, ab.slot)
                   const on = tool === 'place' && place?.t === 'ability' && place.a === picked.uuid && place.s === ab.slot
                   return (
-                    <button key={ab.slot} type="button" className={`sb2-ability${on ? ' on' : ''}`} onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}
+                    <button key={ab.slot} type="button" className={`sb2-ability${on ? ' on' : ''}`} style={{ '--side': teamColor }} onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}
                       title={`${ab.name}${sp ? ` · ${shapeLabel(sp)}` : ''}`}>
                       <img src={ab.icon} alt="" />
                       <kbd>{SLOT_KEY[ab.slot]}</kbd>
@@ -634,7 +637,7 @@ export default function Strat() {
         ) : (
           legend.length > 0 && (
             <ul className="sb2-legend" aria-label="Agents sur cette étape">
-              {legend.map((a) => <li key={a.uuid} style={{ '--role': ROLE_COLOR[a.role?.name] || '#9aa3af' }}><img src={a.icon} alt="" />{a.name}</li>)}
+              {legend.map((a) => <li key={a.uuid} style={{ '--side': SIDE_COLORS[strat.side] || SIDE_COLORS.attaque }}><img src={a.icon} alt="" />{a.name}</li>)}
             </ul>
           )
         )}

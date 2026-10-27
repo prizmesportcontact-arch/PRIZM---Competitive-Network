@@ -73,6 +73,7 @@ export default function StratPresenter({ strat, mapName, minimap, rotation, view
           view={view}
           side={strat.side}
           items={step.items}
+          stepKey={step.id}
           agentByUuid={agentByUuid}
           editable={false}
           showNames={names}

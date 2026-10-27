@@ -64,15 +64,36 @@ const FONT_DISPLAY = '"Big Shoulders Display", "Arial Narrow", sans-serif'
 const FONT_BODY = '"Instrument Sans", sans-serif'
 
 // Exportée pour être réutilisée par matchCard.js (vignettes de map).
-export function loadImage(src) {
+// Image utilisable sur un canvas exportable. Le navigateur garde souvent en cache une version
+// de l'image chargée sans CORS (celle affichée sur la page) : on la retélécharge donc nous-mêmes.
+const imgCache = new Map()
+function tagImage(src, bust) {
   return new Promise((resolve) => {
-    if (!src) return resolve(null)
     const img = new Image()
     img.crossOrigin = 'anonymous'
     img.onload = () => resolve(img)
     img.onerror = () => resolve(null)
-    img.src = src
+    img.src = bust ? `${src}${src.includes('?') ? '&' : '?'}cb=${Date.now()}` : src
   })
+}
+export function loadImage(src) {
+  if (!src) return Promise.resolve(null)
+  if (imgCache.has(src)) return imgCache.get(src)
+  const p = (async () => {
+    if (/^(data|blob):/.test(src)) return tagImage(src)
+    try {
+      const res = await fetch(src, { mode: 'cors', cache: 'reload' })
+      if (res.ok) {
+        const url = URL.createObjectURL(await res.blob())
+        const img = await tagImage(url)
+        if (img) return img
+      }
+    } catch { /* on tente autrement */ }
+    return (await tagImage(src, true)) || null
+  })()
+  imgCache.set(src, p)
+  p.then((img) => { if (!img) imgCache.delete(src) })
+  return p
 }
 
 // Dessine `img` en remplissant exactement la boîte (x, y, w, h), recadrée

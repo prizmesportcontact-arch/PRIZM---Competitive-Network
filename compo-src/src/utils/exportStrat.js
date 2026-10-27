@@ -1,6 +1,7 @@
 // Image PNG d'une étape de strat (pour l'envoyer sur Discord), dessinée sur un canvas.
 import { loadImage } from './exportComposition'
-import { SIZES } from '../components/StratBoard/StratBoard'
+import { SIZES, SIDE_COLORS } from '../components/StratBoard/StratBoard'
+import { SPIKE } from '../data/spikeGlyph'
 import { abilityGeometry, colorFor, mapScale, shapeFor } from '../data/abilityShapes'
 import { boardRotation, boardView, loadCrop } from './mapView'
 
@@ -8,7 +9,7 @@ const W = 1080
 const HEAD = 120
 const FONT_DISPLAY = '"Big Shoulders Display", "Arial Narrow", sans-serif'
 const FONT_MONO = '"JetBrains Mono", monospace'
-const RING = { attaque: '#ff6170', defense: '#4cc9f0' }
+const RING = SIDE_COLORS
 
 export async function renderStratPng({ map, strat, step, agentByUuid, showNames = true }) {
   // Même orientation et même cadrage que sur le tableau
@@ -114,7 +115,7 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
         ctx.arc(0, 0, r, 0, Math.PI * 2)
         ctx.fillStyle = onZone ? 'rgba(13,17,23,0.35)' : '#0d1117'
         ctx.fill()
-        ctx.lineWidth = (it.t === 'agent' ? 5 : onZone ? 2.5 : 3) * k
+        ctx.lineWidth = (it.t === 'agent' ? 4 : onZone ? 2.5 : 3) * k
         ctx.strokeStyle = it.en ? ringEnemy : ring
         ctx.stroke()
         const im = imgs.get(icon)
@@ -127,14 +128,14 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
             ctx.drawImage(im, -r + 3 * k, -r + 3 * k, (r - 3 * k) * 2, (r - 3 * k) * 2)
             ctx.restore()
             if (showNames && a) {
-              ctx.font = `700 ${19 * k}px "Instrument Sans", sans-serif`
-              const w = ctx.measureText(a.name).width + 18 * k
+              ctx.font = `700 ${16 * k}px "Instrument Sans", sans-serif`
+              const w = ctx.measureText(a.name).width + 16 * k
               ctx.fillStyle = 'rgba(8,10,14,0.86)'
-              ctx.fillRect(-w / 2, r + 5 * k, w, 30 * k)
+              ctx.fillRect(-w / 2, r + 3 * k, w, 26 * k)
               ctx.fillStyle = '#eef0f3'
               ctx.textAlign = 'center'
               ctx.textBaseline = 'middle'
-              ctx.fillText(a.name, 0, r + 20 * k)
+              ctx.fillText(a.name, 0, r + 16 * k)
             }
           } else {
             ctx.drawImage(im, -r * 0.68, -r * 0.68, r * 1.36, r * 1.36)
@@ -144,17 +145,27 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
     } else if (it.t === 'spike') {
       const s = SIZES.spike * k
       upright(it.x, it.y, () => {
+        ctx.save()
+        ctx.shadowColor = 'rgba(255,70,85,0.55)'
+        ctx.shadowBlur = 8 * k
         ctx.beginPath()
-        ctx.moveTo(0, -s * 1.3)
-        ctx.lineTo(s, 0)
-        ctx.lineTo(0, s * 1.3)
-        ctx.lineTo(-s, 0)
-        ctx.closePath()
-        ctx.fillStyle = '#ff4655'
+        ctx.arc(0, 0, s * SPIKE.r, 0, Math.PI * 2)
+        ctx.fillStyle = SPIKE.bg
         ctx.fill()
+        ctx.restore()
         ctx.lineWidth = 3 * k
-        ctx.strokeStyle = '#fff'
+        ctx.strokeStyle = SPIKE.red
         ctx.stroke()
+        ctx.save()
+        ctx.scale(s, s)
+        ctx.lineJoin = 'round'
+        for (const [d, fill, lw] of [[SPIKE.fins, SPIKE.dark, 0.07], [SPIKE.body, SPIKE.dark, 0.08], [SPIKE.cap, '#c9ced6', 0], [SPIKE.core, SPIKE.red, 0]]) {
+          const path = new Path2D(d)
+          ctx.fillStyle = fill
+          ctx.fill(path)
+          if (lw) { ctx.lineWidth = lw; ctx.strokeStyle = SPIKE.red; ctx.stroke(path) }
+        }
+        ctx.restore()
       })
     } else if (it.t === 'text') {
       upright(it.x, it.y, () => {

@@ -1,12 +1,25 @@
-import { useEffect, useId, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { uid } from '../../services/strats'
 import { unrotate } from '../../utils/mapView'
 import { abilityGeometry, colorFor, hasLength, isRotatable, shapeFor, shapeLabel } from '../../data/abilityShapes'
+import { SPIKE } from '../../data/spikeGlyph'
 import './StratBoard.css'
 
 // Tailles dans le repère 0–1000 de la minimap
-export const SIZES = { agent: 30, ability: 21, spike: 18, line: 6, text: 30 }
-const SIDE_RING = { attaque: '#ff6170', defense: '#4cc9f0' }
+export const SIZES = { agent: 22, ability: 17, spike: 20, line: 6, text: 30 }
+export const SIDE_COLORS = { attaque: '#ff6170', defense: '#4cc9f0' }
+const SIDE_RING = SIDE_COLORS
+const MOVE_MS = 750
+const ease = (t) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2)
+
+// Même élément d'une étape à l'autre (les copies d'étape ont de nouveaux identifiants)
+function matchKey(it) {
+  if (it.t === 'agent') return `a:${it.a}:${it.en ? 1 : 0}`
+  if (it.t === 'ability') return `b:${it.a}:${it.s}:${it.en ? 1 : 0}`
+  if (it.t === 'spike') return 'spike'
+  if (it.t === 'text') return `t:${it.v}`
+  return null
+}
 
 const clamp = (v) => Math.max(0, Math.min(1000, Math.round(v)))
 
@@ -67,6 +80,7 @@ export default function StratBoard({
   mini = false,
   showNames = false,
   scale = 7,
+  stepKey = null, // change d'étape → les éléments glissent vers leur nouvelle place
 }) {
   const uidBase = useId().replace(/:/g, '')
   const svgRef = useRef(null)
@@ -78,6 +92,41 @@ export default function StratBoard({
   // Plein écran : la vue s'étend à la forme de la zone disponible (la carte reste centrée)
   const wrapRef = useRef(null)
   const [box, setBox] = useState(null)
+  // Transition entre deux étapes : chaque agent « marche » de son ancienne place à la nouvelle
+  const lastRef = useRef({ key: stepKey, items })
+  const [anim, setAnim] = useState(null) // { from: Map(id → ancien élément), fresh: Set(id), t }
+  useLayoutEffect(() => {
+    const prev = lastRef.current
+    if (stepKey == null || prev.key === stepKey) return undefined
+    if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return undefined
+    const pool = new Map()
+    prev.items.forEach((it) => {
+      const k = matchKey(it)
+      if (!k) return
+      if (!pool.has(k)) pool.set(k, [])
+      pool.get(k).push(it)
+    })
+    const from = new Map()
+    const fresh = new Set()
+    items.forEach((it) => {
+      const k = matchKey(it)
+      const src = k ? pool.get(k)?.shift() : null
+      if (src) { if (src.x !== it.x || src.y !== it.y || src.d !== it.d) from.set(it.id, src) } else fresh.add(it.id)
+    })
+    if (!from.size && !fresh.size) { setAnim(null); return undefined }
+    let raf = 0
+    const t0 = performance.now()
+    const tick = (now) => {
+      const t = Math.min(1, (now - t0) / MOVE_MS)
+      if (t >= 1) { setAnim(null); return }
+      setAnim({ from, fresh, t })
+      raf = requestAnimationFrame(tick)
+    }
+    setAnim({ from, fresh, t: 0 })
+    raf = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(raf)
+  }, [stepKey]) // eslint-disable-line react-hooks/exhaustive-deps
+  useLayoutEffect(() => { lastRef.current = { key: stepKey, items } })
   useEffect(() => {
     const el = wrapRef.current
     if (!el || mini) return undefined
@@ -308,6 +357,16 @@ export default function StratBoard({
   }
 
   const shown = items.map((it) => {
+    if (anim) {
+      const e = ease(anim.t)
+      const f = anim.from.get(it.id)
+      if (f) {
+        const lerp = (a, b) => (a == null || b == null ? b : a + (b - a) * e)
+        return { ...it, x: lerp(f.x, it.x), y: lerp(f.y, it.y), d: it.d != null && f.d != null ? lerp(f.d, it.d) : it.d }
+      }
+      if (anim.fresh.has(it.id)) return { ...it, _o: Math.min(1, anim.t * 1.6) }
+      if (!matchKey(it)) return { ...it, _o: Math.min(1, anim.t * 1.6) }
+    }
     if (drag && it.id === drag.id) return moveItem(it, drag.dx, drag.dy)
     if (turn && it.id === turn.id) return { ...it, d: turn.d, l: turn.l }
     return it
@@ -340,7 +399,7 @@ export default function StratBoard({
             <path d="M0 0 10 5 0 10z" fill={c} />
           </marker>
         ))}
-        <clipPath id={`${uidBase}-clip`}><circle r={SIZES.agent - 4} /></clipPath>
+        <clipPath id={`${uidBase}-clip`}><circle r={SIZES.agent - 3} /></clipPath>
         <marker id={`${uidBase}-zarrow`} viewBox="0 0 10 10" refX="7" refY="5" markerWidth="4" markerHeight="4" orient="auto">
           <path d="M0 0 10 5 0 10z" fill="#ffffff" fillOpacity="0.85" />
         </marker>
@@ -349,7 +408,7 @@ export default function StratBoard({
         {minimap && <image href={minimap} x="0" y="0" width="1000" height="1000" className="strat-board__map" />}
         {shown.map((it) => {
           const sel = it.id === selectedId
-          const common = { 'data-id': it.id, className: `sb-item${sel ? ' sb-item--sel' : ''}` }
+          const common = { 'data-id': it.id, className: `sb-item${sel ? ' sb-item--sel' : ''}`, style: it._o != null ? { opacity: it._o } : undefined }
           if (it.t === 'line') {
             const [x1, y1, x2, y2] = it.p
             return (
@@ -383,9 +442,15 @@ export default function StratBoard({
             const s = SIZES.spike
             return (
               <g key={it.id} {...common} transform={`translate(${it.x} ${it.y})${rotation ? ` rotate(${-rotation})` : ''}`}>
-                {sel && <circle r={s + 14} className="sb-selring" />}
-                <path d={`M0 ${-s * 1.3} L${s} 0 L0 ${s * 1.3} L${-s} 0Z`} className="sb-spike" />
-                <circle r="4" fill="#fff" />
+                <title>Spike</title>
+                {sel && <circle r={s * SPIKE.r + 10} className="sb-selring" />}
+                <circle r={s * SPIKE.r} className="sb-spike" />
+                <g transform={`scale(${s})`} className="sb-spike__glyph">
+                  <path d={SPIKE.fins} fill={SPIKE.dark} stroke={SPIKE.red} strokeWidth={0.07} strokeLinejoin="round" />
+                  <path d={SPIKE.body} fill={SPIKE.dark} stroke={SPIKE.red} strokeWidth={0.08} strokeLinejoin="round" />
+                  <path d={SPIKE.cap} fill="#c9ced6" />
+                  <path d={SPIKE.core} fill={SPIKE.red} className="sb-spike__core" />
+                </g>
               </g>
             )
           }
@@ -428,10 +493,10 @@ export default function StratBoard({
                 <title>{agent?.name || 'Agent'}</title>
                 {sel && <circle r={r + 10} className="sb-selring" />}
                 <circle r={r} className={`sb-agent${it.en ? ' sb-agent--enemy' : ''}`} stroke={it.en ? ringEnemy : ring} />
-                {agent && <image href={agent.icon} x={-r + 4} y={-r + 4} width={(r - 4) * 2} height={(r - 4) * 2} clipPath={`url(#${uidBase}-clip)`} />}
+                {agent && <image href={agent.icon} x={-r + 3} y={-r + 3} width={(r - 3) * 2} height={(r - 3) * 2} clipPath={`url(#${uidBase}-clip)`} />}
                 {showNames && agent && (
-                  <g className="sb-name" transform={`translate(0 ${r + 20})`}>
-                    <rect x={-(agent.name.length * 10.4 + 18) / 2} y="-15" width={agent.name.length * 10.4 + 18} height="30" />
+                  <g className="sb-name" transform={`translate(0 ${r + 16})`}>
+                    <rect x={-(agent.name.length * 9 + 16) / 2} y="-13" width={agent.name.length * 9 + 16} height="26" />
                     <text textAnchor="middle" dominantBaseline="central">{agent.name}</text>
                   </g>
                 )}
