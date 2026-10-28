@@ -47,9 +47,28 @@ function rowToPlayer(row) {
 // ---------- Players ----------
 
 export async function fetchPlayers() {
-  const { data, error } = await supabase.from('cb_players').select('*').eq('team_id', getTeamId())
+  const teamId = getTeamId()
+  const [{ data, error }, { data: roster }] = await Promise.all([
+    supabase.from('cb_players').select('*').eq('team_id', teamId),
+    // Pseudo et photo Discord des membres : les mêmes que sur la page de l'équipe
+    supabase.rpc('team_roster', { p_team: teamId }),
+  ])
   if (error) throw error
-  return data.map(rowToPlayer)
+  const byUser = new Map((roster || []).map((r) => [r.user_id, r]))
+  return data.map((row) => {
+    const pl = rowToPlayer(row)
+    const m = pl.userId ? byUser.get(pl.userId) : null
+    if (m) {
+      pl.pseudo = m.username || pl.pseudo
+      pl.avatarUrl = m.avatar_url || null
+      pl.isMember = true
+      pl.memberRole = m.role || null
+      pl.isCaptain = !!m.is_captain
+    } else {
+      pl.isMember = false
+    }
+    return pl
+  })
 }
 
 export async function insertPlayer({ pseudo, primaryRole, secondaryRole, color }) {

@@ -17,7 +17,12 @@ export function PlayersProvider({ children }) {
   const [status, setStatus] = useState('loading')
 
   const mergePlayer = useCallback((player) => {
-    setPlayers((prev) => ({ ...prev, [player.id]: player }))
+    setPlayers((prev) => {
+      // Une fiche reliée à un compte garde le pseudo et la photo Discord du membre
+      const old = prev[player.id]
+      const keep = old?.isMember ? { pseudo: old.pseudo, avatarUrl: old.avatarUrl, isMember: true, memberRole: old.memberRole, isCaptain: old.isCaptain } : {}
+      return { ...prev, [player.id]: { ...player, ...keep } }
+    })
   }, [])
 
   const removePlayerFromState = useCallback((id) => {

@@ -188,3 +188,8 @@
 }
 .team-page__netlink { color: var(--amber, #ffa043); font-weight: 600; text-decoration: none; white-space: nowrap; }
 .team-page__netlink:hover { text-decoration: underline; }
+
+/* Séparation membres / fiches sans compte */
+.team-page__group { grid-column: 1 / -1; display: grid; gap: 2px; margin-top: 12px; padding-top: 14px; border-top: 1px solid var(--border-subtle); }
+.team-page__group b { font: 800 1rem var(--font-display); text-transform: uppercase; letter-spacing: 0.04em; }
+.team-page__group span { font-size: 0.86rem; color: var(--text-secondary); }

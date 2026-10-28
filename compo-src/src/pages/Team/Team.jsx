@@ -112,7 +112,7 @@ export default function Team() {
   }, [agents])
 
   const playerList = useMemo(
-    () => Object.values(players).sort((a, b) => a.pseudo.localeCompare(b.pseudo)),
+    () => Object.values(players).sort((a, b) => (b.isMember ? 1 : 0) - (a.isMember ? 1 : 0) || (b.isCaptain ? 1 : 0) - (a.isCaptain ? 1 : 0) || a.pseudo.localeCompare(b.pseudo)),
     [players]
   )
 
@@ -242,7 +242,12 @@ export default function Team() {
       ) : (
         <div className="team-page__grid">
           <AnimatePresence>
-            {visiblePlayers.map((player, index) => (
+            {visiblePlayers.flatMap((player, index) => [
+              ...(!player.isMember && (index === 0 || visiblePlayers[index - 1].isMember) ? [
+                <motion.div key="__offnet" className="team-page__group" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                  <b>Sans compte sur le site</b>
+                  <span>Fiches ajoutées à la main : pas de photo Discord tant que le joueur n'a pas rejoint l'équipe sur le réseau.{isAdmin ? ' Tu peux les supprimer si ce ne sont plus des joueurs de l’équipe.' : ''}</span>
+                </motion.div>] : []),
               <motion.div
                 key={player.id}
                 className="player-card glass-panel accent-card"
@@ -272,7 +277,7 @@ export default function Team() {
                   )}
                   {!player.userId && (
                     <span className="player-card__no-role" title="Fiche ajoutée à la main, pas membre de l'équipe sur le réseau">
-                      Hors réseau
+                      Pas de compte relié
                     </span>
                   )}
                 </div>
@@ -325,8 +330,8 @@ export default function Team() {
                     )}
                   </div>
                 )}
-              </motion.div>
-            ))}
+              </motion.div>,
+            ])}
           </AnimatePresence>
         </div>
       )}

@@ -32,7 +32,11 @@ export default function PlayerAvatar({ player, size = 'md', title, showDiscordBa
       style={{ '--avatar-color': player.color }}
       title={title || player.pseudo}
     >
-      {initials}
+      {player.avatarUrl ? (
+        <img className="player-avatar__img" src={player.avatarUrl} alt="" referrerPolicy="no-referrer" loading="lazy" />
+      ) : (
+        initials
+      )}
     </span>
   )
 

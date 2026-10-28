@@ -31,3 +31,7 @@ Nouvelle strat sur {}	New strat on {}
 Changer la map de la strat	Change the strat's map
 Map changée pour {} : pense à enregistrer.	Map changed to {}: remember to save.
 Choisis la map de la nouvelle strat	Choose the new strat's map
+Sans compte sur le site	No account on the site
+Pas de compte relié	No linked account
+Fiches ajoutées à la main : pas de photo Discord tant que le joueur n'a pas rejoint l'équipe sur le réseau.	Added by hand: no Discord picture until the player joins the team on the network.
+Fiches ajoutées à la main : pas de photo Discord tant que le joueur n'a pas rejoint l'équipe sur le réseau. Tu peux les supprimer si ce ne sont plus des joueurs de l’équipe.	Added by hand: no Discord picture until the player joins the team on the network. You can delete them if they're no longer on the team.
