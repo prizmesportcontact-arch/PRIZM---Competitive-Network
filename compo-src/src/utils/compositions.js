@@ -51,7 +51,7 @@ export function summarizeMap(compositionsByMap, mapUuid) {
     compsCount: comps.length,
     mainComp: main,
     filledCount: countFilled(main),
-    status: main?.status || null,
+    status: main?.status || 'none',
     lastModified: comps.length ? Math.max(...comps.map((c) => c.updatedAt)) : null,
     hasProgress: comps.some((c) => countFilled(c) > 0),
   }

@@ -29,6 +29,10 @@ export const STATUS = {
 // dernière refonte graphique : le gris de "À faire" était resté un
 // gris froid (#c7cdd6) alors que tout le reste de l'app était passé à
 // une palette chaude.
+// Map sans aucune compo : statut affiché automatiquement (on ne le choisit pas)
+export const NO_COMP = 'none'
+export const NO_COMP_META = { label: 'Pas de compo', emoji: '◌', color: 'var(--text-tertiary)' }
+
 export const STATUS_META = {
   [STATUS.VALIDATED]: { label: 'Prête', emoji: '🟢', color: 'var(--role-sentinel)' },
   [STATUS.TESTING]: { label: 'En test', emoji: '🟡', color: 'var(--role-initiator)' },

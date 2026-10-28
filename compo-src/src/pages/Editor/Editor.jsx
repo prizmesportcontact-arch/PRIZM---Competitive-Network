@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useData } from '../../context/DataContext'
+import CompMosaic from '../../components/CompMosaic/CompMosaic'
 import { useCompositions } from '../../context/CompositionsContext'
 import { usePlayers } from '../../context/PlayersContext'
 import { useAuth } from '../../context/AuthContext'
@@ -103,7 +104,7 @@ export default function Editor() {
     setPendingNew(null)
   }, [])
 
-  const { guard, dialog: leaveDialog } = useUnsavedGuard({
+  const { guard, allow, dialog: leaveDialog } = useUnsavedGuard({
     when: isAdmin && isDirty,
     label: saved?.name,
     onSave: doSave,
@@ -163,7 +164,10 @@ export default function Editor() {
   }
 
   const composition = saved && liveDraft ? { ...saved, name: liveDraft.name, slots: liveDraft.slots, status: liveDraft.status, notes: liveDraft.notes } : saved
-  const tabComps = allComps.map((c) => (composition && c.id === composition.id ? composition : c))
+  // Compos sans map : chacune a sa carte sur l'accueil, on n'affiche que celle ouverte (et une nouvelle en cours)
+  const tabComps = allComps
+    .filter((c) => !map?.free || !composition || c.id === composition.id || c.id === 'new')
+    .map((c) => (composition && c.id === composition.id ? composition : c))
 
   const usedAgentUuids = new Set(composition ? composition.slots.filter((s) => s.agentUuid).map((s) => s.agentUuid) : [])
 
@@ -211,7 +215,11 @@ export default function Editor() {
     }
     await deleteComposition(mapId, confirmDelete)
     setConfirmDelete(null)
+    setDraft(null)
+    setActiveCompId(null)
     pushToast('Composition supprimée.', 'success')
+    // Une compo sans map n'existe plus une fois supprimée : retour à la liste
+    if (map?.free) { allow(); navigate('/') }
   }
 
   return (
@@ -220,7 +228,7 @@ export default function Editor() {
         className="editor__banner accent-bar-static"
         style={composition ? { '--accent-card-color': STATUS_META[composition.status]?.color } : undefined}
       >
-        {map?.image ? <img src={map.image} alt="" className="editor__banner-image" /> : <div className="editor__banner-free" aria-hidden="true" />}
+        {map?.image ? <img src={map.image} alt="" className="editor__banner-image" /> : <CompMosaic slots={composition?.slots || []} agentByUuid={agentByUuid} />}
         <div className="editor__banner-scrim" />
         <div className="container editor__banner-content">
           <button className="btn btn-ghost editor__back" onClick={() => navigate('/')}>
@@ -229,7 +237,7 @@ export default function Editor() {
             </svg>
             Toutes les compos
           </button>
-          <h1 className="editor__title">{map?.name}</h1>
+          <h1 className="editor__title">{map?.free && composition ? composition.name : map?.name}</h1>
           <span className="editor__count">
             {filledCount}/5 agents sélectionnés sur cette composition
             {!isAdmin && ' · lecture seule'}

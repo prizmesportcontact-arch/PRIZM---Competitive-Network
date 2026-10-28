@@ -61,3 +61,16 @@ Donne un pseudo (2 caractères minimum).	Enter a name (2 characters minimum).
 ex : Coach Max	e.g. Coach Max
 Flex	Flex
 Couleur	Colour
+Ajouter une compo	Add a comp
+Choisis le nom, les agents et la map (ou aucune)	Pick the name, agents and map (or none)
+Nom	Name
+Aucune map	No map
+Agents	Agents
+(facultatif, modifiable ensuite)	(optional, can be changed later)
+Créer la compo	Create the comp
+Création…	Creating…
+Nouvelle compo	New comp
+ex : Anti-rush, Compo fun, Eco…	e.g. Anti-rush, Fun comp, Eco…
+Pas de compo	No comp
+◌ Pas de compo	◌ No comp
+Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer, ou ajoute une compo à ta façon, avec ou sans map.	One comp (or more) per map: agents, players, notes and strats. Click a map to prepare it, or add your own comp, with or without a map.

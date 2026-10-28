@@ -6,11 +6,19 @@ import { summarizeMap } from '../../utils/compositions'
 import MapCard from '../../components/MapCard/MapCard'
 import { MapCardSkeletonGrid } from '../../components/Skeleton/Skeleton'
 import FilterBar, { FILTERS, SORTS } from '../../components/FilterBar/FilterBar'
+import CompCard, { AddCompCard } from '../../components/CompCard/CompCard'
+import NewCompModal from '../../components/NewCompModal/NewCompModal'
+import { FREE_MAP } from '../../context/DataContext'
+import { useAuth } from '../../context/AuthContext'
+import { countFilled } from '../../utils/compositions'
 import './Home.css'
 
 export default function Home() {
-  const { maps, status, error, reload } = useData()
-  const { compositionsByMap } = useCompositions()
+  const { maps, agents, status, error, reload } = useData()
+  const { compositionsByMap, createComposition } = useCompositions()
+  const { isAdmin } = useAuth()
+  const [newOpen, setNewOpen] = useState(false)
+  const agentByUuid = useMemo(() => new Map(agents.map((a) => [a.uuid, a])), [agents])
   const { players } = usePlayers()
 
   const [search, setSearch] = useState('')
@@ -27,7 +35,8 @@ export default function Home() {
   }, [maps, compositionsByMap])
 
   const visibleMaps = useMemo(() => {
-    let list = maps.filter((m) => m.name.toLowerCase().includes(search.trim().toLowerCase()))
+    // Les compos sans map ont chacune leur carte (voir freeComps) : la « map » Sans map n'apparaît plus
+    let list = maps.filter((m) => !m.free && m.name.toLowerCase().includes(search.trim().toLowerCase()))
 
     if (filter === FILTERS.WITH) {
       list = list.filter((m) => summaries.get(m.uuid).hasProgress)
@@ -55,10 +64,18 @@ export default function Home() {
       }
     })
 
-    // Les compos sans map restent toujours en tête de liste
-    withSummary.sort((a, b) => Number(Boolean(b.map.free)) - Number(Boolean(a.map.free)))
     return withSummary
   }, [maps, summaries, search, filter, statusFilter, sort])
+
+  // Compos sans map : une carte chacune, en tête de liste, avec les mêmes filtres
+  const freeComps = useMemo(() => {
+    const q = search.trim().toLowerCase()
+    let list = Object.values(compositionsByMap[FREE_MAP.uuid] || {}).filter((c) => c.name.toLowerCase().includes(q))
+    if (filter === FILTERS.WITH) list = list.filter((c) => countFilled(c) > 0)
+    else if (filter === FILTERS.WITHOUT) list = list.filter((c) => countFilled(c) === 0)
+    if (statusFilter !== 'all') list = list.filter((c) => c.status === statusFilter)
+    return list.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0))
+  }, [compositionsByMap, search, filter, statusFilter])
 
   const realMaps = maps.filter((m) => !m.free)
   const totalComplete = realMaps.filter((m) => summaries.get(m.uuid)?.filledCount === 5).length
@@ -66,7 +83,7 @@ export default function Home() {
   return (
     <main className="home">
       <section className="home__hero container">
-        <div className="home__intro"><h1 className="home__title">Compos</h1><p className="home__lead">Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer.</p></div>
+        <div className="home__intro"><h1 className="home__title">Compos</h1><p className="home__lead">Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer, ou ajoute une compo à ta façon, avec ou sans map.</p></div>
         {status === 'ready' && realMaps.length > 0 && (
           <div className="home__progress">
             <div className="home__progress-bar">
@@ -108,17 +125,21 @@ export default function Home() {
               onSortChange={setSort}
             />
 
-            {visibleMaps.length === 0 ? (
+            <div className="home__grid">
+              {isAdmin && <AddCompCard onClick={() => setNewOpen(true)} />}
+              {freeComps.map((comp, index) => (
+                <CompCard key={comp.id} comp={comp} mapUuid={FREE_MAP.uuid} agentByUuid={agentByUuid} players={players} index={index + 1} />
+              ))}
+              {visibleMaps.map(({ map, summary }, index) => (
+                <MapCard key={map.uuid} map={map} summary={summary} players={players} index={index + freeComps.length + 1} />
+              ))}
+            </div>
+            {visibleMaps.length === 0 && freeComps.length === 0 && (
               <div className="home__empty glass-panel">
                 <p>Aucune map ne correspond à ces critères.</p>
               </div>
-            ) : (
-              <div className="home__grid">
-                {visibleMaps.map(({ map, summary }, index) => (
-                  <MapCard key={map.uuid} map={map} summary={summary} players={players} index={index} />
-                ))}
-              </div>
             )}
+            <NewCompModal open={newOpen} onClose={() => setNewOpen(false)} maps={maps} agents={agents} createComposition={createComposition} />
           </>
         )}
       </section>

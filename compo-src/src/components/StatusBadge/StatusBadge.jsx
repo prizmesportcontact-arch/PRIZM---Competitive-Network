@@ -1,9 +1,9 @@
-import { STATUS, STATUS_META } from '../../utils/storage'
+import { STATUS, STATUS_META, NO_COMP, NO_COMP_META } from '../../utils/storage'
 import './StatusBadge.css'
 
 /** Mode lecture seule : simple pastille. */
 export function StatusDot({ status, size = 'md' }) {
-  const meta = STATUS_META[status]
+  const meta = STATUS_META[status] || (status === NO_COMP ? NO_COMP_META : null)
   if (!meta) return null
   return (
     <span className={`status-dot status-dot--${size}`} style={{ '--status-color': meta.color }} title={meta.label}>

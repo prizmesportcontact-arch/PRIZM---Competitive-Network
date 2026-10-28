@@ -83,7 +83,7 @@ export default function CompositionTabs({
                       <path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2" stroke="currentColor" strokeWidth="1.8" />
                     </svg>
                   </button>
-                  {comps.length > 1 && (
+                  {comp.id !== 'new' && (
                     <button type="button" title="Supprimer" onClick={() => onDelete(comp.id)} aria-label="Supprimer">
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none">
                         <path d="M5 7h14M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2m-9 0 1 13a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1l1-13" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />

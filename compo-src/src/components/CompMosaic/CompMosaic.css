@@ -1,0 +1,37 @@
+.comp-mosaic {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  background: #10151d;
+  overflow: hidden;
+}
+.comp-mosaic--empty {
+  display: block;
+  background: var(--bg-hover) repeating-linear-gradient(-62deg, transparent 0 18px, rgba(255, 160, 67, 0.14) 18px 20px);
+}
+.comp-mosaic__band {
+  position: relative;
+  overflow: hidden;
+  /* Bandes en biais, comme le logo */
+  margin: 0 -9%;
+  clip-path: polygon(18% 0, 100% 0, 82% 100%, 0 100%) !important;
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--role) 38%, transparent), color-mix(in srgb, var(--role) 8%, transparent)),
+    #141a23;
+}
+.comp-mosaic__band:first-child { margin-left: 0; clip-path: polygon(0 0, 100% 0, 82% 100%, 0 100%) !important; }
+.comp-mosaic__band:last-child { margin-right: 0; clip-path: polygon(18% 0, 100% 0, 100% 100%, 0 100%) !important; }
+.comp-mosaic__band img {
+  position: absolute;
+  left: 50%;
+  top: 4%;
+  height: 135%;
+  width: auto;
+  max-width: none;
+  transform: translateX(-50%);
+  object-fit: cover;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.5));
+  transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.map-card:hover .comp-mosaic__band img { transform: translateX(-50%) scale(1.06); }

@@ -90,11 +90,11 @@ export function CompositionsProvider({ children }) {
   )
 
   const createComposition = useCallback(
-    async (mapUuid, name) => {
+    async (mapUuid, name, init = {}) => {
       try {
         const bucket = compositionsByMap[mapUuid] || {}
         const hasMain = Object.values(bucket).some((c) => c.isMain)
-        const draft = defaultCompositionDraft(name, { isMain: !hasMain })
+        const draft = { ...defaultCompositionDraft(name, { isMain: !hasMain }), ...init }
         const comp = await insertComposition(mapUuid, draft)
         mergeComp(comp)
         return comp.id

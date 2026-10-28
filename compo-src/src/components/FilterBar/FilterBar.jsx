@@ -84,6 +84,7 @@ export default function FilterBar({
             {meta.emoji} {meta.label}
           </option>
         ))}
+        <option value="none">◌ Pas de compo</option>
       </select>
 
       <select
