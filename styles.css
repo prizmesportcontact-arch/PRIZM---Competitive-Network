@@ -1246,3 +1246,16 @@ kbd{border-radius:6px}
 .act-pop{position:absolute;right:0;top:calc(100% + 6px);z-index:40;width:220px;display:grid;gap:2px;min-width:200px;padding:6px;border-radius:var(--r-md);background:var(--panel);border:1px solid var(--edge);box-shadow:0 18px 40px rgba(0,0,0,.5);text-align:left}
 .act-pop .link-btn{display:block;width:100%;text-align:left;padding:9px 10px;border-radius:10px;text-decoration:none}
 .act-pop .link-btn:hover{background:var(--raised)}
+/* Roster : tient dans la largeur (le tableau défile au lieu d'être coupé si l'écran est étroit) */
+.table-scroll{overflow-x:auto;overflow-y:visible}
+table.roster{min-width:640px}
+.roster td{padding:12px 10px}
+.roster td:nth-child(3){white-space:nowrap}
+.pl-txt{display:grid;gap:2px;min-width:0}
+.pl-sub{display:flex;align-items:center;gap:6px;font-size:.78rem;color:var(--mute)}
+.pl-sub .cap{font-size:.62rem;padding:1px 6px;border-radius:999px}
+.ed-tag{display:inline;margin:0;font-size:.62rem}
+.roster .rank-ok{margin-left:4px}
+details.act-menu{border:0;padding:0}
+details.act-menu[open] summary::after,details.act-menu summary::after{content:" ▾";color:var(--mute)}
+details.act-menu summary{display:inline-flex;align-items:center;gap:4px}
