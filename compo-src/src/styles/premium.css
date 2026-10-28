@@ -1,0 +1,123 @@
+/* ============================================
+   Style premium : coins arrondis, cartes en relief, ombres douces.
+   Mêmes couleurs qu'avant (ardoise + ambre). Chargé en dernier ;
+   les sélecteurs commencent par « body » pour passer devant le CSS
+   des pages chargées à la demande.
+   ============================================ */
+
+:root,
+[data-theme='dark'],
+[data-theme='light'] {
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 22px;
+  --radius-xl: 28px;
+  --bg-elevated: #161b23;
+  --bg-panel: #161b23;
+  --bg-panel-solid: #161b23;
+  --bg-hover: #1d2430;
+  --bg-raised: #1b212b;
+  --edge: #252c37;
+  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.035) inset, 0 24px 48px -30px rgba(0, 0, 0, 0.8);
+}
+
+/* Fini les coins coupés : tout est arrondi (les dessins SVG ne sont pas touchés) */
+body *:not(svg):not(svg *) { clip-path: none !important; }
+
+/* Cartes */
+body .glass-panel,
+body .map-card,
+body .strat-card,
+body .player-card,
+body .agent-slot,
+body .filter-bar,
+body .notes-editor,
+body .vote-panel,
+body .role-stats,
+body .strats__map,
+body .strats__picker,
+body .confirm-dialog,
+body .player-form,
+body .compare-modal,
+body .agent-modal,
+body .gsearch {
+  border-radius: var(--radius-lg);
+  border-color: var(--edge);
+  background-color: var(--bg-panel);
+  box-shadow: var(--shadow-soft);
+  overflow: hidden;
+}
+body .agent-slot { border-radius: var(--radius-md); }
+body .map-card:hover, body .strat-card:hover { border-color: var(--brand-red); }
+body .editor__banner { border-radius: var(--radius-xl); }
+body .editor-savebar { border-radius: var(--radius-lg); box-shadow: var(--shadow-lift); }
+body .toast { border-radius: var(--radius-md); }
+
+/* Boutons : pilules */
+body .btn,
+body .btn-primary,
+body .btn-ghost,
+body .btn-danger,
+body .editor__back,
+body .comp-tabs__add,
+body .strats__chip,
+body .strats__pick,
+body .team-page__stat-btn {
+  border-radius: 999px;
+}
+body .btn-primary { box-shadow: 0 10px 24px -12px rgba(255, 160, 67, 0.75); padding-left: 22px; padding-right: 22px; }
+body .btn-ghost { border-color: var(--edge); }
+body .btn-icon { border-radius: var(--radius-sm); }
+
+/* Onglets des compos, filtres, badges */
+body .comp-tab { border-radius: 999px; }
+body .filter-chip { border-radius: 999px; }
+body .status-badge,
+body .role-badge,
+body .map-card__count,
+body .player-select { border-radius: 999px; }
+body .progress-bar,
+body .progress-bar__fill,
+body .home__progress-bar,
+body .home__progress-fill { border-radius: 999px; }
+
+/* Champs */
+body input:not([type='checkbox']):not([type='radio']):not([type='range']),
+body select,
+body textarea { border-radius: var(--radius-sm); }
+body kbd { border-radius: 6px; }
+
+/* Menu de gauche : une carte, comme sur le site */
+body .tm-side {
+  background: var(--bg-panel);
+  border: 1px solid var(--edge);
+  border-radius: var(--radius-lg);
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+  gap: 14px;
+}
+body .tm-id { padding: 4px 4px 14px; border-bottom-color: var(--edge); }
+body .tm-id b { font-size: 0.98rem; }
+body .tm-side { padding: 14px 12px; }
+body .tm-logo { border-radius: 14px; }
+body .tm-link { border-left: 0; border-radius: var(--radius-sm); }
+body .tm-link:hover { background: var(--bg-hover); }
+body .tm-link.on { background: var(--bg-raised); box-shadow: inset 0 0 0 1px var(--edge); }
+body .tm-search { border-radius: 999px; border-color: var(--edge); }
+
+/* Compte en haut à droite */
+body .me-btn { border-radius: 999px; border-color: var(--edge); background: var(--bg-panel); }
+body .me-btn img, body .me-btn .me-av { border-radius: 999px; }
+body .me-menu { border-radius: var(--radius-md); overflow: hidden; }
+body .lang-switch { border-radius: 999px; overflow: hidden; }
+
+/* Tableau des strats */
+body .sb2-btn, body .sb2-save, body .sb2-present, body .sb2-tab, body .sb2-comp, body .sb2-hint { border-radius: 999px; }
+body .sb2-mapcard, body .sb2-sidebtn, body .sb2-wide, body .sb2-del, body .sb2-inspect, body .sb2-modal, body .sb2-note { border-radius: var(--radius-md); }
+body .sb2-step, body .sb2-tool, body .sb2-icon, body .sb2-color, body .sb2-agent, body .sb2-ability, body .sb2-input, body .sb2-search, body .sb2-name { border-radius: var(--radius-sm); }
+body .sb2-team { border-radius: 999px; overflow: hidden; }
+body .sb2-team button { border-radius: 0; }
+body .sb2-rolechips button, body .sb2-legend li { border-radius: 999px; }
+body .sb2-board { border-radius: var(--radius-lg); overflow: hidden; }
+body .sb-zoom { border-radius: var(--radius-sm); overflow: hidden; }
+body .sp-btn, body .sp-dot { border-radius: 999px; }

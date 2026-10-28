@@ -1133,3 +1133,85 @@ body.no-scroll{overflow:hidden}
 .ad-team b,.ad-player b{white-space:nowrap}
 .ad-line .t-opp b{white-space:normal}
 @media (max-width:620px){.ad-tiles{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* ===== Style premium : coins arrondis, cartes en relief, ombres douces (couleurs inchangées) ===== */
+:root{--r:22px;--r-md:16px;--r-sm:12px}
+body{--raised:color-mix(in srgb,var(--panel) 90%,#fff);--edge:color-mix(in srgb,var(--line) 80%,transparent);
+  --shadow:0 1px 0 rgba(255,255,255,.035) inset,0 24px 48px -30px rgba(0,0,0,.8)}
+
+/* Cartes */
+.card,.db-card,.db-todo,.dash-card,.rank-box,.lfg-card,.follow-card,.t-card,.pub-player,details.week,.roles-explain>div,.t-team,.brief-pl,.pool-row
+  {border-radius:var(--r);background:var(--panel);border-color:var(--edge);box-shadow:var(--shadow)}
+.t-team,.brief-pl,.pool-row,.roles-explain>div{border-radius:var(--r-md);box-shadow:none}
+.db-card,.db-todo,.card,.dash-card{padding:24px}
+.db-todo{border:1px solid var(--edge);box-shadow:var(--shadow),inset 0 0 0 1px color-mix(in srgb,var(--accent) 35%,transparent)}
+.live-card,.rg-side,.scx-propose,.dash-todo,.callout,.leave-box{border-radius:var(--r);box-shadow:var(--shadow)}
+.callout{border-radius:var(--r-md);box-shadow:none}
+details.week{overflow:hidden}
+
+/* Éléments posés dans une carte : un cran plus clairs */
+.scx-card{border-radius:var(--r-md);background:var(--raised);border-color:var(--edge)}
+.db-todo-line{border-radius:var(--r-md);background:var(--raised)}
+.db-todo-line:hover{background:color-mix(in srgb,var(--raised) 85%,#fff)}
+.db-prep-map,.db-map{border-radius:var(--r-sm)}
+.db-prep-map{border-color:var(--edge)}
+
+/* Listes et blocs de chiffres : arrondis, le contenu est découpé proprement */
+.team-list,.comp-list,.rep-list,.sc-list,.t-lines,.scx-results,.mm-list,.staff-list,.map-stats,.sched,.divs,.season,
+.brief-stats,.t-stats,.db-stats,.ad-tiles,.dash-comps,.match,.table-scroll
+  {border-radius:var(--r-md);overflow:hidden}
+.team-list,.comp-list,.rep-list,.sc-list,.t-lines,.scx-results,.mm-list,.staff-list,.map-stats,.sched,.divs,.season,.brief-stats,.match{border-color:var(--edge)}
+.db-stats,.t-stats,.ad-tiles,.dash-comps{gap:8px;background:transparent;border:0}
+.db-stats>*,.t-stats>*,.ad-tiles>*,.dash-comps>*{border-radius:var(--r-md);background:var(--raised)}
+.date-tile{border-radius:14px;border-color:var(--edge);background:var(--raised)}
+
+/* Boutons : pilules (le biais reste dans le logo) */
+.btn{clip-path:none;border-radius:999px;transition:transform .15s,filter .15s,background-color .15s,border-color .15s}
+.btn:not(.solid):not(.armed){background:transparent;border:1.5px solid color-mix(in srgb,var(--bc) 45%,transparent);padding:14px 22px}
+.btn.sm:not(.solid):not(.armed){padding:10px 16px}
+.btn:not(.solid):not(.armed):hover{border-color:var(--bc);background:color-mix(in srgb,var(--bc) 7%,transparent)}
+.btn.solid{box-shadow:0 10px 24px -12px color-mix(in srgb,var(--accent) 75%,transparent)}
+.btn.solid:hover{filter:brightness(1.06)}
+.btn.armed{padding:14px 22px}.btn.sm.armed{padding:10px 16px}
+.scx-fbtn,.rg-swap,.season-tab,.brief-x{border-radius:var(--r-sm)}
+.brief-x{border-radius:999px}
+
+/* Champs */
+input:not([type=checkbox]):not([type=radio]):not([type=range]),select,textarea{border-radius:var(--r-sm)}
+.score-line input,.rep-row input{border-radius:var(--r-sm)}
+
+/* Étiquettes */
+.pill,.tag-chip,.type-badge,.pool-chip,.map-scores span,.scx-res,.ad-count,.scx-tag{border-radius:999px}
+.pool-seg{display:inline-flex;border-radius:999px;overflow:hidden}
+.pool-seg button{border-radius:0}
+.pool-seg button:first-child{border-radius:999px 0 0 999px}.pool-seg button:last-child{border-radius:0 999px 999px 0}
+.ad-badge{border-radius:var(--r-sm)}
+.team-logo{border-radius:10px}
+kbd{border-radius:6px}
+
+/* Haut de page : compte et menu */
+.me-btn{border-radius:999px;border-color:var(--edge);background:var(--panel)}
+.me-btn img,.me-btn .me-av{border-radius:999px}
+.me-menu{border-radius:var(--r-md);overflow:hidden;border-color:var(--edge);background:var(--panel)}
+.lang-switch{border-radius:999px;overflow:hidden}
+
+/* Espace équipe et admin : le menu de gauche devient une carte */
+.tm-side{background:var(--panel);border:1px solid var(--edge);border-radius:var(--r);padding:16px;box-shadow:var(--shadow);gap:14px}
+.tm-id{padding:4px 4px 14px;border-bottom-color:var(--edge)}
+.tm-id .team-logo,.tm-id img{border-radius:14px}
+.tm-link{border-left:0;border-radius:var(--r-sm)}
+.tm-link:hover{background:color-mix(in srgb,var(--raised) 70%,transparent)}
+.tm-link.on{background:var(--raised);box-shadow:inset 0 0 0 1px var(--edge)}
+.tm-link.sub{padding-left:42px}
+
+/* Fiche adversaire (panneau latéral) et fenêtre « partir sans enregistrer » */
+.brief{border-radius:var(--r) 0 0 var(--r)}
+.leave-box{border:1px solid var(--edge);border-top:3px solid var(--accent)}
+.div-chip{border-radius:999px;padding:4px 10px}
+.t-res{border-radius:10px}
+.db-next-when em{border-radius:999px;padding:3px 10px}
+.team-logo{border-radius:28%}
+.tm-id b{font-size:.98rem}.tm-side{padding:14px 12px}
+.scx-card{background:var(--panel);box-shadow:var(--shadow)}
+.db-card .scx-card,.db-todo .scx-card{background:var(--raised);box-shadow:none}
+.t-stats>div,.ad-tiles>a,.ad-tiles>div{background:var(--raised);border-radius:var(--r-md)}
