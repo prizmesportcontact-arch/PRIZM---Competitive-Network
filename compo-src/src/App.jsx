@@ -1,4 +1,6 @@
+import { networkUrl } from './services/team'
 import { Suspense, lazy } from 'react'
+import { useEffect } from 'react'
 import { Navigate, Route, RouterProvider, Routes, createHashRouter, useLocation } from 'react-router-dom'
 import { AnimatePresence, MotionConfig } from 'framer-motion'
 import { ThemeProvider } from './context/ThemeContext'
@@ -22,7 +24,6 @@ import TeamGate from './components/TeamGate/TeamGate'
 // d'un seul bloc auparavant).
 const Home = lazy(() => import('./pages/Home/Home'))
 const Editor = lazy(() => import('./pages/Editor/Editor'))
-const Team = lazy(() => import('./pages/Team/Team'))
 const Strats = lazy(() => import('./pages/Strats/Strats'))
 const Strat = lazy(() => import('./pages/Strat/Strat'))
 
@@ -46,7 +47,7 @@ function AppRoutes() {
       <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><Suspense fallback={pageFallback}><Home /></Suspense></PageTransition>} />
         <Route path="/editor/:mapId" element={<PageTransition><Suspense fallback={pageFallback}><Editor /></Suspense></PageTransition>} />
-        <Route path="/team" element={<PageTransition><Suspense fallback={pageFallback}><Team /></Suspense></PageTransition>} />
+        <Route path="/team" element={<ToRoster />} />
         <Route path="/strats" element={<PageTransition><Suspense fallback={pageFallback}><Strats /></Suspense></PageTransition>} />
         <Route path="/strat/:stratId" element={<PageTransition><Suspense fallback={pageFallback}><Strat /></Suspense></PageTransition>} />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
@@ -127,6 +128,12 @@ function TeamScopedApp() {
       </PlayersProvider>
     </DataProvider>
   )
+}
+
+// Les joueurs (rôles, couleurs, joueurs sans compte) se gèrent dans le Roster du site
+function ToRoster() {
+  useEffect(() => { window.location.replace(networkUrl('#/mon-equipe')) }, [])
+  return null
 }
 
 export default function App() {

@@ -1,3 +1,4 @@
+import { networkUrl } from '../../services/team'
 import { useMemo, useState } from 'react'
 import { AnimatePresence, motion } from 'framer-motion'
 import { useNavigate } from 'react-router-dom'
@@ -125,7 +126,7 @@ export default function GlobalSearch({ open, onClose }) {
               <div className="gsearch__group">
                 <span className="gsearch__group-title">Joueurs</span>
                 {playerResults.map((p) => (
-                  <button key={p.id} className="gsearch__row" onClick={() => go('/team')}>
+                  <button key={p.id} className="gsearch__row" onClick={() => { window.location.href = networkUrl('#/mon-equipe') }}>
                     <PlayerAvatar player={p} size="sm" />
                     <span>{p.pseudo}</span>
                   </button>

@@ -35,3 +35,29 @@ Sans compte sur le site	No account on the site
 Pas de compte relié	No linked account
 Fiches ajoutées à la main : pas de photo Discord tant que le joueur n'a pas rejoint l'équipe sur le réseau.	Added by hand: no Discord picture until the player joins the team on the network.
 Fiches ajoutées à la main : pas de photo Discord tant que le joueur n'a pas rejoint l'équipe sur le réseau. Tu peux les supprimer si ce ne sont plus des joueurs de l’équipe.	Added by hand: no Discord picture until the player joins the team on the network. You can delete them if they're no longer on the team.
+Rôles en jeu	In-game roles
+Modifier les rôles et la couleur	Edit roles and colour
+Retirer de l'équipe	Remove from team
+Nommer éditeur	Make editor
+Retirer éditeur	Remove editor
+Peut modifier les compos et les strats	Can edit comps and strats
+Coach, joueur de dépannage… Ils n'ont pas rejoint l'équipe sur le site (pas de photo Discord ni de rang), mais on peut les placer dans les compos. Dès qu'un joueur rejoint l'équipe avec le lien d'invitation, il apparaît dans le roster au-dessus.	Coach, stand-in player… They haven't joined the team on the site (no Discord picture or rank), but they can be placed in comps. As soon as a player joins the team with the invite link, they show up in the roster above.
+Aucun.	None.
+Invitation, logo et départ :	Invite, logo and leaving:
+Nouveau joueur sans compte	New player without an account
+Rôles de {}	{} roles
+Rien à enregistrer	Nothing to save
+Pas encore enregistré	Not saved yet
+Couleur dans les compos	Colour in comps
+Aucun	None
+Les rôles du joueur ne sont pas enregistrés. Si tu pars sans enregistrer, ils seront perdus.	The player's roles aren't saved. If you leave without saving, they'll be lost.
+Il peut maintenant modifier les compos et les strats.	They can now edit comps and strats.
+Il passe en lecture seule dans les compos.	They're now read-only in comps.
+Joueur ajouté.	Player added.
+Rôles enregistrés.	Roles saved.
+Joueur supprimé.	Player deleted.
+Enregistré.	Saved.
+Donne un pseudo (2 caractères minimum).	Enter a name (2 characters minimum).
+ex : Coach Max	e.g. Coach Max
+Flex	Flex
+Couleur	Colour

@@ -137,21 +137,21 @@
     ov.className = "leave-ov";
     ov.innerHTML = `<div class="leave-box" role="dialog" aria-modal="true" aria-labelledby="leave-t">
       <h3 id="leave-t">Êtes-vous sûr de partir sans enregistrer ?</h3>
-      <p class="small-note">Les changements du map pool ne sont pas enregistrés. Si tu pars sans enregistrer, ils seront perdus.</p>
+      <p class="small-note">${esc(unsaved.what || "Les changements du map pool")} ne sont pas enregistrés. Si tu pars sans enregistrer, ils seront perdus.</p>
       <div class="ctas"><button class="btn solid sm" data-a="save" type="button">Enregistrer et partir</button>
         <button class="btn danger sm" data-a="go" type="button">Partir sans enregistrer</button>
         <button class="btn sm" data-a="stay" type="button">Rester</button></div></div>`;
     document.body.appendChild(ov);
     $("[data-a=stay]", ov).focus();
     const close = () => ov.remove();
-    const go = () => { unsaved.pool = false; live.editing = null; close(); location.hash = target; };
+    const go = () => { unsaved.pool = false; unsaved.save = null; unsaved.what = null; live.editing = null; close(); location.hash = target; };
     ov.onclick = async e => {
       const a = e.target.closest("[data-a]"); if (!a && e.target !== ov) return;
       const act = a ? a.dataset.a : "stay";
       if (act === "stay") return close();
       if (act === "go") return go();
       a.disabled = true;
-      try { await rpc("set_map_pool", { p_pool: unsaved.poolValue() }); toast("Map pool enregistré."); go(); }
+      try { if (unsaved.save) await unsaved.save(); else await rpc("set_map_pool", { p_pool: unsaved.poolValue() }); toast("Enregistré."); go(); }
       catch (x) { toast(errMsg(x), "err"); a.disabled = false; }
     };
   }
@@ -534,7 +534,19 @@
     }
 
     const t = state.team, code = t.invite_code;
-    const roster = await rpc("team_roster", { p_team: teamId });
+    // Un seul endroit pour les joueurs : le roster du site porte aussi les rôles en jeu et la couleur
+    // utilisés par le Comp Builder (fiches cb_players), et les joueurs sans compte (coach, dépannage).
+    const [roster, fiches, editTeam, members] = await Promise.all([
+      rpc("team_roster", { p_team: teamId }),
+      sb.from("cb_players").select("*").eq("team_id", teamId).then(r => r.data || []),
+      rpc("my_cb_edit_team").catch(() => null),
+      sb.from("team_members").select("user_id, cb_editor").eq("team_id", teamId).then(r => r.data || []),
+    ]);
+    const canEditRoles = !!editTeam;
+    const editors = new Set(members.filter(m => m.cb_editor).map(m => m.user_id));
+    const ficheOf = new Map(fiches.filter(f => f.user_id).map(f => [f.user_id, f]));
+    const offnet = fiches.filter(f => !f.user_id).sort((a, b) => a.pseudo.localeCompare(b.pseudo));
+    const rolesOpt = { ficheOf, canEdit: canEditRoles, me: state.session.user.id, editors, captain: !!t.is_captain };
     const me = state.session.user.id;
     const isCap = !!t.is_captain;
     const inviteLink = location.origin + location.pathname + "?join=" + code + "#/mon-equipe";
@@ -551,9 +563,18 @@
       ${t.status === "validee" ? `<div class="callout info">Ton rôle <b>D${t.division}</b> est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir${(CFG.links || {}).discord ? ` : <a href="${esc(CFG.links.discord)}" target="_blank" rel="noopener">rejoindre le Discord</a>` : ""}. Arrivé après la validation ? <button class="link-btn" id="sync-me" type="button">Recevoir mon rôle</button></div>` : ""}
       ${tit < 5 && t.status !== "validee" ? `<div class="callout">Il te faut 5 titulaires pour être validé. Pour l'instant : ${tit}/5.</div>` : ""}
       ${locked ? `<p class="lock-line">🔒 Roster bloqué pendant <b>${esc(locked)}</b> : personne ne peut rejoindre ni quitter l'équipe. Besoin d'un changement ? Ouvre un ticket dans #support.</p>` : ""}
-      ${rosterTable(roster, isCap, me, false, !!locked)}
+      ${rosterTable(roster, isCap, me, false, !!locked, rolesOpt)}
       <div class="roster-tools"><button class="link-btn" id="refresh-ranks" type="button">Actualiser les rangs de l'équipe</button><span class="small-note">✓ = rang vérifié · ? = rang non vérifié</span></div>
-      <p class="small-note roster-more">Rôles in-game et couleurs des joueurs pour les compos : <a class="link-btn" href="compo/#/team">Rôles des joueurs</a>. Invitation, logo et départ : <a class="link-btn" href="#/reglages">Réglages</a>.</p>`,
+      <div id="role-editor"></div>
+      <section class="db-card roster-off">
+        <div class="db-head"><h3>Sans compte sur le site</h3>${canEditRoles ? `<button class="btn sm" id="off-add" type="button">+ Ajouter un joueur</button>` : ""}</div>
+        <p class="small-note">Coach, joueur de dépannage… Ils n'ont pas rejoint l'équipe sur le site (pas de photo Discord ni de rang), mais on peut les placer dans les compos. Dès qu'un joueur rejoint l'équipe avec le lien d'invitation, il apparaît dans le roster au-dessus.</p>
+        ${offnet.length ? `<div class="off-list">${offnet.map(f => `<div class="off-row">
+            <span class="role-dot" style="--c:${esc(f.color || "#9aa3af")}"></span><b>${esc(f.pseudo)}</b>${roleChips(f)}
+            ${canEditRoles ? `<span class="off-act"><button class="link-btn" data-roles-edit="${f.id}" type="button">Modifier</button><button class="link-btn danger-t" data-off-del="${f.id}" type="button">Supprimer</button></span>` : ""}
+          </div>`).join("")}</div>` : `<p class="small-note mute">Aucun.</p>`}
+      </section>
+      <p class="small-note roster-more">Invitation, logo et départ : <a class="link-btn" href="#/reglages">Réglages</a>.</p>`,
       isCap ? "Titulaires, remplaçants et capitaine. Tu peux changer les rôles et retirer un joueur." : "Les joueurs de l'équipe et leur rang.");
 
     $("#refresh-ranks").onclick = async () => {
@@ -565,9 +586,79 @@
     };
     if ($("#sync-me")) $("#sync-me").onclick = () => discordSync({ user_ids: [me] }, true);
     bindRosterActions(app, () => viewMyTeam(app));
+    bindRoleEditor(app, { teamId, fiches, roster, refresh: () => viewMyTeam(app) });
 
     // Arrivées, départs, rôles, validation, logo, scrims : la page se met à jour toute seule
-    setLive("/mon-equipe", ["team:" + teamId, "scrims"], () => viewMyTeam(app));
+    setLive("/mon-equipe", ["team:" + teamId, "scrims", "cb:" + teamId], () => viewMyTeam(app));
+  }
+
+  // Rôles en jeu (Comp Builder) : mêmes noms que les agents de Valorant
+  const GAME_ROLES = ["Duelliste", "Contrôleur", "Initiateur", "Sentinelle", "Flex"];
+  const ROLE_COL = { Duelliste: "#ff6170", Contrôleur: "#9b84ff", Initiateur: "#f2d45c", Sentinelle: "#4ade80", Flex: "#9aa3af" };
+  const PLAYER_COLORS = ["#ff4655", "#ff8a4c", "#ffc94c", "#8ce971", "#3ddc97", "#4cd4d9", "#7c8cff", "#c67cff", "#ff7cc5", "#c7cdd6"];
+  const roleChips = f => [f.primary_role, f.secondary_role].filter(Boolean)
+    .map((r, i) => `<span class="role-chip${i ? " sec" : ""}" style="--c:${ROLE_COL[r] || "#9aa3af"}">${esc(r)}</span>`).join("");
+
+  // Fenêtre d'édition des rôles (membre, joueur sans compte ou nouveau). Rien n'est enregistré sans le bouton.
+  function bindRoleEditor(app, { teamId, fiches, roster, refresh }) {
+    const box = $("#role-editor", app);
+    const clearGuard = () => { unsaved.pool = false; unsaved.save = null; unsaved.what = null; live.editing = null; };
+    const open = fiche => {
+      const isNew = !fiche, member = fiche && fiche.user_id ? roster.find(r => r.user_id === fiche.user_id) : null;
+      const st = { pseudo: fiche ? fiche.pseudo : "", p: fiche ? fiche.primary_role || "" : "", s: fiche ? fiche.secondary_role || "" : "", c: fiche ? fiche.color || PLAYER_COLORS[0] : PLAYER_COLORS[0] };
+      const init = JSON.stringify(st);
+      const title = isNew ? "Nouveau joueur sans compte" : `Rôles de ${member ? member.username : fiche.pseudo}`;
+      box.innerHTML = `<form class="db-card role-form" novalidate>
+        <div class="db-head"><h3>${esc(title)}</h3><span class="small-note" id="rf-state">Rien à enregistrer</span></div>
+        ${member ? "" : `<label class="rf-field"><span>Pseudo</span><input id="rf-pseudo" maxlength="24" value="${esc(st.pseudo)}" placeholder="ex : Coach Max" required></label>`}
+        <div class="rf-row">
+          <label class="rf-field"><span>Rôle principal</span><select id="rf-p"><option value="">Aucun</option>${GAME_ROLES.map(r => `<option value="${r}" ${st.p === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+          <label class="rf-field"><span>Rôle secondaire</span><select id="rf-s"><option value="">Aucun</option>${GAME_ROLES.map(r => `<option value="${r}" ${st.s === r ? "selected" : ""}>${r}</option>`).join("")}</select></label>
+        </div>
+        <div class="rf-field"><span>Couleur dans les compos</span><div class="rf-colors" role="radiogroup" aria-label="Couleur">${PLAYER_COLORS.map(c => `<button type="button" role="radio" aria-checked="${st.c === c}" aria-label="${c}" class="rf-color${st.c === c ? " on" : ""}" data-c="${c}" style="--c:${c}"></button>`).join("")}</div></div>
+        <div class="ctas"><button class="btn solid sm" id="rf-save" type="submit" disabled>Enregistrer</button><button class="btn sm" id="rf-cancel" type="button">Annuler</button></div>
+        <p class="form-err" id="rf-err" role="alert"></p>
+      </form>`;
+      const form = $(".role-form", box), saveBtn = $("#rf-save", box), info = $("#rf-state", box);
+      const save = async () => {
+        const row = { primary_role: st.p || null, secondary_role: st.s && st.s !== st.p ? st.s : null, color: st.c };
+        if (!member) { if (st.pseudo.trim().length < 2) throw new Error("Donne un pseudo (2 caractères minimum)."); row.pseudo = st.pseudo.trim(); }
+        const q = isNew ? sb.from("cb_players").insert({ team_id: teamId, ...row }) : sb.from("cb_players").update(row).eq("id", fiche.id);
+        const { error } = await q; if (error) throw error;
+      };
+      const sync = () => {
+        const d = JSON.stringify(st) !== init;
+        saveBtn.disabled = !d; info.textContent = d ? "Pas encore enregistré" : "Rien à enregistrer"; info.classList.toggle("warn-t", d);
+        if (d) { unsaved.pool = true; unsaved.what = "Les rôles du joueur"; unsaved.save = save; live.editing = app; } else clearGuard();
+      };
+      if ($("#rf-pseudo", box)) $("#rf-pseudo", box).oninput = e => { st.pseudo = e.target.value; sync(); };
+      $("#rf-p", box).onchange = e => { st.p = e.target.value; sync(); };
+      $("#rf-s", box).onchange = e => { st.s = e.target.value; sync(); };
+      box.querySelectorAll(".rf-color").forEach(b => b.onclick = () => {
+        st.c = b.dataset.c; box.querySelectorAll(".rf-color").forEach(x => { x.classList.toggle("on", x === b); x.setAttribute("aria-checked", x === b); }); sync(); });
+      $("#rf-cancel", box).onclick = () => { clearGuard(); box.innerHTML = ""; };
+      form.onsubmit = async e => {
+        e.preventDefault(); saveBtn.disabled = true; $("#rf-err", box).textContent = "";
+        try { await save(); clearGuard(); toast(isNew ? "Joueur ajouté." : "Rôles enregistrés."); refresh(); }
+        catch (x) { $("#rf-err", box).textContent = errMsg(x); saveBtn.disabled = false; }
+      };
+      box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      ($("#rf-pseudo", box) || $("#rf-p", box)).focus({ preventScroll: true });
+    };
+    const ask = fn => { if (unsaved.pool && !confirm("Les changements en cours ne sont pas enregistrés. Les abandonner ?")) return; clearGuard(); fn(); };
+    app.querySelectorAll("[data-roles-edit]").forEach(b => b.onclick = () => ask(() => open(fiches.find(f => f.id === b.dataset.rolesEdit))));
+    const add = $("#off-add", app); if (add) add.onclick = () => ask(() => open(null));
+    app.querySelectorAll("[data-off-del]").forEach(b => confirmable(b, "Confirmer ?", async () => {
+      const id = b.dataset.offDel;
+      try {
+        // Retiré aussi des compos où il était placé
+        const { data: comps } = await sb.from("cb_compositions").select("id, slots").eq("team_id", teamId);
+        await Promise.all((comps || []).filter(c => (c.slots || []).some(x => x.playerId === id))
+          .map(c => sb.from("cb_compositions").update({ slots: c.slots.map(x => x.playerId === id ? { ...x, playerId: null } : x) }).eq("id", c.id)));
+        const { error } = await sb.from("cb_players").delete().eq("id", id); if (error) throw error;
+        toast("Joueur supprimé."); refresh();
+      } catch (x) { toast(errMsg(x), "err"); }
+    }));
   }
 
   function statusPill(t) {
@@ -586,24 +677,47 @@
       : r.rank != null ? `<span class="rank-unv" title="Rang non vérifié">?</span>` : "";
   };
 
-  function rosterTable(roster, isCap, me, admin = false, noKick = false) {
+  function rosterTable(roster, isCap, me, admin = false, noKick = false, ro = null) {
+    const rolesCell = r => {
+      const f = ro.ficheOf.get(r.user_id);
+      if (!f) return `<td><span class="mute">—</span></td>`;
+      const can = ro.canEdit || r.user_id === ro.me;
+      return `<td><span class="role-cell"><span class="role-dot" style="--c:${esc(f.color || "#9aa3af")}" title="Couleur dans les compos"></span>${roleChips(f) || `<span class="mute">Aucun</span>`}${can ? `<button class="role-edit" data-roles-edit="${f.id}" type="button" title="Modifier les rôles et la couleur" aria-label="Modifier les rôles de ${esc(r.username)}"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3Z"/></svg></button>` : ""}</span></td>`;
+    };
     return `<div class="table-scroll"><table class="roster">
-      <thead><tr><th>Joueur</th><th>Riot ID</th><th>Rang</th><th>Rôle</th>${isCap ? "<th><span class='sr'>Actions</span></th>" : ""}</tr></thead>
+      <thead><tr><th>Joueur</th><th>Riot ID</th><th>Rang</th><th>Rôle</th>${ro ? "<th>Rôles en jeu</th>" : ""}${isCap ? "<th><span class='sr'>Actions</span></th>" : ""}</tr></thead>
       <tbody>${roster.map(r => `<tr>
         <td><span class="pl">${avatar(r.avatar_url, r.username, 28)}<a class="pl-link" href="${playerHref(r.user_id)}"><b>${esc(r.username)}</b></a>${r.is_captain ? '<span class="cap">Capitaine</span>' : ""}</span></td>
         <td class="mono">${esc(r.riot_id || "—")}</td>
         <td>${admin ? `<span class="admin-rank"><select data-rank-for="${r.user_id}" aria-label="Rang de ${esc(r.username)}"><option value="">Non classé</option>${RANKS.map((n, i) => `<option value="${i}" ${r.rank === i ? "selected" : ""}>${n}</option>`).join("")}</select><button class="link-btn" data-rank-save="${r.user_id}" type="button">Fixer</button></span> ${rankMark(r)}` : rankCell(r)}</td>
-        <td>${r.role === "titulaire" ? "Titulaire" : "Remplaçant"}</td>
-        ${isCap ? `<td class="act">${r.user_id === me ? "" : `
+        <td>${r.role === "titulaire" ? "Titulaire" : "Remplaçant"}${ro && !r.is_captain && ro.editors.has(r.user_id) ? `<small class="ed-tag" title="Peut modifier les compos et les strats">Éditeur</small>` : ""}</td>
+        ${ro ? rolesCell(r) : ""}
+        ${isCap ? `<td class="act">${r.user_id === me ? "" : `<details class="act-menu"><summary>Gérer</summary><div class="act-pop">${ro ? `<button class="link-btn" data-act="editor" data-u="${r.user_id}" data-on="${ro.editors.has(r.user_id) ? "0" : "1"}" type="button" title="Peut modifier les compos et les strats">${ro.editors.has(r.user_id) ? "Retirer éditeur" : "Nommer éditeur"}</button>` : ""}
           <button class="link-btn" data-act="role" data-u="${r.user_id}" data-r="${r.role === "titulaire" ? "remplacant" : "titulaire"}" type="button">${r.role === "titulaire" ? "Passer remplaçant" : "Passer titulaire"}</button>
           <button class="link-btn" data-act="cap" data-u="${r.user_id}" type="button">Nommer capitaine</button>
-          ${noKick ? "" : `<button class="link-btn danger-t" data-act="kick" data-u="${r.user_id}" type="button">Retirer</button>`}`}</td>` : ""}
+          ${noKick ? "" : `<button class="link-btn danger-t" data-act="kick" data-u="${r.user_id}" type="button">Retirer de l'équipe</button>`}</div></details>`}</td>` : ""}
       </tr>`).join("")}</tbody></table></div>`;
   }
 
   function bindRosterActions(root, refresh) {
+    // Menus « Gérer » : posés au-dessus de la page (le tableau défile, il les couperait)
+    root.querySelectorAll(".act-menu").forEach(d => d.addEventListener("toggle", () => {
+      if (!d.open) return;
+      root.querySelectorAll(".act-menu[open]").forEach(o => { if (o !== d) o.open = false; });
+      const pop = $(".act-pop", d), r = $("summary", d).getBoundingClientRect();
+      pop.style.position = "fixed"; pop.style.right = "auto";
+      pop.style.left = Math.max(8, Math.min(r.right - 220, innerWidth - 228)) + "px";
+      const below = r.bottom + 6, h = pop.offsetHeight || 160;
+      pop.style.top = (below + h > innerHeight - 8 ? Math.max(8, r.top - 6 - h) : below) + "px";
+    }));
+    if (!document.body.dataset.actClose) {
+      document.body.dataset.actClose = "1";
+      document.addEventListener("click", e => { document.querySelectorAll(".act-menu[open]").forEach(o => { if (!o.contains(e.target)) o.open = false; }); });
+      addEventListener("scroll", () => document.querySelectorAll(".act-menu[open]").forEach(o => o.open = false), { passive: true });
+    }
     root.querySelectorAll("[data-act]").forEach(b => {
       const u = b.dataset.u;
+      if (b.dataset.act === "editor") b.onclick = async () => { try { await rpc("cb_set_editor", { p_user: u, p_on: b.dataset.on === "1" }); toast(b.dataset.on === "1" ? "Il peut maintenant modifier les compos et les strats." : "Il passe en lecture seule dans les compos."); refresh(); } catch (x) { toast(errMsg(x), "err"); } };
       if (b.dataset.act === "role") b.onclick = async () => { try { await rpc("set_member_role", { p_user: u, p_role: b.dataset.r }); refresh(); } catch (x) { toast(errMsg(x), "err"); } };
       if (b.dataset.act === "cap") confirmable(b, "Confirmer ?", async () => { try { await rpc("transfer_captain", { p_user: u }); discordSync({ user_ids: [u, state.session.user.id] }); toast("Nouveau capitaine nommé."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
       if (b.dataset.act === "kick") confirmable(b, "Confirmer ?", async () => { try { await rpc("kick_member", { p_user: u }); discordSync({ user_ids: [u] }); toast("Joueur retiré."); refresh(); } catch (x) { toast(errMsg(x), "err"); } });
@@ -1379,7 +1493,6 @@
     ["espace", "#/espace", "Tableau de bord"],
     ["scrims", "#/nos-scrims", "Nos scrims"],
     ["compos", "compo/", "Compos"],
-    ["roles", "compo/#/team", "Rôles des joueurs", true],
     ["strats", "compo/#/strats", "Strats"],
     ["roster", "#/mon-equipe", "Roster"],
     ["reglages", "#/reglages", "Réglages"],

@@ -101,7 +101,6 @@ export function TeamSide() {
         {ext('espace', '#/espace', 'Tableau de bord')}
         {ext('scrims', '#/nos-scrims', 'Nos scrims')}
         {int('compos', '/', 'Compos', inCompos)}
-        {int('roles', '/team', 'Rôles des joueurs', pathname === '/team', true)}
         {int('strats', '/strats', 'Strats', pathname.startsWith('/strats'))}
         {ext('roster', '#/mon-equipe', 'Roster')}
         {ext('reglages', '#/reglages', 'Réglages')}
