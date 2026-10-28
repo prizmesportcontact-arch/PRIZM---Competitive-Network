@@ -1,0 +1,10 @@
+.reset-all { margin-top: 40px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 14px 24px; padding: 18px 22px; border-color: rgba(255, 97, 112, 0.28) !important; }
+.reset-all > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 320px; }
+.reset-all b { font: 800 1.05rem var(--font-display); text-transform: uppercase; letter-spacing: 0.03em; }
+.reset-all span { font-size: 0.88rem; color: var(--text-secondary); }
+.reset-all__dialog { display: grid; gap: 14px; width: min(460px, 100%); }
+.reset-all__check { display: flex; align-items: center; gap: 10px; font-weight: 600; cursor: pointer; }
+.reset-all__check input { width: 18px; height: 18px; accent-color: #ff6170; }
+.reset-all__type { display: grid; gap: 6px; font-size: 0.88rem; color: var(--text-secondary); }
+.reset-all__type b { color: #ff6170; font-family: var(--font-mono); }
+.reset-all__type input { font: 600 1rem var(--font-mono); letter-spacing: 0.1em; padding: 10px 12px; border: 1px solid var(--border-subtle); background: var(--bg-base); color: var(--text-primary); }

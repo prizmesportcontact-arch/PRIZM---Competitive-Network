@@ -8,6 +8,8 @@ import { MapCardSkeletonGrid } from '../../components/Skeleton/Skeleton'
 import FilterBar, { FILTERS, SORTS } from '../../components/FilterBar/FilterBar'
 import CompCard, { AddCompCard } from '../../components/CompCard/CompCard'
 import NewCompModal from '../../components/NewCompModal/NewCompModal'
+import ResetAll from '../../components/ResetAll/ResetAll'
+import { useStrats } from '../../context/StratsContext'
 import { FREE_MAP } from '../../context/DataContext'
 import { useAuth } from '../../context/AuthContext'
 import { countFilled } from '../../utils/compositions'
@@ -17,6 +19,7 @@ export default function Home() {
   const { maps, agents, status, error, reload } = useData()
   const { compositionsByMap, createComposition } = useCompositions()
   const { isAdmin } = useAuth()
+  const { strats } = useStrats()
   const [newOpen, setNewOpen] = useState(false)
   const agentByUuid = useMemo(() => new Map(agents.map((a) => [a.uuid, a])), [agents])
   const { players } = usePlayers()
@@ -138,6 +141,12 @@ export default function Home() {
               <div className="home__empty glass-panel">
                 <p>Aucune map ne correspond à ces critères.</p>
               </div>
+            )}
+            {isAdmin && (
+              <ResetAll
+                compsCount={Object.values(compositionsByMap).reduce((n, b) => n + Object.keys(b || {}).length, 0)}
+                stratsCount={Object.values(strats || {}).filter((x) => !String(x.id).startsWith('draft-')).length}
+              />
             )}
             <NewCompModal open={newOpen} onClose={() => setNewOpen(false)} maps={maps} agents={agents} createComposition={createComposition} />
           </>

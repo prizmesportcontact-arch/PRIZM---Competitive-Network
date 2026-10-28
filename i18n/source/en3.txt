@@ -74,3 +74,17 @@ ex : Anti-rush, Compo fun, Eco…	e.g. Anti-rush, Fun comp, Eco…
 Pas de compo	No comp
 ◌ Pas de compo	◌ No comp
 Une compo (ou plusieurs) par map : agents, joueurs, notes et strats. Clique une map pour la préparer, ou ajoute une compo à ta façon, avec ou sans map.	One comp (or more) per map: agents, players, notes and strats. Click a map to prepare it, or add your own comp, with or without a map.
+Tout réinitialiser	Reset everything
+Tout réinitialiser ?	Reset everything?
+Supprime toutes les compos de l'équipe et, si tu veux, toutes les strats. Le roster et les rôles des joueurs ne changent pas.	Deletes all the team's comps and, if you want, all strats. The roster and player roles don't change.
+Supprime toutes les compos de l'équipe. Le roster et les rôles des joueurs ne changent pas.	Deletes all the team's comps. The roster and player roles don't change.
+{} compos seront supprimées pour toute l'équipe. C'est définitif, impossible de revenir en arrière.	{} comps will be deleted for the whole team. This is permanent and can't be undone.
+{} compo sera supprimée pour toute l'équipe. C'est définitif, impossible de revenir en arrière.	{} comp will be deleted for the whole team. This is permanent and can't be undone.
+Supprimer aussi les {} strats	Also delete the {} strats
+Supprimer aussi la strat	Also delete the strat
+Tape RESET pour confirmer	Type RESET to confirm
+Tout supprimer	Delete everything
+Suppression…	Deleting…
+Compos et strats réinitialisées.	Comps and strats reset.
+Compos réinitialisées.	Comps reset.
+Impossible de tout réinitialiser.	Couldn't reset everything.

@@ -83,3 +83,9 @@ export async function deleteStratRow(id) {
   const { error } = await supabase.from('cb_strats').delete().eq('id', id)
   if (error) throw error
 }
+
+/** Supprime toutes les strats de l'équipe (réinitialisation complète). */
+export async function deleteAllStrats() {
+  const { error } = await supabase.from('cb_strats').delete().eq('team_id', getTeamId())
+  if (error) throw error
+}
