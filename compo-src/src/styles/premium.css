@@ -120,3 +120,4 @@ body .sb2-rolechips button, body .sb2-legend li { border-radius: 999px; }
 body .sb2-board { border-radius: var(--radius-lg); overflow: hidden; }
 body .sb-zoom { border-radius: var(--radius-sm); overflow: hidden; }
 body .sp-btn, body .sp-dot { border-radius: 999px; }
+body .agent-modal__roles button, body .agent-modal__role { border-radius: 999px; }
