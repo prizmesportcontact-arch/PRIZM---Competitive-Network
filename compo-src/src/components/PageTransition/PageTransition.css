@@ -1,0 +1,3 @@
+.page-enter { animation: page-enter 0.3s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes page-enter { from { opacity: 0; transform: translateY(12px); } }
+@media (prefers-reduced-motion: reduce) { .page-enter { animation: none; } }

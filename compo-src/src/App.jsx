@@ -2,7 +2,7 @@ import { networkUrl } from './services/team'
 import { Suspense, lazy } from 'react'
 import { useEffect } from 'react'
 import { Navigate, Route, RouterProvider, Routes, createHashRouter, useLocation } from 'react-router-dom'
-import { AnimatePresence, MotionConfig } from 'framer-motion'
+import { MotionConfig } from 'framer-motion'
 import { ThemeProvider } from './context/ThemeContext'
 import { SoundProvider } from './context/SoundContext'
 import { AuthProvider, useAuth } from './context/AuthContext'
@@ -31,20 +31,14 @@ const Strat = lazy(() => import('./pages/Strat/Strat'))
 function AppRoutes() {
   const location = useLocation()
 
-  // Le Suspense est imbriqué À L'INTÉRIEUR de chaque PageTransition (donc à
-  // l'intérieur d'AnimatePresence), pas englobant tout le bloc. S'il englobait
-  // AnimatePresence + Routes, un composant lazy pas encore chargé faisait
-  // basculer TOUT le sous-arbre sur le fallback pendant le chargement du
-  // chunk, ce qui démonte AnimatePresence en cours d'animation de sortie et
-  // lui fait perdre le suivi de la page en train de disparaître : elle reste
-  // alors bloquée à l'écran indéfiniment (page blanche après une recherche
-  // puis un clic, par ex.). Avec un Suspense propre à chaque page,
-  // AnimatePresence n'est plus jamais démonté pendant une transition.
+  // Chaque page a son propre Suspense : pendant le chargement de son code, seul son contenu
+  // affiche « Chargement… », le reste de l'écran (menus) ne bouge pas.
   const pageFallback = <div className="container"><Loader label="Chargement…" /></div>
 
   return (
-    <AnimatePresence mode="wait">
-      <Routes location={location} key={location.pathname}>
+    // Plus d'animation de sortie entre les pages : avec les pages chargées à la demande, elle restait
+    // parfois bloquée et laissait la zone vide. Chaque page apparaît juste en fondu (voir PageTransition).
+    <Routes location={location} key={location.pathname}>
         <Route path="/" element={<PageTransition><Suspense fallback={pageFallback}><Home /></Suspense></PageTransition>} />
         <Route path="/editor/:mapId" element={<PageTransition><Suspense fallback={pageFallback}><Editor /></Suspense></PageTransition>} />
         <Route path="/team" element={<ToRoster />} />
@@ -53,8 +47,7 @@ function AppRoutes() {
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         {/* Toute URL inconnue renvoie vers l'accueil plutôt que sur une page blanche. */}
         <Route path="*" element={<Navigate to="/" replace />} />
-      </Routes>
-    </AnimatePresence>
+    </Routes>
   )
 }
 
