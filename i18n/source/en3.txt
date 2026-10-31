@@ -88,3 +88,98 @@ Suppression…	Deleting…
 Compos et strats réinitialisées.	Comps and strats reset.
 Compos réinitialisées.	Comps reset.
 Impossible de tout réinitialiser.	Couldn't reset everything.
+Hors classement	Unranked
+Une des deux équipes n'est pas encore validée : ce scrim ne compte pas au classement	One of the two teams isn't approved yet: this scrim doesn't count in the standings
+On sera en retard	We'll be late
+{} min	{} min
+🕒 Vous avez prévenu : environ {} min de retard.	🕒 You let them know: about {} min late.
+🕒 L'adversaire annonce environ {} min de retard.	🕒 The opponent says they'll be about {} min late.
+Retard annoncé ({} min) : l'autre capitaine est prévenu sur Discord.	Delay announced ({} min): the other captain has been notified on Discord.
+Ton équipe n'est pas encore validée : tes scrims se jouent hors classement, dans ta division estimée (D{}). Ils comptent au classement dès la validation par le staff.	Your team isn't approved yet: your scrims are unranked, in your estimated division (D{}). They count in the standings once the staff approves your team.
+Ton équipe a été refusée : contacte le staff dans #support pour en savoir plus.	Your team was rejected: contact the staff in #support to find out more.
+Équipe refusée	Team rejected
+L'équipe attend la validation du staff (il faut 5 titulaires). En attendant, tu peux déjà faire des scrims hors classement.	The team is waiting for staff approval (5 starters needed). Meanwhile, you can already play unranked scrims.
+En attendant la validation, ton équipe peut déjà faire des scrims hors classement.	While waiting for approval, your team can already play unranked scrims.
+{} · hors classement	{} · unranked
+Règlement	Rules
+L'essentiel à connaître avant ton premier scrim. Le règlement est aussi épinglé sur le Discord.	What you need to know before your first scrim. The rules are also pinned on the Discord.
+Roster	Roster
+5 titulaires et jusqu'à 2 remplaçants. Un joueur ne joue que pour une équipe à la fois.	5 starters and up to 2 substitutes. A player only plays for one team at a time.
+Comptes	Accounts
+Chaque joueur déclare son Riot ID. Le smurf et le partage de compte entraînent l'exclusion.	Every player declares their Riot ID. Smurfing and account sharing lead to exclusion.
+Validation	Approval
+Le staff valide la division d'une équipe quand elle a 5 titulaires. Avant ça, l'équipe peut déjà scrimer : ses scrims sont hors classement.	The staff approves a team's division once it has 5 starters. Before that, the team can already scrim: its scrims are unranked.
+Ponctualité	Punctuality
+En retard ? Préviens avec « On sera en retard » (5 à 30 min) : l'adversaire est prévenu sur Discord. Sans prévenir, 15 minutes après l'heure prévue, l'adversaire peut déclarer une absence (le délai est allongé du retard annoncé).	Running late? Use "We'll be late" (5 to 30 min): the opponent is notified on Discord. Without notice, 15 minutes after the scheduled time the opponent can report a no-show (the delay is extended by the announced lateness).
+Annulation	Cancellation
+Annule au moins 2 h avant. En dessous, c'est une annulation tardive : elle fait baisser ta fiabilité.	Cancel at least 2 h before. Any later is a late cancellation: it lowers your reliability.
+Résultats	Results
+Un capitaine envoie le score de chaque map, l'autre confirme. En BO3, gagne l'équipe qui remporte le plus de maps. Sans réponse sous 48 h, le résultat est validé.	One captain sends each map's score, the other confirms. In a BO3, the team that wins the most maps wins. With no answer within 48 h, the result is approved.
+Classement	Standings
+Victoire 3 points, nul 1 point, puis la différence de rounds. Seuls les scrims entre deux équipes validées comptent. La fiabilité indique la part de scrims honorés.	Win 3 points, draw 1 point, then round difference. Only scrims between two approved teams count. Reliability shows the share of scrims honoured.
+Esprit scrim	Scrim spirit
+On joue pour progresser : pas de troll, pas de rage-quit, on va au bout du format prévu.	We play to improve: no trolling, no rage-quitting, we play the full format.
+Comportement	Behaviour
+Toxicité, insultes ou triche : avertissement, puis exclusion du réseau.	Toxicity, insults or cheating: a warning, then exclusion from the network.
+Litiges	Disputes
+Un ticket dans #support sur le Discord. La décision du staff est définitive.	A ticket in #support on the Discord. The staff's decision is final.
+Pas encore d'équipe en {}	No team in {} yet
+Les équipes apparaissent ici une fois validées par le staff.	Teams show up here once the staff approves them.
+Aucune proposition en ce moment	No proposals right now
+Lance la première : une équipe de ton niveau pourra l'accepter en un clic.	Post the first one: a team at your level can accept it in one click.
+Inscrire mon équipe	Register my team
+Créer ou rejoindre une équipe	Create or join a team
+Proposer un scrim	Propose a scrim
+Personne avec ces filtres	Nobody with these filters
+Essaie une autre division ou un autre rôle.	Try another division or role.
+Aucun joueur ne cherche d'équipe pour l'instant	No player is looking for a team yet
+Aucune équipe ne recrute pour l'instant	No team is recruiting yet
+Publie ton annonce : elle apparaît ici et sur le Discord.	Post your listing: it shows up here and on the Discord.
+Aucun scrim joué en D{} pendant cette saison	No scrims played in D{} this season
+Choisis une autre division ou une autre saison.	Pick another division or season.
+Pas encore de scrim classé en D{}	No ranked scrims in D{} yet
+Le classement se remplit à chaque scrim confirmé entre deux équipes validées.	The standings fill up with each confirmed scrim between two approved teams.
+Aucune proposition à ton niveau pour l'instant	No proposals at your level yet
+Aucune proposition pour l'instant	No proposals yet
+Aucune proposition en D{} pour l'instant	No proposals in D{} yet
+Lance la tienne avec « Proposer un scrim » : elle apparaît aussi sur le Discord.	Post yours with "Propose a scrim": it also shows up on the Discord.
+Reviens plus tard, ou inscris ton équipe pour proposer un créneau.	Come back later, or register your team to propose a slot.
+Aucun scrim calé	No scrim scheduled
+Accepte une proposition ou publie la tienne.	Accept a proposal or post your own.
+Le capitaine cale les scrims de l'équipe.	The captain schedules the team's scrims.
+Trouver un scrim	Find a scrim
+Pas encore de scrim	No scrims yet
+Propose un créneau ou accepte celui d'une autre équipe : tout ce qui concerne vos scrims s'affichera ici.	Propose a slot or accept another team's: everything about your scrims will show up here.
+Le capitaine cale les scrims depuis la page Scrims.	The captain schedules scrims from the Scrims page.
+Inscris ton équipe	Register your team
+Connexion avec Discord, puis invite tes joueurs. Tu peux scrimer tout de suite.	Log in with Discord, then invite your players. You can scrim right away.
+Propose ou accepte un créneau	Propose or accept a slot
+Une équipe de ton niveau accepte en un clic, le Discord prévient les deux capitaines.	A team at your level accepts in one click, and the Discord notifies both captains.
+Envoie le score	Send the score
+L'autre capitaine confirme, le classement se met à jour.	The other captain confirms, and the standings update.
+Ta division dépend du rang de tes titulaires. Tu scrimes contre ta division et les divisions voisines.	Your division depends on your starters' ranks. You scrim against your division and the neighbouring ones.
+Mon équipe n'est pas encore validée, on peut jouer ?	My team isn't approved yet, can we play?
+Oui. Dès que l'équipe est créée, le capitaine peut proposer et accepter des scrims. Ils se jouent hors classement jusqu'à la validation par le staff (il faut 5 titulaires).	Yes. As soon as the team is created, the captain can propose and accept scrims. They're unranked until the staff approves the team (5 starters needed).
+Victoire 3 points, nul 1 point, puis la différence de rounds. La fiabilité indique la part de scrims honorés. Tout est détaillé dans le règlement.	Win 3 points, draw 1 point, then round difference. Reliability shows the share of scrims honoured. Everything is detailed in the rules.
+Compo {} · {} strats	Comp {} · {} strats
+Compo {} · {} strat	Comp {} · {} strat
+Modifier les rôles de {}	Edit {}'s roles
+Victoire 3 points, nul 1 point, puis la différence de rounds. La fiabilité indique la part de scrims honorés. Tout est détaillé dans le	Win 3 points, draw 1 point, then round difference. Reliability shows the share of scrims honoured. Everything is detailed in the
+règlement	rules
+Ton équipe peut proposer et accepter des scrims.	Your team can propose and accept scrims.
+est donné automatiquement sur le Discord PRIZM. Tu dois être sur le serveur pour le recevoir :	is given automatically on the PRIZM Discord. You need to be on the server to get it:
+. Arrivé après la validation ?	. Joined after the approval?
+Ton équipe n'est pas encore validée : tes scrims se jouent hors classement, dans ta division estimée (D{}). Ils comptent au classement dès la validation par le staff.	Your team isn't approved yet: your scrims are unranked, in your estimated division (D{}). They count in the standings once the staff approves your team.
+🕒 Vous avez prévenu : environ {} min de retard.	🕒 You let them know: about {} min late.
+🕒 L'adversaire annonce environ {} min de retard.	🕒 The opponent says they'll be about {} min late.
+{} compos seront supprimées pour toute l'équipe. C'est définitif, impossible de revenir en arrière.	{} comps will be deleted for the whole team. This is permanent and can't be undone.
+{} compo sera supprimée pour toute l'équipe. C'est définitif, impossible de revenir en arrière.	{} comp will be deleted for the whole team. This is permanent and can't be undone.
+Tape RESET pour confirmer	Type RESET to confirm
+Supprime toutes les compos de l'équipe et, si tu veux, toutes les strats. Le roster et les rôles des joueurs ne changent pas.	Deletes all the team's comps and, if you want, all strats. The roster and player roles don't change.
+Hors classement · {}	Unranked · {}
+prête	ready
+en test	in testing
+à revoir	to review
+brouillon	draft
+Rôles recherchés	Roles wanted
+ex : on cherche un smoke chill pour scrimer 3 soirs par semaine	e.g. we're looking for a chill smoke to scrim 3 evenings a week

@@ -13,7 +13,7 @@ const NETWORK_LINKS = [
   ['#/recherche', 'Recherche'],
   ['#/classement', 'Classement'],
   ['#/equipes', 'Équipes'],
-  ['#reglement', 'Règlement'],
+  ['#/reglement', 'Règlement'],
 ]
 
 export default function Navbar() {
@@ -29,7 +29,6 @@ export default function Navbar() {
               {label}
             </a>
           ))}
-          <a href={networkUrl('#/prizm')} className="pz-top__switch">Par PRIZM Esport →</a>
         </nav>
         <AuthPanel />
       </div>

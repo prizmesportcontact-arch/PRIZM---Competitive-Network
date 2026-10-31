@@ -1,5 +1,5 @@
 // PRIZM — envoie en message privé Discord les notifications de la file notify_queue :
-// scrim accepté, rappel 30 min avant, score à confirmer, absence déclarée.
+// scrim accepté, rappel 30 min avant, retard annoncé, score à confirmer, absence déclarée.
 // Appelée uniquement par la base (en-tête x-dm-secret = secret rangé dans app_secrets).
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   const scrimIds = [...new Set(jobs.map((j) => j.scrim_id).filter(Boolean))];
   const userIds = [...new Set(jobs.map((j) => j.user_id))];
   const [{ data: scrims }, { data: users }] = await Promise.all([
-    db.from("scrims").select("id, starts_at, format, maps, host_id, guest_id, host_score, guest_score, reported_by, no_show, status").in("id", scrimIds),
+    db.from("scrims").select("id, starts_at, format, maps, host_id, guest_id, host_score, guest_score, reported_by, no_show, status, late_minutes").in("id", scrimIds),
     db.from("profiles").select("id, discord_id").in("id", userIds),
   ]);
   const teamIds = [...new Set((scrims ?? []).flatMap((s) => [s.host_id, s.guest_id]).filter(Boolean))];
@@ -59,6 +59,10 @@ Deno.serve(async (req) => {
       const us = mine === s.host_id ? s.host_score : s.guest_score, them = mine === s.host_id ? s.guest_score : s.host_score;
       embed = { title: "📝 Score à confirmer", color: 0xf2d45c,
         description: `**${oppName}** a envoyé le score : **${us} – ${them}** pour ton équipe.\nConfirme ou conteste sur le site. Sans réponse sous 48 h, il est validé.` };
+    } else if (j.kind === "late") {
+      if (s.status !== "cale") { await fail("scrim plus calé", true); continue; }
+      embed = { title: "🕒 Retard annoncé", color: 0xffa043,
+        description: `**${oppName}** prévient : environ **${s.late_minutes} min** de retard pour le scrim de ${ts(s.starts_at, "t")}.\nPas besoin de déclarer une absence : le délai est allongé d'autant.` };
     } else {
       embed = { title: "⚠️ Absence déclarée", color: 0xff6170,
         description: `**${oppName}** a déclaré ton équipe absente au scrim du ${ts(s.starts_at, "f")}.\nUne erreur ? Ouvre un ticket dans #support.` };

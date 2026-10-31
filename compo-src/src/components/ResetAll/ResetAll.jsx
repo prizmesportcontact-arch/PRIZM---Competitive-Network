@@ -47,7 +47,9 @@ export default function ResetAll({ compsCount, stratsCount }) {
       <section className="reset-all glass-panel">
         <div>
           <b>Tout réinitialiser</b>
-          <span>Supprime toutes les compos de l'équipe{stratsCount ? ' et, si tu veux, toutes les strats' : ''}. Le roster et les rôles des joueurs ne changent pas.</span>
+          <span>{stratsCount
+            ? "Supprime toutes les compos de l'équipe et, si tu veux, toutes les strats. Le roster et les rôles des joueurs ne changent pas."
+            : "Supprime toutes les compos de l'équipe. Le roster et les rôles des joueurs ne changent pas."}</span>
         </div>
         <button type="button" className="btn btn-danger" onClick={() => setOpen(true)} disabled={!compsCount && !stratsCount}>Tout réinitialiser</button>
       </section>
@@ -68,8 +70,9 @@ export default function ResetAll({ compsCount, stratsCount }) {
             >
               <h3 id="reset-title">Tout réinitialiser ?</h3>
               <p>
-                {compsCount} compo{compsCount > 1 ? 's' : ''} {compsCount > 1 ? 'seront supprimées' : 'sera supprimée'} pour toute l'équipe.
-                C'est définitif, impossible de revenir en arrière.
+                {compsCount > 1
+                  ? `${compsCount} compos seront supprimées pour toute l'équipe. C'est définitif, impossible de revenir en arrière.`
+                  : `${compsCount} compo sera supprimée pour toute l'équipe. C'est définitif, impossible de revenir en arrière.`}
               </p>
               {stratsCount > 0 && (
                 <label className="reset-all__check">
@@ -78,7 +81,7 @@ export default function ResetAll({ compsCount, stratsCount }) {
                 </label>
               )}
               <label className="reset-all__type">
-                <span>Tape <b>{WORD}</b> pour confirmer</span>
+                <span>{`Tape ${WORD} pour confirmer`}</span>
                 <input autoFocus value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" spellCheck={false} />
               </label>
               <div className="confirm-dialog__actions">

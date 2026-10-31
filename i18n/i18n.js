@@ -91,7 +91,7 @@
   window.prizmT = function (s) { if (lang !== 'en') return s; var t = tr(s); return t == null ? s : t; };
 
   var SKIP = { SCRIPT: 1, STYLE: 1, TEXTAREA: 1, NOSCRIPT: 1, CODE: 1 };
-  var ATTRS = ['placeholder', 'title', 'aria-label', 'alt'];
+  var ATTRS = ['placeholder', 'title', 'aria-label', 'alt', 'data-label'];
   var done = new WeakMap();
   function skipEl(el) {
     for (var e = el; e && e.nodeType === 1; e = e.parentNode) {
