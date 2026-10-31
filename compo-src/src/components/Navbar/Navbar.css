@@ -119,3 +119,12 @@
 /* Lien vers la page de l'équipe PRIZM, comme sur le site */
 .pz-top__nav a.pz-top__switch { color: #9b84ff; border-left: 1px solid var(--border-subtle); padding-left: 18px; }
 .pz-top__nav a.pz-top__switch:hover { color: #b9a8ff; }
+
+/* Passage du site au Comp Builder (et retour) : fondu entre les deux pages, en-tête et menu de côté restent en place */
+@view-transition { navigation: auto; }
+.pz-top { view-transition-name: site-top; }
+.tm-side { view-transition-name: team-side; }
+::view-transition-old(root), ::view-transition-new(root) { animation-duration: .18s; }
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
+}

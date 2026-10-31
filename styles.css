@@ -1305,3 +1305,91 @@ details.act-menu summary{display:inline-flex;align-items:center;gap:4px}
   .db-table tr.is-ban{opacity:.55}
   .db-table tr.is-ban td{opacity:1}
 }
+
+/* ===== Navigation fluide entre les pages ===== */
+/* Passage du site au Comp Builder (et retour) : fondu entre les deux pages au lieu d'un écran blanc */
+@view-transition{navigation:auto}
+header.top{view-transition-name:site-top}
+.tm-side{view-transition-name:team-side}
+::view-transition-old(root),::view-transition-new(root){animation-duration:.18s}
+/* Barre de progression fine en haut de l'écran */
+#nav-progress{position:fixed;top:0;left:0;height:2px;width:0;z-index:100;background:var(--accent);box-shadow:0 0 8px color-mix(in srgb,var(--accent) 60%,transparent);opacity:0;pointer-events:none}
+#nav-progress.run{opacity:1;animation:navprog 2.4s cubic-bezier(.1,.6,.3,1) forwards}
+#nav-progress.done{opacity:0;width:100%;transition:width .15s ease,opacity .3s .15s ease}
+@keyframes navprog{0%{width:0}30%{width:45%}100%{width:85%}}
+/* L'ancienne page s'estompe le temps que la nouvelle arrive */
+.nav-busy{opacity:.55;transition:opacity .15s ease .06s;pointer-events:none}
+.nav-in{animation:navin .26s cubic-bezier(.2,.7,.3,1)}
+@keyframes navin{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+/* Page squelette (seulement si la page met du temps) */
+.skel-page{display:grid;gap:16px;padding-top:8px}
+.skel{display:block;border-radius:var(--r-sm,10px);background:linear-gradient(90deg,var(--panel) 25%,color-mix(in srgb,var(--panel) 55%,var(--paper)) 50%,var(--panel) 75%);background-size:200% 100%;animation:skel 1.2s linear infinite}
+.skel-t{height:14px;width:120px}.skel-l{height:46px;width:min(420px,70%)}
+.skel-row{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}.skel-c{height:96px}
+.skel-b{height:64px}.skel-b.short{width:60%}
+@keyframes skel{to{background-position:-200% 0}}
+@media (prefers-reduced-motion:reduce){.nav-in,.skel,#nav-progress.run{animation:none}#nav-progress.run{width:70%}::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important}}
+
+/* ===== Panneau admin ===== */
+.ad .tm-side{gap:14px}
+.ad-tip{margin:0;color:var(--mute)}
+.ad-tip kbd,.ad kbd{font:600 .72rem var(--mono);padding:1px 6px;border:1px solid var(--line);border-bottom-width:2px;border-radius:5px;background:var(--paper)}
+@media (max-width:900px){.ad-tip{display:none}}
+.ad-count{background:var(--warn);color:#1a1006}
+.ad-tile.warn{box-shadow:inset 0 0 0 1.5px color-mix(in srgb,var(--warn) 70%,transparent)}
+.ad-tile small{color:var(--mute)}
+.ad-tile.warn small{color:var(--warn)}
+.ad-todo{box-shadow:var(--shadow),inset 0 0 0 1px color-mix(in srgb,var(--accent) 30%,transparent)}
+.ad-todo-n{font:700 .74rem var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--mute)}
+.ad-todo-n.on{color:#1a1006;background:var(--warn);padding:3px 9px;border-radius:999px}
+.ad-queue{display:grid;gap:8px;margin-bottom:14px}
+.ad-q-row{display:grid;grid-template-columns:minmax(0,1.4fr) minmax(0,.8fr) auto;align-items:center;gap:12px 18px;padding:12px 14px;border-radius:var(--r-md,14px);background:var(--raised,var(--panel));border:1px solid var(--edge,var(--line))}
+.ad-q-meta{display:grid;font-size:.88rem}.ad-q-meta small{color:var(--mute);font-size:.78rem}
+.ad-q-act{display:flex;flex-wrap:wrap;align-items:center;gap:8px;justify-content:flex-end}
+@media (max-width:760px){.ad-q-row{grid-template-columns:minmax(0,1fr) auto}.ad-q-act{grid-column:1/-1;justify-content:flex-start}}
+.ok-t{color:var(--ok)}.warn-t{color:var(--warn)}
+.ad-div{font:500 .86rem var(--body);padding:6px 8px;border:1px solid var(--line);background:var(--paper);color:var(--ink);border-radius:8px;max-width:100%}
+/* Barre d'outils collée sous l'en-tête pendant qu'on fait défiler la liste */
+.ad-bar{position:sticky;top:calc(env(safe-area-inset-top,0px) + 64px);z-index:5;padding:12px 0 2px;background:linear-gradient(var(--paper) 85%,transparent)}
+.ad-bar .scx-filter{margin-bottom:6px}
+.ad-bar-top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 16px}
+.ad-bar-top .ad-search{flex:1 1 280px;border-radius:10px}
+@media (max-width:820px){.ad-bar{position:static;background:none;padding-top:0}}
+.ad-result{display:flex;align-items:center;gap:14px;font-size:.85rem;color:var(--mute)}
+.ad-hint{margin:-4px 0 0}
+.ad-table tbody tr.is-pending>td:first-child{box-shadow:inset 3px 0 0 var(--warn)}
+.ad-table tbody tr.is-open>td{background:var(--panel)}
+.ad-table td small.mute{display:block}
+.ad-table td.ad-row-act{display:table-cell}
+.ad-table td.ad-row-act>*{margin-left:6px}
+.btn.sm.on{border-color:var(--accent);color:var(--accent)}
+.ad-detail td{padding:16px 18px}
+.ad-manage{display:grid;gap:12px}
+.ad-group{display:grid;gap:8px;padding:12px 14px;border-radius:var(--r-sm,12px);background:var(--paper);border:1px solid var(--edge,var(--line))}
+.ad-group .eyebrow{margin:0}
+.ad-danger{border-color:color-mix(in srgb,var(--bad) 45%,transparent)}
+.ad-danger .eyebrow{color:var(--bad)}
+.ad-edit{display:inline-flex;flex-wrap:wrap;align-items:center;gap:6px}
+.ad-edit select{font:500 .86rem var(--body);padding:6px 8px;border:1px solid var(--accent);background:var(--paper);color:var(--ink);border-radius:8px}
+.ad-pen{border:0;background:none;color:var(--mute);cursor:pointer;font-size:.95rem;padding:2px 5px;border-radius:6px;opacity:.55}
+tr:hover .ad-pen,.ad-pen:focus-visible{opacity:1}
+.ad-pen:hover{color:var(--accent);background:var(--panel)}
+@media (hover:none){.ad-pen{opacity:1}}
+@media (max-width:640px){
+  .ad-table td.ad-row-act{display:flex;grid-column:1/-1;flex-direction:row!important;justify-content:flex-start;flex-wrap:wrap}
+  .ad-table td.ad-row-act::before{display:none}
+  .ad-table td.ad-row-act>*{margin-left:0}
+  .ad-table tr.ad-detail{display:block;padding:0;background:none;border:0}
+  .ad-table tr.ad-detail[hidden]{display:none!important}
+  .ad-table tr.ad-detail>td{display:block;padding:0!important}
+  .ad-table tr.is-pending{box-shadow:inset 3px 0 0 var(--warn)}
+  .ad-table tr.is-pending>td:first-child{box-shadow:none}
+}
+/* Tableaux du panneau admin : plus compacts, rien ne passe à la ligne au milieu d'une info */
+.ad-table small.nw,.ad-edit,.ad-discord .link-btn,.ad-cap{white-space:nowrap}
+.ad-edit{flex-wrap:nowrap}
+.ad-id b{white-space:normal}
+@media (max-width:640px){.ad-edit{flex-wrap:wrap}}
+.ad .tm-main{grid-template-columns:minmax(0,1fr)}
+.ad-table td{padding:10px 8px}
+@media (max-width:640px){.ad-table .pill{white-space:normal;text-align:left}}

@@ -45,6 +45,14 @@
   let sb = null;
   if (window.supabase && CFG.supabaseUrl && CFG.supabaseKey) {
     sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
+    // Toute écriture directe dans une table (ou appel de fonction serveur) vide le cache des lectures
+    const from = sb.from.bind(sb), invoke = sb.functions.invoke.bind(sb.functions);
+    sb.from = table => {
+      const q = from(table);
+      ["insert", "update", "upsert", "delete"].forEach(m => { const f = q[m]; if (f) q[m] = (...a) => { clearCache(); return f.apply(q, a); }; });
+      return q;
+    };
+    sb.functions.invoke = (...a) => invoke(...a).finally(clearCache);
   }
   const state = { session: null, profile: null, team: null, isAdmin: false, isStaff: false };
 
@@ -85,7 +93,7 @@
     if (error) toast(errMsg(error), "err");
   }
   async function logout() {
-    await sb.auth.signOut(); state.session = null; clearMe();
+    await sb.auth.signOut(); clearCache(); state.session = null; clearMe();
     renderAuth(); location.hash = "#top"; route();
   }
 
@@ -172,6 +180,9 @@
     if (path === "/compo") { location.href = "compo/"; return; }
     const home = $("#view-home"), net = $("#view-network"), app = $("#view-app");
     document.querySelectorAll("header.top nav a").forEach(a => a.classList.toggle("on", a.getAttribute("href") === (TEAM_ROUTES.includes(h) ? "#/espace" : h)));
+    // Menu de côté (équipe, admin) : l'onglet cliqué s'allume tout de suite, sans attendre la page
+    const hBase = h.split("?")[0];
+    app.querySelectorAll(".tm-link").forEach(a => { const on = (a.getAttribute("href") || "").split("?")[0] === hBase; a.classList.toggle("on", on); if (on) a.setAttribute("aria-current", "page"); else a.removeAttribute("aria-current"); });
     stopLive();
     // Le Competitive Network est l'accueil (l'ancienne page de l'équipe PRIZM, #/prizm, renvoie dessus)
     if (path === "/prizm") { location.replace("#/"); return; }
@@ -182,24 +193,112 @@
     document.body.classList.toggle("area-net", inNet);
     document.body.classList.toggle("area-team", !inNet);
     if (path === "/reseau" || path === "/prizm") {
-      home.hidden = inNet; app.hidden = true; net.hidden = !inNet; window.scrollTo(0, 0); freshenStatic();
+      showStatic(inNet ? net : home); window.scrollTo(0, 0); freshenStatic();
     } else if (path && /^\/(equipe|joueur)\/[^/]+$/.test(path)) {
       // Pages publiques : #/equipe/TAG et #/joueur/<id>
       const [, kind, arg] = path.split("/");
-      home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
-      app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
-      (kind === "equipe" ? viewTeamPublic : viewPlayer)(app, decodeURIComponent(arg))
-        .catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
+      openView(() => (kind === "equipe" ? viewTeamPublic : viewPlayer)(app, decodeURIComponent(arg)));
     } else if (path && views[path]) {
-      home.hidden = true; net.hidden = true; app.hidden = false; window.scrollTo(0, 0);
-      app.innerHTML = `<div class="wrap app-wrap"><p class="eyebrow">Chargement…</p></div>`;
-      views[path](app).catch(e => { app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); });
+      openView(() => views[path](app));
     } else {
-      app.hidden = true; home.hidden = inNet; net.hidden = !inNet; freshenStatic();
+      showStatic(inNet ? net : home); freshenStatic();
       if (anchor) anchor.scrollIntoView(); else window.scrollTo(0, 0);
     }
   }
   window.addEventListener("hashchange", route);
+
+  // ---------- Changement de page en douceur ----------
+  // L'ancienne page reste affichée (légèrement estompée) pendant que la nouvelle se prépare,
+  // puis on bascule d'un coup avec un fondu : plus d'écran « Chargement… » entre deux onglets.
+  // Si la nouvelle page met du temps (première visite, réseau lent), une page squelette prend le relais.
+  const nav = { seq: 0, pending: 0, skelT: 0, prev: null };
+  const SKEL = `<div class="wrap app-wrap"><div class="skel-page" aria-busy="true"><span class="sr">Chargement…</span><i class="skel skel-t"></i><i class="skel skel-l"></i><div class="skel-row"><i class="skel skel-c"></i><i class="skel skel-c"></i><i class="skel skel-c"></i></div><i class="skel skel-b"></i><i class="skel skel-b short"></i></div></div>`;
+  const sections = () => [$("#view-home"), $("#view-network"), $("#view-app")];
+  function progress(on) {
+    let bar = $("#nav-progress");
+    if (!bar) { bar = document.createElement("div"); bar.id = "nav-progress"; bar.setAttribute("aria-hidden", "true"); document.body.appendChild(bar); }
+    clearTimeout(progress.t);
+    if (on) { bar.className = ""; void bar.offsetWidth; bar.className = "run"; }
+    else if (bar.classList.contains("run")) { bar.className = "done"; progress.t = setTimeout(() => { bar.className = ""; }, 400); }
+  }
+  function playIn(el) { el.classList.remove("nav-in"); void el.offsetWidth; el.classList.add("nav-in"); clearTimeout(playIn.t); playIn.t = setTimeout(() => el.classList.remove("nav-in"), 450); }
+  function clearBusy() { sections().forEach(s => s && s.classList.remove("nav-busy")); }
+  function showStatic(el) {
+    nav.seq++; nav.pending = 0; clearTimeout(nav.skelT); progress(false); clearBusy();
+    const was = !el.hidden;
+    sections().forEach(s => { if (s) s.hidden = s !== el; });
+    if (!was) playIn(el);
+  }
+  function openView(run) {
+    const app = $("#view-app"), seq = ++nav.seq;
+    viewKeys.clear();
+    clearTimeout(nav.skelT); clearBusy();
+    const prev = sections().find(s => s && !s.hidden);
+    const keep = prev && (prev !== app || (app.firstElementChild && !app.querySelector(".skel-page")));
+    nav.pending = seq;
+    progress(true);
+    if (keep) {
+      prev.classList.add("nav-busy");
+      nav.skelT = setTimeout(() => { if (nav.pending === seq) showSkeleton(app); }, 420);
+    } else showSkeleton(app);
+    Promise.resolve().then(run)
+      .catch(e => { if (nav.seq === seq) app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); })
+      .finally(() => { if (nav.seq === seq) { if (nav.pending === seq) finishView(app); progress(false); } });
+  }
+  function showSkeleton(app) {
+    clearBusy();
+    app.innerHTML = SKEL; navObserver.takeRecords();
+    sections().forEach(s => { if (s) s.hidden = s !== app; });
+    window.scrollTo(0, 0);
+  }
+  // La page écrit son contenu : on l'affiche (avant même que le navigateur ne dessine l'image suivante)
+  function finishView(app) {
+    if (!nav.pending) return;
+    nav.pending = 0; clearTimeout(nav.skelT); clearBusy();
+    const fromSkel = !!app.querySelector(":scope > .wrap > .skel-page");
+    if (fromSkel) return; // la page n'a encore rien écrit
+    sections().forEach(s => { if (s) s.hidden = s !== app; });
+    window.scrollTo(0, 0);
+    // Menu de côté identique d'une page à l'autre : seul le contenu fait le fondu
+    playIn(app.querySelector(".tm-main") || app);
+    progress(false);
+  }
+  const navObserver = new MutationObserver(() => { if (nav.pending) finishView($("#view-app")); });
+  navObserver.observe($("#view-app"), { childList: true });
+
+  // ---------- Préchargement : survoler un lien suffit à préparer la page ----------
+  const PREFETCH = {
+    "/scrims": () => [["list_scrims"]], "/nos-scrims": () => [["list_scrims"]], "/recherche": () => [["list_lfg"]],
+    "/classement": () => [["scrim_leaderboard"]], "/equipes": () => [["list_teams"]],
+    "/espace": () => state.team ? [["team_dashboard"], ["list_scrims"]] : [],
+    "/mon-equipe": () => state.team ? [["team_roster", { p_team: state.team.id }]] : [],
+    "/admin": () => state.isAdmin ? [["admin_overview"]] : [], "/admin-equipes": () => state.isAdmin ? [["admin_teams"]] : [],
+    "/admin-joueurs": () => state.isAdmin ? [["admin_players"]] : [], "/admin-scrims": () => state.isAdmin ? [["admin_scrims"]] : [],
+  };
+  function prefetchHash(h) {
+    if (!sb || !h || !h.startsWith("#/")) return;
+    const path = h.slice(1).split("?")[0];
+    let m;
+    if ((m = path.match(/^\/equipe\/([^/]+)$/))) return prefetchRpc("team_public", { p_tag: decodeURIComponent(m[1]) });
+    if ((m = path.match(/^\/joueur\/([^/]+)$/))) return prefetchRpc("player_public", { p_user: decodeURIComponent(m[1]) });
+    const f = PREFETCH[path]; if (!f) return;
+    f().forEach(([n, a]) => prefetchRpc(n, a));
+    if (path === "/scrims" || path === "/nos-scrims" || path === "/espace") prefetch("pools", () => loadPools());
+  }
+  const onIntent = e => { const a = e.target.closest && e.target.closest("a[href^='#/']"); if (a) prefetchHash(a.getAttribute("href")); };
+  document.addEventListener("pointerover", onIntent, { passive: true });
+  document.addEventListener("touchstart", onIntent, { passive: true });
+  document.addEventListener("focusin", onIntent);
+  // Comp Builder (autre page du site) : on télécharge ses fichiers en avance, une seule fois,
+  // pour que l'ouvrir depuis « Compos » ou « Strats » soit quasi immédiat
+  function warmCompo() {
+    if (warmCompo.done || !state.team) return; warmCompo.done = true;
+    const go = () => fetch("compo/", { credentials: "same-origin" }).then(r => r.ok ? r.text() : "").then(html => {
+      const urls = [...html.matchAll(/(?:src|href)="(\.\/assets\/[^"]+\.(?:js|css))"/g)].map(m => new URL(m[1], new URL("compo/", location.href)).href);
+      urls.forEach(u => { const l = document.createElement("link"); l.rel = "prefetch"; l.href = u; document.head.appendChild(l); });
+    }).catch(() => {});
+    (window.requestIdleCallback || (f => setTimeout(f, 1500)))(go);
+  }
 
   // ---------- Actualisation automatique ----------
   // Une seule connexion temps réel pour tout le site : on écoute la petite table « live_pulse ».
@@ -216,6 +315,7 @@
     live.topics = topics.filter(Boolean); live.refresh = refresh; live.path = path;
   }
   function onPulse(topic) {
+    staleCache();
     // Pages fixes (accueil PRIZM, accueil du réseau)
     if (topic === "scrims" || topic === "teams" || topic === "lfg") { staleStatic.add("team"); }
     if (topic === "scrims") staleStatic.add("scrims");
@@ -310,10 +410,67 @@
     });
   }
 
-  async function rpc(name, args) {
+  async function rawRpc(name, args) {
     const { data, error } = await sb.rpc(name, args);
     if (error) { if (isSetupError(error)) showSetupBanner(); throw error; }
     return data;
+  }
+
+  // ---------- Cache des lectures (navigation instantanée) ----------
+  // Une page déjà vue s'affiche tout de suite avec ses données en mémoire, puis se met à jour
+  // en arrière-plan si quelque chose a changé. Toute écriture (valider, supprimer, poster…) vide le cache.
+  const READ_RPC = new Set(["list_scrims", "list_teams", "list_lfg", "scrim_leaderboard", "team_roster", "team_recent_scrims",
+    "team_public", "team_dashboard", "player_public", "opponent_brief", "my_cb_edit_team",
+    "admin_overview", "admin_teams", "admin_players", "admin_scrims"]);
+  const FRESH_MS = 10000;
+  const qCache = new Map();      // clé → { data, json, at, p }
+  const viewKeys = new Set();    // clés lues par la page affichée
+  let qGen = 0;
+  const clone = d => d == null || typeof d !== "object" ? d : (typeof structuredClone === "function" ? structuredClone(d) : JSON.parse(JSON.stringify(d)));
+  function clearCache() { qGen++; qCache.clear(); }
+  function qFetch(key, fetcher) {
+    const g = qGen, prev = qCache.get(key);
+    const p = Promise.resolve().then(fetcher).then(data => {
+      if (g !== qGen) return data;
+      const json = JSON.stringify(data ?? null);
+      const changed = prev && prev.json !== undefined && prev.json !== json;
+      qCache.set(key, { data, json, at: Date.now(), p: null });
+      if (changed && viewKeys.has(key)) scheduleRefresh();
+      return data;
+    }, e => {
+      const cur = qCache.get(key);
+      if (cur && cur.p === p) { if (cur.json !== undefined) cur.p = null; else qCache.delete(key); }
+      throw e;
+    });
+    qCache.set(key, { ...(prev || {}), p });
+    return p;
+  }
+  async function cached(key, fetcher) {
+    viewKeys.add(key);
+    const c = qCache.get(key);
+    if (c && c.json !== undefined) {
+      if (!c.p && Date.now() - c.at > FRESH_MS) qFetch(key, fetcher).catch(() => {});
+      return clone(c.data);
+    }
+    if (c && c.p) return clone(await c.p);
+    return clone(await qFetch(key, fetcher));
+  }
+  function prefetch(key, fetcher) {
+    if (!sb) return;
+    const c = qCache.get(key);
+    if (c && (c.p || Date.now() - c.at < FRESH_MS)) return;
+    qFetch(key, fetcher).catch(() => {});
+  }
+  const rpcKey = (name, args) => name + ":" + JSON.stringify(args || {});
+  async function rpc(name, args) {
+    if (!READ_RPC.has(name)) { const d = await rawRpc(name, args); clearCache(); return d; }
+    return cached(rpcKey(name, args), () => rawRpc(name, args));
+  }
+  const prefetchRpc = (name, args) => READ_RPC.has(name) && prefetch(rpcKey(name, args), () => rawRpc(name, args));
+  // Données en base modifiées (signal temps réel) : tout devient « à revérifier » ;
+  // celles de la page affichée sont jetées pour que son actualisation reparte de la base
+  function staleCache() {
+    qCache.forEach((c, k) => { if (viewKeys.has(k) && !c.p) qCache.delete(k); else c.at = 0; });
   }
 
   // Synchro des rôles Discord (D1 à D4, Capitaine) via la fonction discord-sync
@@ -883,11 +1040,15 @@
   let mapListP = null, rotCache = null;
   // Pool compétitif du moment (7 maps du classé), mis à jour chaque jour par la base
   async function rotation() {
-    if (rotCache && Date.now() - rotCache.at < 60000) return rotCache.maps;
     if (!sb) return null;
-    const { data } = await sb.from("map_rotation").select("maps").eq("id", 1).maybeSingle();
-    rotCache = { at: Date.now(), maps: data && data.maps && data.maps.length ? data.maps : null };
-    return rotCache.maps;
+    const load = async () => {
+      const { data } = await sb.from("map_rotation").select("maps").eq("id", 1).maybeSingle();
+      rotCache = { at: Date.now(), maps: data && data.maps && data.maps.length ? data.maps : null };
+      return rotCache.maps;
+    };
+    // Déjà connue : on répond tout de suite, et on revérifie en arrière-plan si elle date un peu
+    if (rotCache) { if (Date.now() - rotCache.at > 60000 && !rotation.p) rotation.p = load().catch(() => {}).finally(() => { rotation.p = null; }); return rotCache.maps; }
+    return load();
   }
   // Maps du map pool : seulement celles du pool compétitif (toutes si la rotation est inconnue)
   async function mapList() {
@@ -916,9 +1077,11 @@
   // Tous les map pools (une petite ligne par équipe) : { team_id: { Ascent: "forte", ... } }
   async function loadPools() {
     if (!sb) return {};
-    const { data, error } = await sb.from("team_map_pools").select("team_id,pool");
-    if (error) return {};
-    return Object.fromEntries((data || []).map(r => [r.team_id, r.pool || {}]));
+    return cached("pools", async () => {
+      const { data, error } = await sb.from("team_map_pools").select("team_id,pool");
+      if (error) return {};
+      return Object.fromEntries((data || []).map(r => [r.team_id, r.pool || {}]));
+    });
   }
   // Maps conseillées entre deux équipes : aucune des deux ne la bannit, et les deux la jouent au moins
   function poolMatch(a, b, maps) {
@@ -1782,13 +1945,16 @@
   };
   const ADMIN_NAV = [["overview", "#/admin", "Vue d'ensemble"], ["teams", "#/admin-equipes", "Équipes"], ["players", "#/admin-joueurs", "Joueurs"], ["scrims", "#/admin-scrims", "Scrims"], ["seasons", "#/saisons", "Saisons"]];
   const ADMIN_ROUTES = ["#/admin", "#/admin-equipes", "#/admin-joueurs", "#/admin-scrims", "#/saisons", "#/staff"];
+  // Pastilles du menu (ce qui attend une action), gardées entre les pages du panneau
+  const adBadges = { teams: 0, scrims: 0 };
   const adIcon = k => `<svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${AD_ICONS[k]}"/></svg>`;
-  const adminShell = (active, title, inner, lead = "", badges = {}) =>
+  const adminShell = (active, title, inner, lead = "") =>
     `<div class="wrap app-wrap tm ad">
       <aside class="tm-side">
         <div class="tm-id ad-id"><span class="ad-badge">ADMIN</span><span><b>Panneau admin</b><small class="ok">Competitive Network</small></span></div>
         <nav class="tm-nav" aria-label="Administration">${ADMIN_NAV.map(([k, href, label]) =>
-          `<a class="tm-link${k === active ? " on" : ""}" href="${href}"${k === active ? ` aria-current="page"` : ""}>${adIcon(k)}<span>${label}</span>${badges[k] ? `<em class="ad-count">${badges[k]}</em>` : ""}</a>`).join("")}</nav>
+          `<a class="tm-link${k === active ? " on" : ""}" href="${href}"${k === active ? ` aria-current="page"` : ""}>${adIcon(k)}<span>${label}</span>${adBadges[k] ? `<em class="ad-count" title="À traiter">${adBadges[k]}</em>` : ""}</a>`).join("")}</nav>
+        <p class="ad-tip small-note"><kbd>/</kbd> pour chercher</p>
       </aside>
       <div class="tm-main"><div class="tm-head"><h2 class="tm-title">${title}</h2>${lead ? `<p class="tm-lead">${lead}</p>` : ""}</div>${inner}</div></div>`;
   const adminGate = app => {
@@ -1797,102 +1963,167 @@
     return true;
   };
   const discordCell = id => id
-    ? `<span class="ad-discord"><a class="link-btn" href="https://discord.com/users/${esc(id)}" target="_blank" rel="noopener">Profil Discord</a><button class="ad-copy" type="button" data-copy="${esc(id)}" title="Copier l'identifiant Discord">${esc(id)}</button></span>`
+    ? `<span class="ad-discord"><a class="link-btn" href="https://discord.com/users/${esc(id)}" target="_blank" rel="noopener">Discord</a><button class="ad-copy" type="button" data-copy="${esc(id)}" title="Copier l'identifiant Discord">${esc(id)}</button></span>`
     : `<span class="mute">—</span>`;
   const bindCopy = root => root.querySelectorAll("[data-copy]").forEach(b => b.onclick = async () => {
     try { await navigator.clipboard.writeText(b.dataset.copy); toast("Identifiant Discord copié."); } catch (e) { toast("Copie impossible.", "err"); }
   });
   const fullDate = iso => new Date(iso).toLocaleDateString(LOC(), { day: "numeric", month: "short", year: "numeric" });
   const norm = v => String(v || "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-  const adFilter = { teams: { q: "", st: "all" }, players: { q: "", f: "all", sort: "new" }, scrims: { f: "todo" } };
+  const adFilter = { teams: { q: "", st: "all", sort: "new", open: new Set() }, players: { q: "", f: "all", sort: "new" }, scrims: { q: "", f: "todo" } };
   const STAFF_LABEL = { admin: "Admin", arbitre: "Modérateur" };
+  const DIV_SHORT = d => `D${d} · ${esc((DIV_NAMES[d] || "").split(" · ")[1] || "")}`;
+  // Filtres dans l'adresse (#/admin-equipes?st=en_attente) : on peut les partager, et « Retour » les retrouve
+  const hashQuery = () => new URLSearchParams(location.hash.split("?")[1] || "");
+  function readFilters(F, keys) { const q = hashQuery(); keys.forEach(k => { if (q.has(k)) F[k] = q.get(k); }); return q; }
+  function writeFilters(F, defaults) {
+    const q = new URLSearchParams();
+    Object.keys(defaults).forEach(k => { if (F[k] && F[k] !== defaults[k]) q.set(k, F[k]); });
+    const url = location.hash.split("?")[0] + (q.toString() ? "?" + q : "");
+    if (url !== location.hash) { history.replaceState(null, "", url); lastHash = location.hash; }
+  }
+  // Après une action : on recharge la page en gardant la position et les blocs ouverts
+  const adReload = () => runRefresh(true);
+  // Champ de recherche : filtre en direct sans perdre le curseur
+  function bindSearch(app, F, render) {
+    const qi = $("#ad-q", app); if (!qi) return;
+    qi.oninput = () => { F.q = qi.value; const pos = qi.selectionStart; render(); const n = $("#ad-q", app); n.focus(); n.setSelectionRange(pos, pos); };
+    qi.onkeydown = e => { if (e.key === "Escape" && qi.value) { e.preventDefault(); qi.value = ""; qi.oninput(); } };
+  }
+  // « / » : aller dans la recherche du panneau
+  document.addEventListener("keydown", e => {
+    if (e.key !== "/" || e.ctrlKey || e.metaKey || e.altKey) return;
+    const t = e.target; if (t && (t.isContentEditable || /^(input|textarea|select)$/i.test(t.tagName))) return;
+    const qi = $("#view-app #ad-q"); if (!qi || $("#view-app").hidden) return;
+    e.preventDefault(); qi.focus(); qi.select();
+  });
+  const filterChips = (opts, cur, attr, counts) => opts.map(([v, l]) =>
+    `<button type="button" class="scx-fbtn${cur === v ? " on" : ""}" data-${attr}="${v}" aria-pressed="${cur === v}">${l}<i>${counts[v] || 0}</i></button>`).join("");
+  const resultLine = (n, one, many, active) =>
+    `<div class="ad-result"><span>${n} ${n > 1 ? many : one}</span>${active ? `<button class="link-btn" type="button" data-reset-f>Effacer les filtres</button>` : ""}</div>`;
+
+  // Valider / refuser une équipe (vue d'ensemble et page Équipes)
+  async function reviewTeam(id, status, division, btn) {
+    if (btn) btn.disabled = true;
+    try {
+      await rpc("admin_review_team", { p_team: id, p_status: status, p_division: division });
+      toast(status === "validee" ? `Équipe validée en D${division}.` : "Équipe refusée.");
+      await discordSync({ team_id: id }, true);
+      adReload();
+    } catch (x) { toast(errMsg(x), "err"); if (btn) btn.disabled = false; }
+  }
+  const divSelect = (id, sel, attr = "data-qdiv") => `<select class="ad-div" ${attr}="${id}" aria-label="Division">${[1, 2, 3, 4].map(d => `<option value="${d}" ${sel === d ? "selected" : ""}>${DIV_SHORT(d)}</option>`).join("")}</select>`;
 
   // ---------- Vue d'ensemble ----------
   async function viewAdmin(app) {
     if (!adminGate(app)) return;
     const o = await rpc("admin_overview");
     const tm = o.teams || {}, pend = o.pending_teams || [], stuck = o.stuck_scrims || [];
-    const tile = (n, label, sub, href, tone = "") => `<a class="ad-tile ${tone}" href="${href}"><b>${n}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</a>`;
+    adBadges.teams = tm.en_attente || 0; adBadges.scrims = stuck.length;
+    const todo = pend.length + stuck.length;
+    const tile = (n, label, sub, href, tone = "") => `<a class="ad-tile ${tone}" href="${href}"><b>${n ?? 0}</b><span>${label}</span>${sub ? `<small>${sub}</small>` : ""}</a>`;
     app.innerHTML = adminShell("overview", "Vue d'ensemble", `
       <div class="ad-tiles">
+        ${tile(tm.en_attente || 0, "équipes en attente", tm.en_attente ? "à valider" : "rien à valider", "#/admin-equipes?st=en_attente", tm.en_attente ? "warn" : "")}
+        ${tile(stuck.length, "scrims à régler", stuck.length ? "sans score ou non confirmés" : "tout est réglé", "#/admin-scrims?f=todo", stuck.length ? "warn" : "")}
+        ${tile(tm.validee || 0, "équipes validées", "", "#/admin-equipes?st=validee")}
         ${tile(o.players, "joueurs inscrits", o.players_week ? `+${o.players_week} cette semaine` : "", "#/admin-joueurs")}
-        ${tile(tm.validee || 0, "équipes validées", "", "#/admin-equipes")}
-        ${tile(tm.en_attente || 0, "équipes en attente", tm.en_attente ? "à valider" : "", "#/admin-equipes", tm.en_attente ? "warn" : "")}
-        ${tile(o.players_free, "joueurs sans équipe", "", "#/admin-joueurs")}
-        ${tile(o.scrims_week, "scrims cette semaine", "7 jours avant et après", "#/admin-scrims")}
-        ${tile(o.scrims_open, "propositions ouvertes", "", "#/admin-scrims")}
+        ${tile(o.players_free, "joueurs sans équipe", "", "#/admin-joueurs?f=free")}
+        ${tile(o.scrims_open, "propositions ouvertes", `${o.scrims_week || 0} scrims sur 14 jours`, "#/admin-scrims?f=open")}
       </div>
-      <div class="db-grid">
-        <section class="db-card">
-          <div class="db-head"><h3>À traiter</h3><span class="small-note">${pend.length + stuck.length || "Rien"} ${pend.length + stuck.length ? "point" + (pend.length + stuck.length > 1 ? "s" : "") : "à faire"}</span></div>
-          ${pend.length ? `<p class="eyebrow">Équipes à valider</p><div class="t-lines">${pend.map(t => `<a class="t-line ad-line" href="#/admin-equipes" data-goteam="${esc(t.id)}">${teamLogo(t, 28)}<span class="t-opp"><b>${esc(t.name)}</b><small class="mute"> ${esc(t.tag)}</small></span>
-              <span class="small-note">${t.titulaires}/5 titulaires · estimée ${t.suggested ? "D" + t.suggested : "—"}</span><span class="small-note">${ago(t.created_at)}</span></a>`).join("")}</div>` : ""}
-          ${stuck.length ? `<p class="eyebrow">Scrims bloqués</p><div class="t-lines">${stuck.map(s => `<a class="t-line ad-line" href="#/admin-scrims"><span class="t-res ${s.status === "cale" ? "ff" : "d"}">${s.status === "cale" ? "SANS SCORE" : "48 H"}</span><span class="t-opp"><b>${esc(s.host)} vs ${esc(s.guest || "?")}</b></span>
-              <span class="small-note">${shortDate(s.starts_at)}</span><span class="small-note">${s.status === "cale" ? "aucun résultat envoyé" : "validation auto bientôt"}</span></a>`).join("")}</div>` : ""}
-          ${!pend.length && !stuck.length ? `<p class="db-empty">Tout est à jour ✓</p>` : ""}
-        </section>
-        <section class="db-card">
-          <div class="db-head"><h3>Derniers inscrits</h3><a class="link-btn" href="#/admin-joueurs">Tous les joueurs</a></div>
-          <div class="t-lines">${(o.recent_players || []).map(p => `<a class="t-line ad-line" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 28)}<span class="t-opp"><b>${esc(p.username)}</b></span>
-            <span class="small-note">${p.team_tag ? esc(p.team_tag) : "sans équipe"}</span><span class="small-note">${ago(p.created_at)}</span></a>`).join("") || `<p class="db-empty">Personne pour l'instant.</p>`}</div>
-        </section>
-      </div>`, "Ce qui se passe sur le réseau, et ce qui attend une action du staff.", { teams: tm.en_attente || 0 });
-    app.querySelectorAll("[data-goteam]").forEach(a => a.addEventListener("click", () => { adFilter.teams.st = "en_attente"; }));
+      <section class="db-card ad-todo">
+        <div class="db-head"><h3>À traiter</h3><span class="ad-todo-n${todo ? " on" : ""}">${todo ? `${todo} point${todo > 1 ? "s" : ""}` : "Rien"}</span></div>
+        ${pend.length ? `<p class="eyebrow">Équipes à valider</p><div class="ad-queue">${pend.map(t => `<div class="ad-q-row" data-qteam="${esc(t.id)}">
+            <a class="ad-team" href="${teamHref(t.tag)}">${teamLogo(t, 36)}<span><b>${esc(t.name)}</b><small>${esc(t.tag)} · inscrite ${ago(t.created_at)}</small></span></a>
+            <span class="ad-q-meta"><b class="${t.titulaires >= 5 ? "ok-t" : "warn-t"}">${t.titulaires}/5</b> titulaires<small>estimée ${t.suggested ? "D" + t.suggested : "—"}</small></span>
+            <span class="ad-q-act">${divSelect(t.id, t.suggested || 4)}<button class="btn sm solid" type="button" data-qok>Valider</button><button class="btn sm" type="button" data-qno>Refuser</button>
+              <a class="link-btn" href="#/admin-equipes?st=en_attente&open=${esc(t.id)}">Détails</a></span></div>`).join("")}</div>` : ""}
+        ${stuck.length ? `<p class="eyebrow">Scrims bloqués</p><div class="t-lines">${stuck.map(s => `<a class="t-line ad-line" href="#/admin-scrims?f=todo"><span class="t-res ${s.status === "cale" ? "ff" : "d"}">${s.status === "cale" ? "SANS SCORE" : "48 H"}</span><span class="t-opp"><b>${esc(s.host)} vs ${esc(s.guest || "?")}</b></span>
+            <span class="small-note">${shortDate(s.starts_at)}</span><span class="small-note">${s.status === "cale" ? "aucun résultat envoyé" : "validation auto bientôt"}</span></a>`).join("")}</div>` : ""}
+        ${!todo ? `<p class="db-empty">Tout est à jour ✓</p>` : ""}
+      </section>
+      <section class="db-card">
+        <div class="db-head"><h3>Derniers inscrits</h3><a class="link-btn" href="#/admin-joueurs">Tous les joueurs →</a></div>
+        <div class="t-lines">${(o.recent_players || []).map(p => `<a class="t-line ad-line" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 28)}<span class="t-opp"><b>${esc(p.username)}</b></span>
+          <span class="small-note">${p.team_tag ? esc(p.team_tag) : "sans équipe"}</span><span class="small-note">${ago(p.created_at)}</span></a>`).join("") || `<p class="db-empty">Personne pour l'instant.</p>`}</div>
+      </section>`, "Ce qui attend une action du staff en premier, puis l'activité du réseau.");
+    app.querySelectorAll("[data-qteam]").forEach(row => {
+      const id = row.dataset.qteam, div = () => +$("[data-qdiv]", row).value;
+      $("[data-qok]", row).onclick = e => reviewTeam(id, "validee", div(), e.currentTarget);
+      confirmable($("[data-qno]", row), "Refuser ?", () => reviewTeam(id, "refusee", div()));
+    });
     setLive("/admin", ["teams", "scrims"], () => viewAdmin(app));
   }
 
   // ---------- Équipes ----------
   async function viewAdminTeams(app) {
     if (!adminGate(app)) return;
+    const F = adFilter.teams, DEF = { q: "", st: "all", sort: "new" };
+    const hq = readFilters(F, ["st", "q", "sort"]);
+    if (hq.get("open")) F.open.add(hq.get("open"));
     const teams = await rpc("admin_teams");
     const counts = { all: teams.filter(t => !t.is_test).length, en_attente: 0, validee: 0, refusee: 0, test: teams.filter(t => t.is_test).length };
     teams.forEach(t => { if (!t.is_test) counts[t.status] = (counts[t.status] || 0) + 1; });
-    const F = adFilter.teams;
+    adBadges.teams = counts.en_attente;
+    const SORTS = {
+      new: (a, b) => new Date(b.created_at) - new Date(a.created_at),
+      name: (a, b) => norm(a.name).localeCompare(norm(b.name)),
+      div: (a, b) => (a.division || 9) - (b.division || 9) || norm(a.name).localeCompare(norm(b.name)),
+      scrims: (a, b) => (b.scrims || 0) - (a.scrims || 0),
+    };
     const render = () => {
+      writeFilters(F, DEF);
       const q = norm(F.q);
       const list = teams.filter(t => (F.st === "all" ? !t.is_test : F.st === "test" ? t.is_test : t.status === F.st && !t.is_test)
-        && (!q || norm(`${t.name} ${t.tag} ${t.captain} ${t.captain_discord}`).includes(q)));
-      const chips = [["all", "Toutes"], ["en_attente", "En attente"], ["validee", "Validées"], ["refusee", "Refusées"], ["test", "Test"]]
-        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.st === v ? " on" : ""}" data-st="${v}">${l}<i>${counts[v] || 0}</i></button>`).join("");
+        && (!q || norm(`${t.name} ${t.tag} ${t.captain} ${t.captain_discord}`).includes(q))).sort(SORTS[F.sort] || SORTS.new);
+      const chips = filterChips([["all", "Toutes"], ["en_attente", "En attente"], ["validee", "Validées"], ["refusee", "Refusées"], ["test", "Test"]], F.st, "st", counts);
       $("#ad-body", app).innerHTML = `
-        <div class="ad-bar"><input class="ad-search" id="ad-q" type="search" placeholder="Chercher une équipe, un tag, un capitaine…" value="${esc(F.q)}" aria-label="Chercher une équipe"><div class="scx-filter">${chips}</div></div>
-        <p class="small-note">${list.length} équipe${list.length > 1 ? "s" : ""}</p>
+        <div class="ad-bar">
+          <div class="ad-bar-top"><input class="ad-search" id="ad-q" type="search" placeholder="Chercher une équipe, un tag, un capitaine…" value="${esc(F.q)}" aria-label="Chercher une équipe" autocomplete="off">
+            <label class="ad-sort">Trier <select id="ad-sort">${[["new", "Inscription récente"], ["name", "Nom (A→Z)"], ["div", "Division"], ["scrims", "Scrims joués"]].map(([v, l]) => `<option value="${v}"${F.sort === v ? " selected" : ""}>${l}</option>`).join("")}</select></label></div>
+          <div class="scx-filter">${chips}</div></div>
+        ${resultLine(list.length, "équipe", "équipes", F.q || F.st !== "all")}
         <div class="table-scroll"><table class="ad-table">
-          <thead><tr><th>Équipe</th><th>Statut</th><th>Division</th><th>Joueurs</th><th>Capitaine</th><th>Scrims</th><th>Créée</th><th></th></tr></thead>
-          <tbody>${list.map(t => `<tr data-id="${t.id}">
-            <td><a class="ad-team pl-link" href="${teamHref(t.tag)}">${teamLogo(t, 32)}<span><b>${esc(t.name)}</b><small>${esc(t.tag)}</small></span></a></td>
+          <thead><tr><th>Équipe</th><th>Statut</th><th>Division</th><th>Joueurs</th><th>Capitaine</th><th>Scrims</th><th></th></tr></thead>
+          <tbody>${list.map(t => { const pending = t.status === "en_attente", open = F.open.has(t.id); return `<tr data-id="${t.id}" class="${pending ? "is-pending" : ""}${open ? " is-open" : ""}">
+            <td><a class="ad-team pl-link" href="${teamHref(t.tag)}">${teamLogo(t, 32)}<span><b>${esc(t.name)}</b><small>${esc(t.tag)} · ${shortDate(t.created_at)}</small></span></a></td>
             <td>${statusPill(t)}</td>
-            <td>${t.division ? `<b>D${t.division}</b>` : "—"}<small class="mute">estimée ${t.suggested ? "D" + t.suggested : "—"}</small></td>
-            <td><b>${t.titulaires}</b>/5<small class="mute">${t.members} au total</small></td>
+            <td>${pending ? `${divSelect(t.id, t.suggested || 4)}<small class="mute">estimée ${t.suggested ? "D" + t.suggested : "—"}</small>` : `${t.division ? `<b>D${t.division}</b>` : "—"}<small class="mute">estimée ${t.suggested ? "D" + t.suggested : "—"}</small>`}</td>
+            <td><span class="nw"><b class="${t.titulaires >= 5 ? "" : "warn-t"}">${t.titulaires}</b>/5</span><small class="mute nw">${t.members} au total</small></td>
             <td><span class="ad-cap"><b>${esc(t.captain || "—")}</b>${t.captain_discord ? `<a class="link-btn" href="https://discord.com/users/${esc(t.captain_discord)}" target="_blank" rel="noopener">Discord</a>` : ""}</span></td>
-            <td>${t.scrims}${t.last_scrim ? `<small class="mute">dernier le ${shortDate(t.last_scrim)}</small>` : ""}</td>
-            <td><small class="mute">${fullDate(t.created_at)}</small></td>
-            <td><button class="btn sm" type="button" data-manage="${t.id}" aria-expanded="false">Gérer</button></td></tr>
-            <tr class="ad-detail" data-detail="${t.id}" hidden><td colspan="8"><div class="ad-manage">
-              <div class="ad-actions">
-                <label class="sr" for="div-${t.id}">Division</label>
-                <select id="div-${t.id}">${[1, 2, 3, 4].map(d => `<option value="${d}" ${(t.division || t.suggested) === d ? "selected" : ""}>D${d} · ${esc(DIV_NAMES[d].split(" · ")[1] || "")}</option>`).join("")}</select>
-                <button class="btn sm solid" data-review="validee" type="button">${t.status === "validee" ? "Changer la division" : "Valider l'équipe"}</button>
-                ${t.status !== "refusee" ? `<button class="btn sm" data-review="refusee" type="button">Refuser</button>` : ""}
-                <button class="link-btn" data-sync type="button">Synchro des rôles Discord</button>
-                <button class="link-btn" data-ranks type="button">Actualiser les rangs</button>
-                <button class="link-btn danger-t" data-del type="button">Supprimer l'équipe</button>
-              </div>
-              <details class="team-row" data-id="${t.id}" data-tag="${esc(t.tag)}" open><summary>Roster</summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>
-            </div></td></tr>`).join("") || `<tr><td colspan="8"><p class="db-empty">Aucune équipe ici.</p></td></tr>`}</tbody>
+            <td>${t.scrims}${t.last_scrim ? `<small class="mute nw">dernier ${shortDate(t.last_scrim)}</small>` : ""}</td>
+            <td class="ad-row-act">${pending ? `<button class="btn sm solid" type="button" data-qok>Valider</button>` : ""}<button class="btn sm${open ? " on" : ""}" type="button" data-manage="${t.id}" aria-expanded="${open}">${open ? "Fermer" : "Gérer"}</button></td></tr>
+            <tr class="ad-detail" data-detail="${t.id}"${open ? "" : " hidden"}><td colspan="7"><div class="ad-manage">
+              <div class="ad-group"><span class="eyebrow">Validation</span><div class="ad-actions">
+                ${pending ? `<span class="small-note">Choisis la division dans la ligne, puis « Valider ».</span>` : `<label for="div-${t.id}">Division</label>${divSelect(t.id, t.division || t.suggested || 4, `id="div-${t.id}" data-ddiv`)}
+                <button class="btn sm solid" data-review="validee" type="button">${t.status === "validee" ? "Changer la division" : "Valider l'équipe"}</button>`}
+                ${t.status !== "refusee" ? `<button class="btn sm" data-review="refusee" type="button">Refuser</button>` : ""}</div></div>
+              <div class="ad-group"><span class="eyebrow">Discord et rangs</span><div class="ad-actions">
+                <button class="btn sm" data-sync type="button">Synchro des rôles Discord</button>
+                <button class="btn sm" data-ranks type="button">Actualiser les rangs</button></div></div>
+              <div class="ad-group ad-danger"><span class="eyebrow">Zone sensible</span><div class="ad-actions">
+                <button class="btn sm danger" data-del type="button">Supprimer l'équipe</button><span class="small-note">Roster, compos, strats et scrims proposés sont supprimés.</span></div></div>
+              <details class="team-row" data-id="${t.id}" data-tag="${esc(t.tag)}"><summary>Roster</summary><div class="roster-slot"><p class="small-note">Chargement…</p></div></details>
+            </div></td></tr>`; }).join("") || `<tr><td colspan="7"><p class="db-empty">Aucune équipe ici.</p></td></tr>`}</tbody>
         </table></div>`;
-      const qi = $("#ad-q", app); qi.oninput = () => { F.q = qi.value; const pos = qi.selectionStart; render(); const n = $("#ad-q", app); n.focus(); n.setSelectionRange(pos, pos); };
+      bindSearch(app, F, render);
+      $("#ad-sort", app).onchange = e => { F.sort = e.target.value; render(); };
       app.querySelectorAll("[data-st]").forEach(b => b.onclick = () => { F.st = b.dataset.st; render(); });
+      const rs = $("[data-reset-f]", app); if (rs) rs.onclick = () => { F.q = ""; F.st = "all"; render(); };
+      const openRoster = d => { if (d.dataset.bound) return; d.dataset.bound = "1"; bindTeamRows(d, true); const det = $("details.team-row", d); det.open = true; };
       app.querySelectorAll("[data-manage]").forEach(b => b.onclick = () => {
-        const d = $(`[data-detail="${b.dataset.manage}"]`, app), open = d.hidden;
-        d.hidden = !open; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "Fermer" : "Gérer";
-        if (open && !d.dataset.bound) { d.dataset.bound = "1"; bindTeamRows(d, true); const det = $("details.team-row", d); det.open = false; det.open = true; }
+        const id = b.dataset.manage, d = $(`[data-detail="${id}"]`, app), open = d.hidden;
+        d.hidden = !open; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "Fermer" : "Gérer"; b.classList.toggle("on", open);
+        b.closest("tr").classList.toggle("is-open", open);
+        if (open) { F.open.add(id); openRoster(d); } else F.open.delete(id);
       });
-      app.querySelectorAll("[data-review]").forEach(b => b.onclick = async () => {
+      app.querySelectorAll(".ad-detail:not([hidden])").forEach(openRoster);
+      app.querySelectorAll("tr[data-id] [data-qok]").forEach(b => b.onclick = () => { const id = b.closest("tr").dataset.id; reviewTeam(id, "validee", +$(`[data-qdiv="${id}"]`, app).value, b); });
+      app.querySelectorAll("[data-review]").forEach(b => {
         const id = b.closest(".ad-detail").dataset.detail;
-        try { await rpc("admin_review_team", { p_team: id, p_status: b.dataset.review, p_division: +$(`#div-${id}`, app).value });
-          toast(b.dataset.review === "validee" ? "Équipe validée." : "Équipe refusée."); await discordSync({ team_id: id }, true); viewAdminTeams(app); }
-        catch (x) { toast(errMsg(x), "err"); }
+        const div = () => +(($(`[data-qdiv="${id}"]`, app) || $(`#div-${id}`, app) || {}).value || 4);
+        if (b.dataset.review === "refusee") confirmable(b, "Refuser ?", () => reviewTeam(id, "refusee", div()));
+        else b.onclick = () => reviewTeam(id, "validee", div(), b);
       });
       app.querySelectorAll("[data-sync]").forEach(b => b.onclick = async () => { b.disabled = true; await discordSync({ team_id: b.closest(".ad-detail").dataset.detail }, true); b.disabled = false; });
       app.querySelectorAll("[data-ranks]").forEach(b => b.onclick = async () => {
@@ -1900,15 +2131,15 @@
         const r = await rankSync({ team_id: b.closest(".ad-detail").dataset.detail });
         if (r.error) toast(r.error, "err");
         else toast(Object.values(r.results).map(x => (x.username || "?") + " : " + (x.ok ? (x.label || "Non classé") : x.message)).join(" · "));
-        viewAdminTeams(app);
+        adReload();
       });
-      app.querySelectorAll("[data-del]").forEach(b => confirmable(b, "Sûr ? Tout est supprimé (roster, compos, strats, scrims proposés). Clique encore", async () => {
+      app.querySelectorAll("[data-del]").forEach(b => confirmable(b, "Sûr ? Clique encore pour tout supprimer", async () => {
         const id = b.closest(".ad-detail").dataset.detail;
-        try { await rpc("admin_delete_team", { p_team: id }); await cleanLogos(id, null).catch(() => {}); toast("Équipe supprimée."); viewAdminTeams(app); }
+        try { await rpc("admin_delete_team", { p_team: id }); await cleanLogos(id, null).catch(() => {}); F.open.delete(id); toast("Équipe supprimée."); adReload(); }
         catch (x) { toast(errMsg(x), "err"); }
       }));
     };
-    app.innerHTML = adminShell("teams", "Équipes", `<div id="ad-body"></div>`, "Toutes les équipes inscrites. « Gérer » ouvre la validation, la division, les rôles Discord et le roster.", { teams: counts.en_attente });
+    app.innerHTML = adminShell("teams", "Équipes", `<div id="ad-body"></div>`, "Les équipes en attente se valident directement dans la liste. « Gérer » ouvre la division, Discord, le roster et la suppression.");
     render();
     setLive("/admin-equipes", ["teams"], () => viewAdminTeams(app));
   }
@@ -1916,8 +2147,9 @@
   // ---------- Joueurs ----------
   async function viewAdminPlayers(app) {
     if (!adminGate(app)) return;
+    const F = adFilter.players, DEF = { q: "", f: "all", sort: "new" };
+    readFilters(F, ["f", "q", "sort"]);
     const players = await rpc("admin_players");
-    const F = adFilter.players;
     const tests = {
       all: () => true,
       free: p => !p.team_id,
@@ -1927,56 +2159,66 @@
       noriot: p => !p.riot_id,
     };
     const counts = Object.fromEntries(Object.keys(tests).map(k => [k, players.filter(tests[k]).length]));
+    const roleChip = p => p.staff_role ? `<span class="ad-staff ${p.staff_role}">${STAFF_LABEL[p.staff_role] || p.staff_role}</span>` : `<span class="mute">Joueur</span>`;
     const render = () => {
+      writeFilters(F, DEF);
       const q = norm(F.q);
       let list = players.filter(tests[F.f] || tests.all).filter(p => !q || norm(`${p.username} ${p.riot_id} ${p.discord_id} ${p.team_name} ${p.team_tag}`).includes(q));
       if (F.sort === "name") list = [...list].sort((a, b) => norm(a.username).localeCompare(norm(b.username)));
       if (F.sort === "rank") list = [...list].sort((a, b) => (b.rank ?? -1) - (a.rank ?? -1));
-      const chips = [["all", "Tous"], ["free", "Sans équipe"], ["cap", "Capitaines"], ["staff", "Staff"], ["unv", "Rang non vérifié"], ["noriot", "Sans Riot ID"]]
-        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.f === v ? " on" : ""}" data-pf="${v}">${l}<i>${counts[v]}</i></button>`).join("");
+      const chips = filterChips([["all", "Tous"], ["free", "Sans équipe"], ["cap", "Capitaines"], ["staff", "Staff"], ["unv", "Rang non vérifié"], ["noriot", "Sans Riot ID"]], F.f, "pf", counts);
       $("#ad-body", app).innerHTML = `
-        <div class="ad-bar"><input class="ad-search" id="ad-q" type="search" placeholder="Pseudo, Riot ID, identifiant Discord, équipe…" value="${esc(F.q)}" aria-label="Chercher un joueur">
-          <label class="ad-sort">Trier <select id="ad-sort"><option value="new"${F.sort === "new" ? " selected" : ""}>Inscription récente</option><option value="name"${F.sort === "name" ? " selected" : ""}>Pseudo (A→Z)</option><option value="rank"${F.sort === "rank" ? " selected" : ""}>Rang</option></select></label>
+        <div class="ad-bar">
+          <div class="ad-bar-top"><input class="ad-search" id="ad-q" type="search" placeholder="Pseudo, Riot ID, identifiant Discord, équipe…" value="${esc(F.q)}" aria-label="Chercher un joueur" autocomplete="off">
+            <label class="ad-sort">Trier <select id="ad-sort"><option value="new"${F.sort === "new" ? " selected" : ""}>Inscription récente</option><option value="name"${F.sort === "name" ? " selected" : ""}>Pseudo (A→Z)</option><option value="rank"${F.sort === "rank" ? " selected" : ""}>Rang</option></select></label></div>
           <div class="scx-filter">${chips}</div></div>
-        <p class="small-note">${list.length} joueur${list.length > 1 ? "s" : ""}</p>
+        ${resultLine(list.length, "joueur", "joueurs", F.q || F.f !== "all")}
         <div class="table-scroll"><table class="ad-table">
-          <thead><tr><th>Joueur</th><th>Discord</th><th>Riot ID</th><th>Rang</th><th>Équipe</th><th>Inscrit</th><th></th></tr></thead>
+          <thead><tr><th>Joueur</th><th>Discord</th><th>Riot ID</th><th>Rang</th><th>Équipe</th><th>Rôle</th><th>Inscrit</th><th></th></tr></thead>
           <tbody>${list.map(p => `<tr data-u="${p.id}">
-            <td><a class="ad-player pl-link" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 32)}<span><b>${esc(p.username || "?")}</b>${p.staff_role ? `<small class="ad-staff ${p.staff_role}">${STAFF_LABEL[p.staff_role] || p.staff_role}</small>` : ""}</span></a></td>
+            <td><a class="ad-player pl-link" href="${playerHref(p.id)}">${avatar(p.avatar_url, p.username, 32)}<span><b>${esc(p.username || "?")}</b></span></a></td>
             <td>${discordCell(p.discord_id)}</td>
             <td>${p.riot_id ? `<span class="mono">${esc(p.riot_id)}</span>` : `<span class="mute">—</span>`}</td>
-            <td>${p.rank != null ? rankLabel(p.rank, 18) + rankMark(p) : `<span class="mute">Non classé</span>`}</td>
+            <td><span class="ad-edit" data-edit="rank">${p.rank != null ? rankLabel(p.rank, 18) + rankMark(p) : `<span class="mute">Non classé</span>`}<button class="ad-pen" type="button" data-pen="rank" title="Changer le rang" aria-label="Changer le rang de ${esc(p.username || "")}">✎</button></span></td>
             <td>${p.team_id ? `<a class="pl-link" href="${teamHref(p.team_tag)}"><b>${esc(p.team_tag)}</b></a><small class="mute"> ${p.is_captain ? "capitaine" : p.team_role === "remplacant" ? "remplaçant" : "titulaire"}</small>` : `<span class="mute">Sans équipe</span>`}</td>
+            <td><span class="ad-edit" data-edit="role">${roleChip(p)}<button class="ad-pen" type="button" data-pen="role" title="Changer le rôle" aria-label="Changer le rôle de ${esc(p.username || "")}">✎</button></span></td>
             <td><small class="mute">${fullDate(p.created_at)}</small></td>
-            <td><button class="btn sm" type="button" data-pmanage="${p.id}" aria-expanded="false">Gérer</button></td></tr>
-            <tr class="ad-detail" data-pdetail="${p.id}" hidden><td colspan="7"><div class="ad-actions">
-              <label>Rang fixé par le staff <select data-rank-for="${p.id}"><option value="">Automatique / non classé</option>${RANKS.map((r, i) => `<option value="${i}"${p.rank === i ? " selected" : ""}>${r}</option>`).join("")}</select></label>
-              <button class="btn sm" type="button" data-prank="${p.id}">Enregistrer le rang</button>
-              <label>Rôle <select data-role-for="${p.id}">${["joueur", "arbitre", "admin"].map(r => `<option value="${r}"${(p.staff_role || "joueur") === r ? " selected" : ""}>${r === "joueur" ? "Joueur" : STAFF_LABEL[r]}</option>`).join("")}</select></label>
-              <button class="btn sm" type="button" data-prole="${p.id}">Enregistrer le rôle</button>
-              <button class="link-btn" type="button" data-psync="${p.id}">Synchro Discord</button>
-            </div><p class="small-note">Modérateur : gère les scrims et la recherche d'équipe. Admin : tout, y compris la validation des équipes et ce panneau.</p></td></tr>`).join("") || `<tr><td colspan="7"><p class="db-empty">Aucun joueur ici.</p></td></tr>`}</tbody>
-        </table></div>`;
+            <td class="ad-row-act"><button class="link-btn" type="button" data-psync="${p.id}" title="Synchroniser ses rôles Discord">Synchro</button></td></tr>`).join("") || `<tr><td colspan="8"><p class="db-empty">Aucun joueur ici.</p></td></tr>`}</tbody>
+        </table></div>
+        <p class="small-note">✎ pour changer un rang ou un rôle. Modérateur : gère les scrims et la recherche d'équipe. Admin : tout, y compris la validation des équipes et ce panneau.</p>`;
       bindCopy(app);
-      const qi = $("#ad-q", app); qi.oninput = () => { F.q = qi.value; const pos = qi.selectionStart; render(); const n = $("#ad-q", app); n.focus(); n.setSelectionRange(pos, pos); };
+      bindSearch(app, F, render);
       $("#ad-sort", app).onchange = e => { F.sort = e.target.value; render(); };
       app.querySelectorAll("[data-pf]").forEach(b => b.onclick = () => { F.f = b.dataset.pf; render(); });
-      app.querySelectorAll("[data-pmanage]").forEach(b => b.onclick = () => {
-        const d = $(`[data-pdetail="${b.dataset.pmanage}"]`, app), open = d.hidden;
-        d.hidden = !open; b.setAttribute("aria-expanded", String(open)); b.textContent = open ? "Fermer" : "Gérer";
-      });
-      app.querySelectorAll("[data-prank]").forEach(b => b.onclick = async () => {
-        const u = b.dataset.prank, v = $(`[data-rank-for="${u}"]`, app).value;
-        try { await rpc("admin_set_rank", { p_user: u, p_rank: v === "" ? null : +v }); toast("Rang enregistré."); viewAdminPlayers(app); } catch (x) { toast(errMsg(x), "err"); }
-      });
-      app.querySelectorAll("[data-prole]").forEach(b => b.onclick = async () => {
-        const u = b.dataset.prole;
-        try { await rpc("admin_set_staff", { p_user: u, p_role: $(`[data-role-for="${u}"]`, app).value }); toast("Rôle enregistré."); if (u === state.session.user.id) { await loadMe(); renderAuth(); } viewAdminPlayers(app); }
-        catch (x) { toast(errMsg(x), "err"); }
+      const rs = $("[data-reset-f]", app); if (rs) rs.onclick = () => { F.q = ""; F.f = "all"; render(); };
+      // ✎ : la case devient un menu ; le rang s'enregistre dès qu'on le choisit, le rôle demande une confirmation
+      app.querySelectorAll("[data-pen]").forEach(b => b.onclick = () => {
+        const cell = b.closest(".ad-edit"), u = b.closest("tr").dataset.u, p = players.find(x => x.id === u), kind = b.dataset.pen;
+        const cancel = () => { live.editing = null; render(); };
+        cell.classList.add("editing");
+        if (kind === "rank") {
+          cell.innerHTML = `<select aria-label="Rang"><option value="">Automatique / non classé</option>${RANKS.map((r, i) => `<option value="${i}"${p.rank === i ? " selected" : ""}>${r}</option>`).join("")}</select><button class="link-btn" type="button" data-x>Annuler</button>`;
+          const s = $("select", cell); live.editing = s; s.focus();
+          s.onchange = async () => {
+            s.disabled = true;
+            try { await rpc("admin_set_rank", { p_user: u, p_rank: s.value === "" ? null : +s.value }); toast(`${p.username} : ${s.value === "" ? "rang automatique" : RANKS[+s.value]}.`); live.editing = null; adReload(); }
+            catch (x) { toast(errMsg(x), "err"); s.disabled = false; }
+          };
+        } else {
+          cell.innerHTML = `<select aria-label="Rôle">${["joueur", "arbitre", "admin"].map(r => `<option value="${r}"${(p.staff_role || "joueur") === r ? " selected" : ""}>${r === "joueur" ? "Joueur" : STAFF_LABEL[r]}</option>`).join("")}</select><button class="btn sm solid" type="button" data-ok>Enregistrer</button><button class="link-btn" type="button" data-x>Annuler</button>`;
+          const s = $("select", cell), ok = $("[data-ok]", cell); live.editing = s; s.focus();
+          ok.onclick = async () => {
+            ok.disabled = true;
+            try { await rpc("admin_set_staff", { p_user: u, p_role: s.value }); toast(`${p.username} : ${s.value === "joueur" ? "joueur" : STAFF_LABEL[s.value]}.`); live.editing = null; if (u === state.session.user.id) { await loadMe(); renderAuth(); } adReload(); }
+            catch (x) { toast(errMsg(x), "err"); ok.disabled = false; }
+          };
+        }
+        $("[data-x]", cell).onclick = cancel;
+        cell.onkeydown = e => { if (e.key === "Escape") cancel(); };
       });
       app.querySelectorAll("[data-psync]").forEach(b => b.onclick = async () => { b.disabled = true; await discordSync({ user_ids: [b.dataset.psync] }, true); b.disabled = false; });
     };
-    app.innerHTML = adminShell("players", "Joueurs", `<div id="ad-body"></div>`, "Tous les comptes inscrits, avec leur Discord, leur Riot ID, leur rang et leur équipe. « Gérer » pour fixer un rang ou nommer quelqu'un au staff.");
+    app.innerHTML = adminShell("players", "Joueurs", `<div id="ad-body"></div>`, "Tous les comptes inscrits, avec leur Discord, leur Riot ID, leur rang et leur équipe.");
     render();
     setLive("/admin-joueurs", ["teams"], () => viewAdminPlayers(app));
   }
@@ -1984,40 +2226,51 @@
   // ---------- Scrims ----------
   async function viewAdminScrims(app) {
     if (!adminGate(app)) return;
+    const F = adFilter.scrims, DEF = { q: "", f: "todo" };
+    readFilters(F, ["f", "q"]);
     const scrims = await rpc("admin_scrims");
-    const now = Date.now(), F = adFilter.scrims;
+    const now = Date.now();
     const kind = s => s.status === "ouvert" ? "open" : s.status === "annule" ? "cancel" : s.status === "cale" ? (new Date(s.starts_at) < now ? "todo" : "next")
       : s.status === "termine" && !s.confirmed && !s.no_show ? "todo" : "done";
     const counts = { all: scrims.length }; scrims.forEach(s => { const k = kind(s); counts[k] = (counts[k] || 0) + 1; });
+    adBadges.scrims = counts.todo || 0;
     const LBL = { open: ["Ouvert", "next"], next: ["Calé", "next"], todo: ["À régler", "ff"], done: ["Terminé", "w"], cancel: ["Annulé", "d"] };
+    const HINT = { todo: "Scrims passés sans score, ou score envoyé mais pas encore confirmé par l'autre équipe.", next: "Scrims calés qui n'ont pas encore eu lieu.", open: "Créneaux proposés, en attente d'un adversaire." };
     const render = () => {
-      const list = scrims.filter(s => F.f === "all" || kind(s) === F.f);
-      const chips = [["todo", "À régler"], ["next", "À venir"], ["open", "Propositions"], ["done", "Terminés"], ["cancel", "Annulés"], ["all", "Tous"]]
-        .map(([v, l]) => `<button type="button" class="scx-fbtn${F.f === v ? " on" : ""}" data-sf="${v}">${l}<i>${counts[v] || 0}</i></button>`).join("");
-      $("#ad-body", app).innerHTML = `<div class="ad-bar"><div class="scx-filter">${chips}</div></div>
+      writeFilters(F, DEF);
+      const q = norm(F.q);
+      const list = scrims.filter(s => (F.f === "all" || kind(s) === F.f) && (!q || norm(`${s.host_tag} ${s.guest_tag} ${s.maps} D${s.division}`).includes(q)));
+      const chips = filterChips([["todo", "À régler"], ["next", "À venir"], ["open", "Propositions"], ["done", "Terminés"], ["cancel", "Annulés"], ["all", "Tous"]], F.f, "sf", counts);
+      $("#ad-body", app).innerHTML = `<div class="ad-bar">
+          <div class="ad-bar-top"><input class="ad-search" id="ad-q" type="search" placeholder="Tag d'équipe, map, division (D2)…" value="${esc(F.q)}" aria-label="Chercher un scrim" autocomplete="off"></div>
+          <div class="scx-filter">${chips}</div></div>
+        ${HINT[F.f] ? `<p class="small-note ad-hint">${HINT[F.f]}</p>` : ""}
+        ${resultLine(list.length, "scrim", "scrims", !!F.q)}
         <div class="table-scroll"><table class="ad-table">
           <thead><tr><th>Date</th><th>Équipes</th><th>Format</th><th>Statut</th><th>Score</th><th></th></tr></thead>
-          <tbody>${list.map(s => { const k = kind(s), l = LBL[k]; return `<tr data-s="${s.id}">
+          <tbody>${list.map(s => { const k = kind(s), l = LBL[k]; return `<tr data-s="${s.id}" class="${k === "todo" ? "is-pending" : ""}">
             <td><b>${shortDate(s.starts_at)}</b><small class="mute"> ${hourLabel(s.starts_at)}</small></td>
-            <td><b>${esc(s.host_tag)}</b> <span class="mute">vs</span> <b>${esc(s.guest_tag || "?")}</b><small class="mute"> · D${s.division}</small></td>
+            <td><a class="pl-link" href="${teamHref(s.host_tag)}"><b>${esc(s.host_tag)}</b></a> <span class="mute">vs</span> ${s.guest_tag ? `<a class="pl-link" href="${teamHref(s.guest_tag)}"><b>${esc(s.guest_tag)}</b></a>` : `<b class="mute">?</b>`}<small class="mute"> · D${s.division}</small></td>
             <td>${esc(s.format)}${s.maps ? `<small class="mute"> · ${esc(s.maps)}</small>` : ""}</td>
             <td><span class="t-res ${l[1]}">${l[0]}</span>${s.cancel_late ? `<small class="mute"> tardif</small>` : ""}${s.no_show ? `<small class="mute"> absence ${esc(s.no_show === s.host_id ? s.host_tag : s.guest_tag)}</small>` : ""}</td>
             <td>${s.host_score != null ? `<b class="mono">${s.host_score} – ${s.guest_score}</b>${s.map_scores ? `<small class="mute"> ${esc(s.map_scores.map(m => `${m.map} ${m.h}-${m.g}`).join(" · "))}</small>` : ""}${s.status === "termine" && !s.confirmed ? `<small class="mute"> non confirmé</small>` : ""}` : `<span class="mute">—</span>`}</td>
             <td class="ad-row-act">${s.status === "cale" || s.status === "termine" ? `<button class="link-btn" data-sreset="${s.id}" type="button">Remettre à zéro</button>` : ""}<button class="link-btn danger-t" data-sdel="${s.id}" type="button">Supprimer</button></td></tr>`; }).join("")
-            || `<tr><td colspan="6"><p class="db-empty">Aucun scrim ici.</p></td></tr>`}</tbody>
+            || `<tr><td colspan="6"><p class="db-empty">${F.f === "todo" && !q ? "Aucun scrim à régler ✓" : "Aucun scrim ici."}</p></td></tr>`}</tbody>
         </table></div>`;
+      bindSearch(app, F, render);
       app.querySelectorAll("[data-sf]").forEach(b => b.onclick = () => { F.f = b.dataset.sf; render(); });
+      const rs = $("[data-reset-f]", app); if (rs) rs.onclick = () => { F.q = ""; render(); };
       app.querySelectorAll("[data-sreset]").forEach(b => confirmable(b, "Confirmer ?", async () => {
-        try { await rpc("admin_reset_scrim", { p_id: b.dataset.sreset }); toast("Scrim remis à zéro."); viewAdminScrims(app); } catch (x) { toast(errMsg(x), "err"); } }));
+        try { await rpc("admin_reset_scrim", { p_id: b.dataset.sreset }); toast("Scrim remis à zéro."); adReload(); } catch (x) { toast(errMsg(x), "err"); } }));
       app.querySelectorAll("[data-sdel]").forEach(b => confirmable(b, "Supprimer ?", async () => {
-        try { await rpc("admin_delete_scrim", { p_id: b.dataset.sdel }); toast("Scrim supprimé."); viewAdminScrims(app); } catch (x) { toast(errMsg(x), "err"); } }));
+        try { await rpc("admin_delete_scrim", { p_id: b.dataset.sdel }); toast("Scrim supprimé."); adReload(); } catch (x) { toast(errMsg(x), "err"); } }));
     };
-    app.innerHTML = adminShell("scrims", "Scrims", `<div id="ad-body"></div>`, "Les 500 derniers scrims. « À régler » : scrims passés sans score, ou score pas encore confirmé.");
+    app.innerHTML = adminShell("scrims", "Scrims", `<div id="ad-body"></div>`, "Les 500 derniers scrims. « Remettre à zéro » efface le score, « Supprimer » retire le scrim.");
     render();
     setLive("/admin-scrims", ["scrims"], () => viewAdminScrims(app));
   }
   // L'ancienne page Staff est maintenant dans Joueurs (filtre Staff)
-  async function viewStaff() { adFilter.players.f = "staff"; location.hash = "#/admin-joueurs"; }
+  async function viewStaff() { location.replace("#/admin-joueurs?f=staff"); }
 
   // ---------- Vue : saisons (admin) ----------
   async function viewSeasons(app) {
@@ -2082,7 +2335,7 @@
     state.session = data.session; await loadMe(); renderAuth();
     let after = null; try { after = sessionStorage.getItem("prizm_after_login"); sessionStorage.removeItem("prizm_after_login"); } catch (e) {}
     if (after && state.session && location.hash !== after) { location.hash = after; } else route();
-    homeScrims(); teamHome(); startLive();
+    homeScrims(); teamHome(); startLive(); warmCompo();
     // Sur téléphone, les tableaux deviennent des cartes : chaque case porte le nom de sa colonne
     const labelTables = () => document.querySelectorAll("#view-app table").forEach(tb => {
       const heads = [...tb.querySelectorAll("thead th")].map(th => { const x = th.textContent.trim(); return (x.length <= 3 && th.title ? th.title : x).trim(); });
@@ -2099,8 +2352,8 @@
     new MutationObserver(() => { cancelAnimationFrame(lt); lt = requestAnimationFrame(labelTables); }).observe($("#view-app"), { childList: true, subtree: true });
     sb.auth.onAuthStateChange(async (ev, session) => {
       if (ev === "SIGNED_IN" && (!state.session || state.session.user.id !== session.user.id)) {
-        state.session = session; await loadMe(); renderAuth(); route();
-      } else if (ev === "SIGNED_OUT") { if (state.session) { state.session = null; clearMe(); renderAuth(); route(); } }
+        clearCache(); state.session = session; await loadMe(); renderAuth(); route(); warmCompo();
+      } else if (ev === "SIGNED_OUT") { if (state.session) { clearCache(); state.session = null; clearMe(); renderAuth(); route(); } }
       else state.session = session;
     });
   }
