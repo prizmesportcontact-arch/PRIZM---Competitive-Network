@@ -1172,5 +1172,8 @@ window.PRIZM_EN = {
 "{} : rang automatique.": "{}: automatic rank.",
 "Les 500 derniers scrims. « Remettre à zéro » efface le score, « Supprimer » retire le scrim.": "The last 500 scrims. “Reset” clears the score, “Delete” removes the scrim.",
 "Synchro": "Sync",
-"Synchroniser ses rôles Discord": "Sync their Discord roles"
+"Synchroniser ses rôles Discord": "Sync their Discord roles",
+"La page met trop de temps à charger.": "The page is taking too long to load.",
+"Réessayer": "Try again",
+"La base de données ne répond pas ({}). Réessaie dans un instant.": "The database isn't responding ({}). Try again in a moment."
 };

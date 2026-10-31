@@ -44,7 +44,15 @@
   // ---------- Supabase ----------
   let sb = null;
   if (window.supabase && CFG.supabaseUrl && CFG.supabaseKey) {
-    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce" } });
+    // Verrou de la session partagé entre les onglets (site + Comp Builder) : s'il n'est pas rendu
+    // (onglet en veille, fermé au mauvais moment), on le reprend au bout de 4 s au lieu d'attendre à l'infini
+    const lock = async (name, _timeout, fn) => {
+      if (!navigator.locks) return fn();
+      const ctrl = new AbortController(), t = setTimeout(() => ctrl.abort(), 4000);
+      try { return await navigator.locks.request(name, { mode: "exclusive", signal: ctrl.signal }, () => { clearTimeout(t); return fn(); }); }
+      catch (e) { clearTimeout(t); if (e && e.name === "AbortError") return navigator.locks.request(name, { steal: true }, () => fn()); throw e; }
+    };
+    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce", lock } });
     // Toute écriture directe dans une table (ou appel de fonction serveur) vide le cache des lectures
     const from = sb.from.bind(sb), invoke = sb.functions.invoke.bind(sb.functions);
     sb.from = table => {
@@ -241,8 +249,10 @@
       prev.classList.add("nav-busy");
       nav.skelT = setTimeout(() => { if (nav.pending === seq) showSkeleton(app); }, 420);
     } else showSkeleton(app);
-    Promise.resolve().then(run)
-      .catch(e => { if (nav.seq === seq) app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p>`); })
+    // Filet de sécurité : la page ne reste jamais bloquée en chargement
+    const guard = new Promise((_, rej) => setTimeout(() => rej(new Error("La page met trop de temps à charger.")), 20000));
+    Promise.race([Promise.resolve().then(run), guard])
+      .catch(e => { if (nav.seq === seq) { console.warn("[PRIZM]", e); app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p><div class="ctas" style="margin-top:20px"><button class="btn solid" type="button" id="nav-retry">Réessayer</button></div>`); const r = $("#nav-retry"); if (r) r.onclick = () => { clearCache(); route(); }; } })
       .finally(() => { if (nav.seq === seq) { if (nav.pending === seq) finishView(app); progress(false); } });
   }
   function showSkeleton(app) {
@@ -410,8 +420,10 @@
     });
   }
 
+  // Une requête qui ne répond pas au bout de 15 s échoue (message + bouton Réessayer) au lieu de bloquer la page
+  const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("La base de données ne répond pas (" + what + "). Réessaie dans un instant.")), ms))]);
   async function rawRpc(name, args) {
-    const { data, error } = await sb.rpc(name, args);
+    const { data, error } = await withTimeout(sb.rpc(name, args), 15000, name);
     if (error) { if (isSetupError(error)) showSetupBanner(); throw error; }
     return data;
   }
@@ -2350,9 +2362,10 @@
     });
     let lt = 0;
     new MutationObserver(() => { cancelAnimationFrame(lt); lt = requestAnimationFrame(labelTables); }).observe($("#view-app"), { childList: true, subtree: true });
-    sb.auth.onAuthStateChange(async (ev, session) => {
+    // Rien d'attendu dans ce rappel : Supabase y tient le verrou de session, l'attendre bloquerait toutes les requêtes
+    sb.auth.onAuthStateChange((ev, session) => {
       if (ev === "SIGNED_IN" && (!state.session || state.session.user.id !== session.user.id)) {
-        clearCache(); state.session = session; await loadMe(); renderAuth(); route(); warmCompo();
+        clearCache(); state.session = session; setTimeout(async () => { await loadMe(); renderAuth(); route(); warmCompo(); }, 0);
       } else if (ev === "SIGNED_OUT") { if (state.session) { clearCache(); state.session = null; clearMe(); renderAuth(); route(); } }
       else state.session = session;
     });
