@@ -1046,7 +1046,7 @@
 
   // ---------- Map pool ----------
   // Liste des maps du jeu (API Valorant, gardée pour la session) ; liste de secours si l'API ne répond pas
-  const MAP_FALLBACK = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Sunset"];
+  const MAP_FALLBACK = ["Abyss", "Ascent", "Bind", "Breeze", "Corrode", "Fracture", "Haven", "Icebox", "Lotus", "Pearl", "Split", "Summit", "Sunset"];
   const POOL_LEVELS = [["forte", "Forte"], ["jouable", "Jouable"], ["ban", "Ban"]];
   const POOL_SCORE = { forte: 2, jouable: 1 };
   let mapListP = null, rotCache = null;
@@ -1064,15 +1064,20 @@
   }
   // Maps du map pool : seulement celles du pool compétitif (toutes si la rotation est inconnue)
   async function mapList() {
-    const [all, rot] = await Promise.all([allMaps(), rotation().catch(() => null)]);
+    const [all, rot] = await Promise.all([allMaps(), withTimeout(rotation(), 6000, "rotation").catch(() => null)]);
     if (!rot) return all;
     return rot.map(n => all.find(m => m.name.toLowerCase() === n.toLowerCase()) || { name: n, img: null })
       .sort((a, b) => a.name.localeCompare(b.name));
   }
+  // Liste des maps (valorant-api.com). Gardée 7 jours dans le navigateur ; si le site est lent ou bloqué,
+  // on n'attend pas plus de 5 s : on affiche la liste de secours et on réessaiera plus tard.
   function allMaps() {
     if (mapListP) return mapListP;
-    try { const c = JSON.parse(sessionStorage.getItem("prizm_maps2") || "null"); if (c && c.length) return (mapListP = Promise.resolve(c)); } catch (e) {}
-    mapListP = fetch("https://valorant-api.com/v1/maps").then(r => r.json()).then(j => {
+    let old = null;
+    try { old = JSON.parse(localStorage.getItem("prizm_maps3") || "null"); } catch (e) {}
+    if (old && old.list && old.list.length && Date.now() - old.at < 7 * 864e5) return (mapListP = Promise.resolve(old.list));
+    const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 5000);
+    mapListP = fetch("https://valorant-api.com/v1/maps", { signal: ctrl.signal }).then(r => r.json()).then(j => {
       const seen = new Set(), out = [];
       for (const m of j.data || []) {
         if (!m.displayName || !m.tacticalDescription || /range|tutorial|npe/i.test(m.mapUrl || "")) continue;
@@ -1081,9 +1086,12 @@
       }
       out.sort((a, b) => a.name.localeCompare(b.name));
       if (!out.length) throw new Error("vide");
-      try { sessionStorage.setItem("prizm_maps2", JSON.stringify(out)); } catch (e) {}
+      try { localStorage.setItem("prizm_maps3", JSON.stringify({ at: Date.now(), list: out })); } catch (e) {}
       return out;
-    }).catch(() => MAP_FALLBACK.map(name => ({ name, img: null })));
+    }).catch(() => {
+      setTimeout(() => { mapListP = null; }, 60000); // nouvel essai dans une minute
+      return old && old.list && old.list.length ? old.list : MAP_FALLBACK.map(name => ({ name, img: null }));
+    }).finally(() => clearTimeout(timer));
     return mapListP;
   }
   // Tous les map pools (une petite ligne par équipe) : { team_id: { Ascent: "forte", ... } }
