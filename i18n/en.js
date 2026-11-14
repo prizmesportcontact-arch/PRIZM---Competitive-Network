@@ -1175,5 +1175,7 @@ window.PRIZM_EN = {
 "Synchroniser ses rôles Discord": "Sync their Discord roles",
 "La page met trop de temps à charger.": "The page is taking too long to load.",
 "Réessayer": "Try again",
-"La base de données ne répond pas ({}). Réessaie dans un instant.": "The database isn't responding ({}). Try again in a moment."
+"La base de données ne répond pas ({}). Réessaie dans un instant.": "The database isn't responding ({}). Try again in a moment.",
+"La base de données ne répond pas ({}). Vérifie ta connexion puis réessaie.": "The database isn't responding ({}). Check your connection and try again.",
+"La page met trop de temps à charger. (en attente : {})": "The page is taking too long to load. (waiting for: {})"
 };

@@ -43,7 +43,34 @@
 
   // ---------- Supabase ----------
   let sb = null;
+  const netPending = new Map(); // requêtes en cours (affichées si une page met trop de temps)
   if (window.supabase && CFG.supabaseUrl && CFG.supabaseKey) {
+    // Requêtes vers la base : après une mise en veille, le navigateur garde parfois une connexion « morte »
+    // et la requête attend sans fin. Une lecture qui ne répond pas en 7 s est relancée (nouvelle connexion),
+    // jusqu'à 2 fois ; une écriture n'est jamais relancée (pas de doublon), elle échoue au bout de 25 s.
+    const netFetch = async (url, opts = {}) => {
+      const u = String(url), method = (opts.method || "GET").toUpperCase();
+      if (/\/(storage|functions)\/v1\//.test(u)) return fetch(url, opts); // envois de fichiers, fonctions : durée libre
+      const rpcName = (u.match(/\/rest\/v1\/rpc\/([a-z_0-9]+)/) || [])[1];
+      const isRead = method === "GET" || method === "HEAD" || (rpcName && (READ_RPC.has(rpcName) || /^(my_context|map_rotation)$/.test(rpcName)));
+      const label = rpcName || (u.match(/\/(rest|auth)\/v1\/([a-z_]+)/) || [])[2] || "requête";
+      const tries = isRead ? 3 : 1;
+      for (let i = 0; i < tries; i++) {
+        const ctrl = new AbortController(), ms = isRead ? [7000, 10000, 15000][i] : 25000;
+        const t = setTimeout(() => ctrl.abort(), ms);
+        const onAbort = () => ctrl.abort();
+        if (opts.signal) opts.signal.addEventListener("abort", onAbort, { once: true });
+        const id = Symbol(); netPending.set(id, label);
+        try { return await fetch(url, { ...opts, signal: ctrl.signal }); }
+        catch (e) {
+          if ((opts.signal && opts.signal.aborted) || i === tries - 1) {
+            if (ctrl.signal.aborted && !(opts.signal && opts.signal.aborted)) throw new Error("La base de données ne répond pas (" + label + "). Vérifie ta connexion puis réessaie.");
+            throw e;
+          }
+          console.warn("[PRIZM] requête relancée :", label);
+        } finally { clearTimeout(t); netPending.delete(id); if (opts.signal) opts.signal.removeEventListener("abort", onAbort); }
+      }
+    };
     // Verrou de la session partagé entre les onglets (site + Comp Builder) : s'il n'est pas rendu
     // (onglet en veille, fermé au mauvais moment), on le reprend au bout de 4 s au lieu d'attendre à l'infini
     const lock = async (name, _timeout, fn) => {
@@ -52,7 +79,7 @@
       try { return await navigator.locks.request(name, { mode: "exclusive", signal: ctrl.signal }, () => { clearTimeout(t); return fn(); }); }
       catch (e) { clearTimeout(t); if (e && e.name === "AbortError") return navigator.locks.request(name, { steal: true }, () => fn()); throw e; }
     };
-    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce", lock } });
+    sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseKey, { auth: { persistSession: true, detectSessionInUrl: true, flowType: "pkce", lock }, global: { fetch: netFetch } });
     // Toute écriture directe dans une table (ou appel de fonction serveur) vide le cache des lectures
     const from = sb.from.bind(sb), invoke = sb.functions.invoke.bind(sb.functions);
     sb.from = table => {
@@ -250,7 +277,10 @@
       nav.skelT = setTimeout(() => { if (nav.pending === seq) showSkeleton(app); }, 420);
     } else showSkeleton(app);
     // Filet de sécurité : la page ne reste jamais bloquée en chargement
-    const guard = new Promise((_, rej) => setTimeout(() => rej(new Error("La page met trop de temps à charger.")), 20000));
+    const guard = new Promise((_, rej) => setTimeout(() => {
+      const wait = [...new Set(netPending.values())];
+      rej(new Error("La page met trop de temps à charger." + (wait.length ? " (en attente : " + wait.join(", ") + ")" : "")));
+    }, 45000));
     Promise.race([Promise.resolve().then(run), guard])
       .catch(e => { if (nav.seq === seq) { console.warn("[PRIZM]", e); app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p><div class="ctas" style="margin-top:20px"><button class="btn solid" type="button" id="nav-retry">Réessayer</button></div>`); const r = $("#nav-retry"); if (r) r.onclick = () => { clearCache(); route(); }; } })
       .finally(() => { if (nav.seq === seq) { if (nav.pending === seq) finishView(app); progress(false); } });
@@ -423,7 +453,7 @@
   // Une requête qui ne répond pas au bout de 15 s échoue (message + bouton Réessayer) au lieu de bloquer la page
   const withTimeout = (p, ms, what) => Promise.race([p, new Promise((_, rej) => setTimeout(() => rej(new Error("La base de données ne répond pas (" + what + "). Réessaie dans un instant.")), ms))]);
   async function rawRpc(name, args) {
-    const { data, error } = await withTimeout(sb.rpc(name, args), 15000, name);
+    const { data, error } = await withTimeout(sb.rpc(name, args), 40000, name);
     if (error) { if (isSetupError(error)) showSetupBanner(); throw error; }
     return data;
   }

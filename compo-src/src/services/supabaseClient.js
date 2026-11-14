@@ -26,7 +26,29 @@ const lock = async (name, _timeout, fn) => {
   }
 }
 
+// Après une mise en veille, une requête peut rester bloquée sur une connexion « morte » :
+// une lecture (GET) sans réponse en 7 s est relancée, jusqu'à 2 fois. Les écritures ne sont jamais relancées.
+const netFetch = async (url, opts = {}) => {
+  const method = (opts.method || 'GET').toUpperCase()
+  if (method !== 'GET' && method !== 'HEAD') return fetch(url, opts)
+  for (let i = 0; i < 3; i++) {
+    const ctrl = new AbortController()
+    const t = setTimeout(() => ctrl.abort(), [7000, 10000, 15000][i])
+    const onAbort = () => ctrl.abort()
+    if (opts.signal) opts.signal.addEventListener('abort', onAbort, { once: true })
+    try {
+      return await fetch(url, { ...opts, signal: ctrl.signal })
+    } catch (e) {
+      if ((opts.signal && opts.signal.aborted) || i === 2) throw e
+    } finally {
+      clearTimeout(t)
+      if (opts.signal) opts.signal.removeEventListener('abort', onAbort)
+    }
+  }
+}
+
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  global: { fetch: netFetch },
   auth: { flowType: 'pkce', persistSession: true, detectSessionInUrl: true, lock },
   // Peu de messages temps réel par seconde suffisent largement ici
   realtime: { params: { eventsPerSecond: 5 } },
