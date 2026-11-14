@@ -83,6 +83,11 @@ export default function Doc() {
 
   // ---------- Éditeur ----------
   const emitted = useRef(doc?.content) // dernier contenu venu de l'éditeur (pour reconnaître un changement venu d'ailleurs)
+  // À l'ouverture, l'éditeur remet parfois le contenu « en forme » (tableaux, ordre des styles) : ce n'est pas
+  // une modification. Seuls les changements faits après une action de la personne (clavier, souris) comptent.
+  const touched = useRef(false)
+  const baseline = useRef(null)
+  const dirtyNow = useRef(false)
   const editor = useEditor({
     extensions: [
       StarterKit.configure({ heading: { levels: [1, 2, 3] }, codeBlock: false, code: false }),
@@ -104,8 +109,18 @@ export default function Doc() {
     ],
     content: doc?.content,
     editable,
+    onCreate: ({ editor: ed }) => {
+      touched.current = false
+      baseline.current = canon(ed.getJSON())
+    },
     onUpdate: ({ editor: ed }) => {
       const json = ed.getJSON()
+      const c = canon(json)
+      if (!touched.current) {
+        baseline.current = c
+        return
+      }
+      if (c === baseline.current && !dirtyNow.current) return
       emitted.current = json
       patchLocal(docId, { content: json })
     },
@@ -117,7 +132,10 @@ export default function Doc() {
   useEffect(() => {
     if (!editor || !doc || doc.content === emitted.current) return
     emitted.current = doc.content
-    if (canon(doc.content) !== canon(editor.getJSON())) editor.commands.setContent(doc.content, false)
+    if (canon(doc.content) !== canon(editor.getJSON())) {
+      editor.commands.setContent(doc.content, false)
+      baseline.current = canon(editor.getJSON())
+    }
   }, [editor, doc])
   useEffect(() => {
     if (editor) editor.setEditable(editable)
@@ -131,6 +149,7 @@ export default function Doc() {
     setSaving(true)
     const content = editor ? editor.getJSON() : doc.content
     const id = await saveDoc(docId, { ...doc, content })
+    if (id) baseline.current = canon(content)
     setSaving(false)
     if (!id) return false
     pushToast(id !== docId ? 'Page créée et enregistrée.' : 'Page enregistrée.', 'success')
@@ -155,7 +174,6 @@ export default function Doc() {
   useEffect(() => {
     allowRef.current = allow
   }, [allow])
-  const dirtyNow = useRef(false)
   useEffect(() => {
     dirtyNow.current = isDirty
   }, [isDirty])
@@ -243,11 +261,14 @@ export default function Doc() {
         </div>
       </div>
 
+      <div className="pbd__work" onPointerDownCapture={() => { touched.current = true }} onKeyDownCapture={() => { touched.current = true }}
+        onPasteCapture={() => { touched.current = true }} onDropCapture={() => { touched.current = true }}>
       {editable && editor && <Toolbar editor={editor} mapUuid={doc.mapUuid} />}
 
       <article className="pbd__paper">
         <EditorContent editor={editor} className="pb-content" />
       </article>
+      </div>
 
       {leaveDialog}
       <ConfirmDialog
@@ -304,7 +325,7 @@ function Toolbar({ editor, mapUuid }) {
         <B label="Gras (Ctrl+B)" on={editor.isActive('bold')} onClick={() => ch().toggleBold().run()}><b>G</b></B>
         <B label="Italique (Ctrl+I)" on={editor.isActive('italic')} onClick={() => ch().toggleItalic().run()}><i>I</i></B>
         <B label="Souligné (Ctrl+U)" on={editor.isActive('underline')} onClick={() => ch().toggleUnderline().run()}><u>S</u></B>
-        <B label="Barré" on={editor.isActive('strike')} onClick={() => ch().toggleStrike().run()}><s>B</s></B>
+        <B label="Barré" on={editor.isActive('strike')} onClick={() => ch().toggleStrike().run()}><s>ab</s></B>
         <span className="pbt__pop">
           <B label="Couleur du texte" isOpen={open === 'color'} onClick={() => toggle('color')}><span className="pbt__color" style={{ '--c': curColor || 'currentColor' }}><Ico d={I.color} /></span></B>
           {open === 'color' && (

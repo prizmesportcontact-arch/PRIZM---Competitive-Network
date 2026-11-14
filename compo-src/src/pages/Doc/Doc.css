@@ -182,3 +182,8 @@ input.pbd__title:focus { outline: none; border-bottom-color: var(--brand-red); }
   .pb-embed__body > span, .pb-embed__tag { color: #555; }
   .pb-embed__body em { display: none; }
 }
+
+.pbd__work { display: grid; gap: var(--space-3); }
+/* Les cartes insérées ne prennent pas le style des liens du texte */
+.pb-content a.pb-embed__card { text-decoration: none; color: var(--text-primary); }
+.pb-content a.pb-embed__card b { color: var(--text-primary); }
