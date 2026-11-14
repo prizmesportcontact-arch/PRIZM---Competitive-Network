@@ -70,7 +70,8 @@ export async function renderStratPng({ map, strat, step, agentByUuid, showNames 
     ctx.restore()
   }
   const order = { zone: 0, draw: 1, line: 1, ability: 2, spike: 3, agent: 4, text: 5 }
-  const items = [...step.items].sort((a, b) => (order[a.t] ?? 9) - (order[b.t] ?? 9))
+  // Couleur toujours en texte (d'anciennes versions pouvaient garder [couleur, nom])
+  const items = step.items.map((it) => (Array.isArray(it.c) ? { ...it, c: it.c[0] } : it)).sort((a, b) => (order[a.t] ?? 9) - (order[b.t] ?? 9))
   ctx.lineCap = 'round'
   ctx.lineJoin = 'round'
   for (const it of items) {

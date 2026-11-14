@@ -309,3 +309,13 @@ button.sb2-save:disabled { cursor: default; }
 .sb2-mapsel { display: flex; align-items: center; gap: 8px; margin-top: 8px; font: 600 0.72rem var(--font-mono, monospace); text-transform: uppercase; letter-spacing: 0.08em; color: var(--ink-2); }
 .sb2-mapsel select { flex: 1; min-width: 0; padding: 7px 10px; background: var(--bg-2); color: var(--ink); border: 1px solid var(--line); font: 600 0.88rem var(--font-body); text-transform: none; letter-spacing: 0; }
 @media (max-width: 860px) { .sb2-side > .sb2-mapsel { order: 0; margin: 8px 16px 0; } }
+
+/* Glisser-déposer des icônes sur la carte */
+.sb2-agent, .sb2-ability { touch-action: pan-x; -webkit-user-drag: none; }
+.sb2-agent img, .sb2-ability img { -webkit-user-drag: none; user-select: none; pointer-events: none; }
+.sb2-ghost {
+  position: fixed; z-index: 1000; pointer-events: none; transform: translate(-50%, -50%);
+  width: 46px; height: 46px; display: grid; place-items: center; border-radius: 50%;
+  background: #0d1117; box-shadow: 0 0 0 3px var(--side, #ffa043), 0 8px 20px rgba(0, 0, 0, 0.55);
+}
+.sb2-ghost img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; }

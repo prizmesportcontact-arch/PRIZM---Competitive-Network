@@ -67,7 +67,7 @@ export default function StratBoard({
   rotation = 0,
   view = null, // { x, y, w, h } : partie de la carte affichée (repère tourné)
   side = 'attaque',
-  items = [],
+  items: rawItems = [],
   agentByUuid,
   editable = false,
   tool = 'select',
@@ -81,7 +81,11 @@ export default function StratBoard({
   showNames = false,
   scale = 7,
   stepKey = null, // change d'étape → les éléments glissent vers leur nouvelle place
+  onApi = null, // reçoit { clientToMap, rect } : pour déposer un agent glissé depuis le bandeau
 }) {
+  // Couleur toujours en texte : une couleur restée sous la forme [couleur, nom] rendait les traits invisibles
+  const items = rawItems.some((it) => Array.isArray(it.c)) ? rawItems.map((it) => (Array.isArray(it.c) ? { ...it, c: it.c[0] } : it)) : rawItems
+  color = Array.isArray(color) ? color[0] : color
   const uidBase = useId().replace(/:/g, '')
   const svgRef = useRef(null)
   const [draft, setDraft] = useState(null) // élément en cours de tracé
@@ -219,6 +223,18 @@ export default function StratBoard({
     const [mx, my] = unrotate(p.x, p.y, rotation)
     return [clamp(mx), clamp(my)]
   }
+
+  // Pour le glisser-déposer depuis le bandeau d'agents (Strat.jsx)
+  const toMapRef = useRef(null)
+  useEffect(() => { toMapRef.current = toMap })
+  useEffect(() => {
+    if (!onApi) return undefined
+    onApi({
+      rect: () => svgRef.current?.getBoundingClientRect() || null,
+      clientToMap: (clientX, clientY) => toMapRef.current({ clientX, clientY }),
+    })
+    return () => onApi(null)
+  }, [onApi])
 
   const commit = (next, extra) => onChange && onChange(next, extra || {})
 
@@ -395,7 +411,7 @@ export default function StratBoard({
     >
       <defs>
         {[...new Set(shown.filter((it) => it.t === 'line' && it.ar).map((it) => it.c))].map((c) => (
-          <marker key={c} id={`sb-arrow-${c.slice(1)}`} viewBox="0 0 10 10" refX="6" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
+          <marker key={c} id={`${uidBase}-arrow-${String(c).replace(/[^a-z0-9]/gi, '')}`} viewBox="0 0 10 10" refX="6" refY="5" markerWidth="3.2" markerHeight="3.2" orient="auto-start-reverse">
             <path d="M0 0 10 5 0 10z" fill={c} />
           </marker>
         ))}
@@ -414,7 +430,7 @@ export default function StratBoard({
             return (
               <g key={it.id} {...common}>
                 <line x1={x1} y1={y1} x2={x2} y2={y2} className="sb-hit" />
-                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={it.c} strokeWidth={SIZES.line} strokeLinecap="round" markerEnd={it.ar ? `url(#sb-arrow-${it.c.slice(1)})` : undefined} />
+                <line x1={x1} y1={y1} x2={x2} y2={y2} stroke={it.c} strokeWidth={SIZES.line} strokeLinecap="round" markerEnd={it.ar ? `url(#${uidBase}-arrow-${String(it.c).replace(/[^a-z0-9]/gi, '')})` : undefined} />
               </g>
             )
           }

@@ -11,7 +11,7 @@ import { renderStratPng } from '../../utils/exportStrat'
 import { slugify } from '../../utils/exportComposition'
 import StratBoard, { SIDE_COLORS } from '../../components/StratBoard/StratBoard'
 import { boardRotation, boardView, useMapCrop } from '../../utils/mapView'
-import { mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
+import { isRotatable, mapScale, shapeFor, shapeLabel } from '../../data/abilityShapes'
 import ConfirmDialog from '../../components/ConfirmDialog/ConfirmDialog'
 import Loader from '../../components/Loader/Loader'
 import StratPresenter from './StratPresenter'
@@ -68,7 +68,7 @@ export default function Strat() {
   const [presenting, setPresenting] = useState(false)
   const [tool, setTool] = useState('select')
   const [place, setPlace] = useState(null)
-  const [color, setColor] = useState(COLORS[0])
+  const [color, setColor] = useState(COLORS[0][0])
   const [selectedId, setSelectedId] = useState(null)
   const [pickAgent, setPickAgent] = useState(null)
   const [allOpen, setAllOpen] = useState(false)
@@ -83,6 +83,13 @@ export default function Strat() {
   const history = useRef({ past: [], future: [] })
   const textRef = useRef(null)
   const editable = isAdmin
+  const boardApi = useRef(null)
+  const setBoardApi = useCallback((api) => { boardApi.current = api }, [])
+  const agentsRef = useRef(null)
+  const abilitiesRef = useRef(null)
+  const [ghost, setGhost] = useState(null) // icône qui suit la souris pendant un glisser-déposer
+  const dragRef = useRef(null)
+  const skipClick = useRef(false)
 
 
   const step = strat ? strat.steps.find((s) => s.id === stepId) || strat.steps[0] : null
@@ -234,6 +241,73 @@ export default function Strat() {
   const onPlaced = (p) => {
     if (p.t === 'agent' || p.t === 'ability') setPickAgent(p.a)
   }
+
+  // ---------- Glisser une icône (agent, capacité, spike) sur la carte ----------
+  // Un simple clic garde le fonctionnement habituel (choisir puis cliquer sur la carte).
+  const dropOnBoard = (payload, cx, cy) => {
+    const api = boardApi.current
+    const r = api?.rect()
+    if (!r || cx < r.left || cx > r.right || cy < r.top || cy > r.bottom) return false
+    const [x, y] = api.clientToMap(cx, cy)
+    const p = payload.t === 'agent' || payload.t === 'ability' ? { ...payload, ...(enemy ? { en: true } : {}) } : payload
+    const spec = p.t === 'ability' ? shapeFor(agentByUuid.get(p.a)?.name, p.s) : null
+    const it = { id: uid(), ...p, x, y }
+    if (isRotatable(spec)) {
+      it.d = -90
+      if (spec.l != null) it.l = spec.l
+    }
+    setTool('select')
+    setPlace(null)
+    setItems([...step.items, it])
+    setSelectedId(it.id)
+    if (p.t === 'agent' || p.t === 'ability') setPickAgent(p.a)
+    return true
+  }
+  const iconDown = (e, payload, img) => {
+    if (!editable || e.button !== 0) return
+    dragRef.current = { x: e.clientX, y: e.clientY, payload, img, moved: false }
+  }
+  useEffect(() => {
+    const move = (e) => {
+      const d = dragRef.current
+      if (!d) return
+      if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 7) return
+      d.moved = true
+      setGhost({ img: d.img, x: e.clientX, y: e.clientY })
+    }
+    const up = (e) => {
+      const d = dragRef.current
+      dragRef.current = null
+      if (!d || !d.moved) return
+      setGhost(null)
+      skipClick.current = true
+      setTimeout(() => { skipClick.current = false }, 0)
+      dropOnBoard(d.payload, e.clientX, e.clientY)
+    }
+    const cancel = () => { dragRef.current = null; setGhost(null) }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', cancel)
+    return () => {
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', cancel)
+    }
+  })
+  const iconClick = (fn) => () => { if (!skipClick.current) fn() }
+
+  // Molette sur les bandeaux d'agents et de capacités : défilement horizontal
+  useEffect(() => {
+    const els = [agentsRef.current, abilitiesRef.current].filter(Boolean)
+    const onWheel = (e) => {
+      const el = e.currentTarget
+      if (el.scrollWidth <= el.clientWidth + 1 || Math.abs(e.deltaX) > Math.abs(e.deltaY)) return
+      e.preventDefault()
+      el.scrollLeft += e.deltaY
+    }
+    els.forEach((el) => el.addEventListener('wheel', onWheel, { passive: false }))
+    return () => els.forEach((el) => el.removeEventListener('wheel', onWheel))
+  })
 
   // ---------- Clavier ----------
   useEffect(() => {
@@ -474,7 +548,7 @@ export default function Strat() {
                   <kbd>{t.key.toUpperCase()}</kbd>
                 </button>
               ))}
-              <button type="button" className={`sb2-tool${tool === 'place' && place?.t === 'spike' ? ' on' : ''}`} onClick={() => startPlace({ t: 'spike' })} title="Spike" aria-label="Spike">
+              <button type="button" className={`sb2-tool${tool === 'place' && place?.t === 'spike' ? ' on' : ''}`} onPointerDown={(e) => iconDown(e, { t: 'spike' }, null)} onClick={iconClick(() => startPlace({ t: 'spike' }))} title="Spike (clique ou glisse sur la carte)" aria-label="Spike">
                 <svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 18 12 12 21 6 12z" fill="#ff4655" stroke="#fff" strokeWidth="1.5" /></svg>
               </button>
               <button type="button" className="sb2-tool" onClick={undo} title="Annuler (Ctrl+Z)" aria-label="Annuler"><Ico d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3" /></button>
@@ -546,10 +620,11 @@ export default function Strat() {
               onPlaced={onPlaced}
               showNames={showNames}
               scale={mapScale(map)}
+              onApi={setBoardApi}
             />
             {step.items.length === 0 && (
               <div className="sb2-empty">
-                {editable ? <><b>Étape vide</b><p>Choisis un agent en bas, puis clique sur la carte.</p></> : <b>Rien sur cette étape.</b>}
+                {editable ? <><b>Étape vide</b><p>Glisse un agent du bandeau sur la carte, ou clique-le puis clique sur la carte.</p></> : <b>Rien sur cette étape.</b>}
               </div>
             )}
           </div>
@@ -606,25 +681,28 @@ export default function Strat() {
                 </div>
               </div>
             )}
-            <div className="sb2-agents">
+            <div className="sb2-agents" ref={agentsRef}>
               {stripAgents.map((a) => (
                 <button key={a.uuid} type="button"
                   className={`sb2-agent${pickAgent === a.uuid ? ' on' : ''}${placingAgent?.uuid === a.uuid ? ' placing' : ''}`}
                   style={{ '--side': teamColor }}
-                  onClick={() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) }} title={`Placer ${a.name}`}>
+                  onPointerDown={(e) => iconDown(e, { t: 'agent', a: a.uuid }, a.icon)}
+                  onClick={iconClick(() => { setPickAgent(a.uuid); startPlace({ t: 'agent', a: a.uuid }) })} title={`Placer ${a.name} : clique, ou glisse-le sur la carte`}>
                   <img src={a.icon} alt="" />
                   <span>{a.name}</span>
                 </button>
               ))}
             </div>
             {picked && (
-              <div className="sb2-abilities" aria-label={`Capacités de ${picked.name}`}>
+              <div className="sb2-abilities" ref={abilitiesRef} aria-label={`Capacités de ${picked.name}`}>
                 {SLOT_ORDER.map((slot) => picked.abilities?.find((x) => x.slot === slot)).filter(Boolean).map((ab) => {
                   const sp = shapeFor(picked.name, ab.slot)
                   const on = tool === 'place' && place?.t === 'ability' && place.a === picked.uuid && place.s === ab.slot
                   return (
-                    <button key={ab.slot} type="button" className={`sb2-ability${on ? ' on' : ''}`} style={{ '--side': teamColor }} onClick={() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot })}
-                      title={`${ab.name}${sp ? ` · ${shapeLabel(sp)}` : ''}`}>
+                    <button key={ab.slot} type="button" className={`sb2-ability${on ? ' on' : ''}`} style={{ '--side': teamColor }}
+                      onPointerDown={(e) => iconDown(e, { t: 'ability', a: picked.uuid, s: ab.slot }, ab.icon)}
+                      onClick={iconClick(() => startPlace({ t: 'ability', a: picked.uuid, s: ab.slot }))}
+                      title={`${ab.name}${sp ? ` · ${shapeLabel(sp)}` : ''} : clique, ou glisse-la sur la carte`}>
                       <img src={ab.icon} alt="" />
                       <kbd>{SLOT_KEY[ab.slot]}</kbd>
                       <span>{ab.name}</span>
@@ -643,6 +721,11 @@ export default function Strat() {
         )}
       </section>
 
+      {ghost && (
+        <div className="sb2-ghost" style={{ left: ghost.x, top: ghost.y, '--side': teamColor }} aria-hidden="true">
+          {ghost.img ? <img src={ghost.img} alt="" /> : <svg width="26" height="26" viewBox="0 0 24 24"><path d="M12 3 18 12 12 21 6 12z" fill="#ff4655" stroke="#fff" strokeWidth="1.5" /></svg>}
+        </div>
+      )}
       {leaveDialog}
 
       {presenting && (
