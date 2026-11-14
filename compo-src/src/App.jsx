@@ -10,6 +10,7 @@ import { DataProvider } from './context/DataContext'
 import { CompositionsProvider } from './context/CompositionsContext'
 import { PlayersProvider } from './context/PlayersContext'
 import { StratsProvider } from './context/StratsContext'
+import { DocsProvider } from './context/DocsContext'
 import { ToastProvider } from './context/ToastContext'
 import { isSupabaseConfigured } from './services/supabaseClient'
 import Navbar, { TeamSide } from './components/Navbar/Navbar'
@@ -26,6 +27,8 @@ const Home = lazy(() => import('./pages/Home/Home'))
 const Editor = lazy(() => import('./pages/Editor/Editor'))
 const Strats = lazy(() => import('./pages/Strats/Strats'))
 const Strat = lazy(() => import('./pages/Strat/Strat'))
+const Playbook = lazy(() => import('./pages/Playbook/Playbook'))
+const Doc = lazy(() => import('./pages/Doc/Doc'))
 
 /** Rendu à l'intérieur du routeur : gère la transition animée entre les pages. */
 function AppRoutes() {
@@ -44,6 +47,8 @@ function AppRoutes() {
         <Route path="/team" element={<ToRoster />} />
         <Route path="/strats" element={<PageTransition><Suspense fallback={pageFallback}><Strats /></Suspense></PageTransition>} />
         <Route path="/strat/:stratId" element={<PageTransition><Suspense fallback={pageFallback}><Strat /></Suspense></PageTransition>} />
+        <Route path="/playbook" element={<PageTransition><Suspense fallback={pageFallback}><Playbook /></Suspense></PageTransition>} />
+        <Route path="/playbook/:docId" element={<PageTransition><Suspense fallback={pageFallback}><Doc /></Suspense></PageTransition>} />
         <Route path="/dashboard" element={<Navigate to="/" replace />} />
         {/* Toute URL inconnue renvoie vers l'accueil plutôt que sur une page blanche. */}
         <Route path="*" element={<Navigate to="/" replace />} />
@@ -115,7 +120,9 @@ function TeamScopedApp() {
       <PlayersProvider>
         <CompositionsProvider>
           <StratsProvider>
-            <AppShell />
+            <DocsProvider>
+              <AppShell />
+            </DocsProvider>
           </StratsProvider>
         </CompositionsProvider>
       </PlayersProvider>

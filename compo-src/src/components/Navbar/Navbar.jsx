@@ -42,6 +42,7 @@ const ICONS = {
   scrims: 'M4 5h16v16H4zM4 10h16M9 3v4M15 3v4',
   compos: 'M16 19v-1a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v1M9 10a3 3 0 1 0 0-6 3 3 0 0 0 0 6M22 19v-1a4 4 0 0 0-3-3.9M16 4.1a3 3 0 0 1 0 5.8',
   strats: 'M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14',
+  playbook: 'M4 5a2 2 0 0 1 2-2h12v16H6a2 2 0 0 0-2 2zM4 21V5M8 7h6M8 11h6',
   roster: 'M4 6h16v12H4zM8 10h3M8 14h8M15 10h1',
   reglages: 'M4 7h9M17 7h3M4 17h3M11 17h9M15 5v4M9 15v4',
   search: 'M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-3.5-3.5',
@@ -101,6 +102,7 @@ export function TeamSide() {
         {ext('scrims', '#/nos-scrims', 'Nos scrims')}
         {int('compos', '/', 'Compos', inCompos)}
         {int('strats', '/strats', 'Strats', pathname.startsWith('/strats'))}
+        {int('playbook', '/playbook', 'Playbook', pathname.startsWith('/playbook'))}
         {ext('roster', '#/mon-equipe', 'Roster')}
         {ext('reglages', '#/reglages', 'Réglages')}
       </nav>

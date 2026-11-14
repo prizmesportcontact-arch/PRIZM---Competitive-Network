@@ -79,7 +79,7 @@ export default function StratList({ mapUuid, compositionId = null, comps = [], s
 }
 
 // Aperçu orienté et cadré comme dans l'éditeur
-function StratPreview({ map, strat, items, agentByUuid }) {
+export function StratPreview({ map, strat, items, agentByUuid }) {
   const crop = useMapCrop(map?.minimap)
   const rotation = boardRotation(map, strat.side)
   const view = boardView(rotation, crop, 12)

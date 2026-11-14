@@ -7,7 +7,7 @@ import { createClient } from "jsr:@supabase/supabase-js@2";
 
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { "Content-Type": "application/json" } });
 const TABLES = ["profiles", "teams", "team_members", "scrims", "lfg_posts", "cb_players", "cb_compositions",
-  "cb_strats", "team_map_pools", "map_rotation", "cast_state"];
+  "cb_strats", "cb_docs", "team_map_pools", "map_rotation", "cast_state"];
 const KEEP = 12;
 
 Deno.serve(async (req) => {
