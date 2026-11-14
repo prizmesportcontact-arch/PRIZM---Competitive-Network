@@ -277,10 +277,19 @@
       nav.skelT = setTimeout(() => { if (nav.pending === seq) showSkeleton(app); }, 420);
     } else showSkeleton(app);
     // Filet de sécurité : la page ne reste jamais bloquée en chargement
-    const guard = new Promise((_, rej) => setTimeout(() => {
-      const wait = [...new Set(netPending.values())];
-      rej(new Error("La page met trop de temps à charger." + (wait.length ? " (en attente : " + wait.join(", ") + ")" : "")));
-    }, 45000));
+    // - au bout de 8 s sans aucune requête en cours (blocage hors réseau), on relance la page une fois, sans rien afficher
+    // - tant que des requêtes sont relancées (connexion lente), on patiente, jusqu'à 45 s au total
+    const t0 = Date.now(); let reran = false;
+    const guard = new Promise((res, rej) => {
+      const tick = () => {
+        if (nav.seq !== seq) return;
+        const wait = [...new Set(netPending.values())], el = Date.now() - t0;
+        if (el >= 45000) return rej(new Error("La page met trop de temps à charger." + (wait.length ? " (en attente : " + wait.join(", ") + ")" : "")));
+        if (el >= 8000 && !reran && !wait.length) { reran = true; console.warn("[PRIZM] page relancée"); clearCache(); Promise.resolve().then(run).then(res, rej); }
+        setTimeout(tick, 1000);
+      };
+      setTimeout(tick, 1000);
+    });
     Promise.race([Promise.resolve().then(run), guard])
       .catch(e => { if (nav.seq === seq) { console.warn("[PRIZM]", e); app.innerHTML = panel("Oups", `<p class="lead">${esc(errMsg(e))}</p><div class="ctas" style="margin-top:20px"><button class="btn solid" type="button" id="nav-retry">Réessayer</button></div>`); const r = $("#nav-retry"); if (r) r.onclick = () => { clearCache(); route(); }; } })
       .finally(() => { if (nav.seq === seq) { if (nav.pending === seq) finishView(app); progress(false); } });
